@@ -3728,7 +3728,7 @@
       const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
       const[acomptes,setAcomptes]=React.useState([]);
       const[savTickets,setSavTickets]=React.useState([]);
-      const[objectifs,setObjectifs]=React.useState([]);
+      const[objectifs,setObjectifs]=React.useState({});
       const[rapports,setRapports]=React.useState([]);
       const[view,setView]=React.useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
       const[fCat,setFCat]=React.useState("Toutes");
@@ -3804,7 +3804,16 @@
             if(rc?.data)setChantiersPipeline(rc.data);
             if(ra?.data)setAcomptes(ra.data);
             if(rsav?.data)setSavTickets(rsav.data);
-            if(robj?.data)setObjectifs(robj.data);
+            if(robj?.data){
+              // Transform array [{key, ca, marge}] to object {key: {ca, marge}}
+              if(Array.isArray(robj.data)){
+                const obj={};
+                robj.data.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
+                setObjectifs(obj);
+              } else {
+                setObjectifs(robj.data||{});
+              }
+            }
             if(rrapp?.data)setRapports(rrapp.data);
           }catch(e){console.error("loadAll:",e);}
           firstLoad.current=false;
@@ -4084,7 +4093,7 @@
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
+                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
                 {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
