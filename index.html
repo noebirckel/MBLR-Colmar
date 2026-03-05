@@ -398,7 +398,7 @@
     // ══════════════════════════════════════
     // ONGLET STATS (admin)
     // ══════════════════════════════════════
-    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt}) {
+    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt, objectifs, setObjectifs, role}) {
       const[period,setPeriod]=useState(6); // nb de mois à afficher
 
       // Calculs CA par mois
@@ -587,6 +587,230 @@
               </div>
             </div>
           </div>
+
+
+          {/* ══ OBJECTIFS COMMERCIAUX ══ */}
+          {(() => {
+            const mM_now = String(new Date().getMonth()+1).padStart(2,"0");
+            const mY_now = String(new Date().getFullYear());
+            const mKey   = `${mY_now}-${mM_now}`;
+            const canEdit = role === "administrateur";
+
+            // Vendeurs actifs sur les 3 derniers mois
+            const vendeurs = [...new Set(ventes.map(v=>v.par||"Inconnu"))].sort();
+
+            return (
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px 20px",marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+                  <div>
+                    <h3 style={{margin:"0 0 3px",fontSize:15,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>
+                      🎯 Objectifs commerciaux
+                    </h3>
+                    <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>
+                      {new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}
+                      {canEdit&&<span style={{marginLeft:8,color:"#2E4D82"}}>— Cliquez pour modifier</span>}
+                    </p>
+                  </div>
+                </div>
+
+                {vendeurs.length===0
+                  ? <div style={{textAlign:"center",padding:"24px 0",color:"#2E4D82",fontSize:13}}>
+                      Aucun commercial — enregistrez des ventes d'abord
+                    </div>
+                  : <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                      {vendeurs.map(nom => {
+                        const oKey     = `${mKey}__${nom}`;
+                        const obj      = objectifs[oKey] || {};
+                        const objCA    = Number(obj.ca    || 0);
+                        const objMarge = Number(obj.marge || 0);
+
+                        // CA réel ce mois
+                        const caReel = ventes
+                          .filter(v=>(v.par||"Inconnu")===nom && v.date
+                            && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
+                          .reduce((s,v)=>s+Number(v.prix_ht||0),0);
+
+                        // Marge réelle (prix_ht - coût matériel)
+                        const margeReelle = ventes
+                          .filter(v=>(v.par||"Inconnu")===nom && v.date
+                            && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
+                          .reduce((s,v)=>{
+                            const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
+                                      +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
+                            return s+(Number(v.prix_ht||0)-cout);
+                          },0);
+
+                        const pctCA    = objCA    > 0 ? Math.min(100, Math.round((caReel/objCA)*100))    : null;
+                        const pctMarge = objMarge > 0 ? Math.min(100, Math.round((margeReelle/objMarge)*100)) : null;
+
+                        const colorCA    = pctCA===null?"#1B2D4F" : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
+                        const colorMarge = pctMarge===null?"#1B2D4F" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
+
+                        const[editMode,setEditMode]=useState(false);
+                        const[draftCA,setDraftCA]  =useState(String(objCA||""));
+                        const[draftMarge,setDraftMarge]=useState(String(objMarge||""));
+
+                        const saveObj=()=>{
+                          setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
+                          setEditMode(false);
+                        };
+
+                        return (
+                          <div key={nom} style={{background:"#070D1A",borderRadius:12,padding:"14px 16px",
+                            border:"1px solid #1B2D4F"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",
+                              alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:34,height:34,borderRadius:"50%",
+                                  background:"linear-gradient(135deg,#1B2D4F,#112038)",
+                                  border:"1px solid #1B2D4F",display:"flex",alignItems:"center",
+                                  justifyContent:"center",fontSize:15,flexShrink:0}}>💼</div>
+                                <div>
+                                  <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{nom}</div>
+                                  <div style={{fontSize:11,color:"#4A6A9E"}}>
+                                    {ventes.filter(v=>(v.par||"Inconnu")===nom&&v.date
+                                      &&v.date.split("/")[1]===mM_now&&v.date.split("/")[2]===mY_now).length} vente(s) ce mois
+                                  </div>
+                                </div>
+                              </div>
+                              {canEdit&&(
+                                editMode
+                                  ? <div style={{display:"flex",gap:6}}>
+                                      <button onClick={()=>setEditMode(false)} style={{
+                                        background:"#1B2D4F",border:"none",borderRadius:8,
+                                        color:"#7B96C8",padding:"6px 12px",cursor:"pointer",
+                                        fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                                      <button onClick={saveObj} style={{
+                                        background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",
+                                        border:"none",borderRadius:8,color:"#FFF",
+                                        padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700,
+                                        fontFamily:'"Outfit",sans-serif',
+                                        boxShadow:"0 2px 10px rgba(59,130,246,0.3)"}}>💾 Sauver</button>
+                                    </div>
+                                  : <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditMode(true);}} style={{
+                                      background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",
+                                      borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",
+                                      fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                                      {objCA||objMarge?"✏️ Modifier":"➕ Fixer objectif"}
+                                    </button>
+                              )}
+                            </div>
+
+                            {/* Formulaire édition */}
+                            {editMode&&(
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,
+                                marginBottom:14,padding:"12px",background:"#0D1828",borderRadius:10,
+                                border:"1px solid #1B2D4F"}}>
+                                <div>
+                                  <label style={{display:"block",fontSize:10,fontWeight:700,
+                                    color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",
+                                    letterSpacing:"0.08em"}}>Objectif CA (€ HT)</label>
+                                  <input type="number" value={draftCA}
+                                    onChange={e=>setDraftCA(e.target.value)}
+                                    placeholder="Ex: 15000"
+                                    style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",
+                                      borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,
+                                      outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+                                </div>
+                                <div>
+                                  <label style={{display:"block",fontSize:10,fontWeight:700,
+                                    color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",
+                                    letterSpacing:"0.08em"}}>Objectif marge (€)</label>
+                                  <input type="number" value={draftMarge}
+                                    onChange={e=>setDraftMarge(e.target.value)}
+                                    placeholder="Ex: 3000"
+                                    style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",
+                                      borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,
+                                      outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Barres de progression */}
+                            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+
+                              {/* CA */}
+                              <div>
+                                <div style={{display:"flex",justifyContent:"space-between",
+                                  alignItems:"baseline",marginBottom:6}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>
+                                    💶 Chiffre d'affaires
+                                  </span>
+                                  {pctCA!==null&&(
+                                    <span style={{fontSize:12,fontWeight:800,color:colorCA}}>
+                                      {pctCA}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
+                                  <div style={{
+                                    height:10,borderRadius:8,width:(pctCA||0)+"%",
+                                    background:pctCA>=100
+                                      ?"linear-gradient(90deg,#10B981,#059669)"
+                                      :"linear-gradient(90deg,#3B82F6,#1D4ED8)",
+                                    transition:"width 0.6s cubic-bezier(.4,0,.2,1)",
+                                    boxShadow:pctCA>0?`0 0 8px ${colorCA}60`:"none"
+                                  }}/>
+                                </div>
+                                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                                  <span style={{color:colorCA,fontWeight:700}}>{fmt(caReel)}</span>
+                                  <span style={{color:"#2E4D82"}}>
+                                    {objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif fixé"}
+                                  </span>
+                                </div>
+                                {pctCA>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>
+                                  🎉 Objectif atteint !
+                                </div>}
+                                {pctCA!==null&&pctCA<100&&objCA>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>
+                                  {fmt(objCA-caReel)} restants
+                                </div>}
+                              </div>
+
+                              {/* MARGE */}
+                              <div>
+                                <div style={{display:"flex",justifyContent:"space-between",
+                                  alignItems:"baseline",marginBottom:6}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>
+                                    📈 Marge
+                                  </span>
+                                  {pctMarge!==null&&(
+                                    <span style={{fontSize:12,fontWeight:800,color:colorMarge}}>
+                                      {pctMarge}%
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
+                                  <div style={{
+                                    height:10,borderRadius:8,width:(pctMarge||0)+"%",
+                                    background:pctMarge>=100
+                                      ?"linear-gradient(90deg,#10B981,#059669)"
+                                      :"linear-gradient(90deg,#8B5CF6,#6D28D9)",
+                                    transition:"width 0.6s cubic-bezier(.4,0,.2,1)",
+                                    boxShadow:pctMarge>0?`0 0 8px ${colorMarge}60`:"none"
+                                  }}/>
+                                </div>
+                                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                                  <span style={{color:colorMarge,fontWeight:700}}>{fmt(margeReelle)}</span>
+                                  <span style={{color:"#2E4D82"}}>
+                                    {objMarge>0?`/ ${fmt(objMarge)}`:"Pas d'objectif fixé"}
+                                  </span>
+                                </div>
+                                {pctMarge>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>
+                                  🎉 Objectif atteint !
+                                </div>}
+                                {pctMarge!==null&&pctMarge<100&&objMarge>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>
+                                  {fmt(objMarge-margeReelle)} restants
+                                </div>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                }
+              </div>
+            );
+          })()}
 
           {/* STOCK */}
           <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
@@ -2432,6 +2656,7 @@
       const[chantiersPipeline,setChantiersPipeline]=useState([]);
       const[acomptes,setAcomptes]=useState([]);
       const[savTickets,setSavTickets]=useState([]);
+      const[objectifs,setObjectifs]=useState({});
       const[sync,setSync]=useState("loading");
       const[ventes,setVentes]=useState([]);
       // UI
@@ -2501,6 +2726,7 @@
               if(data.chantiersPipeline)setChantiersPipeline(data.chantiersPipeline);
               if(data.acomptes)setAcomptes(data.acomptes);
               if(data.savTickets)setSavTickets(data.savTickets);
+              if(data.objectifs)setObjectifs(data.objectifs);
             }
             setSyncState("saved");
           }catch(e){setSyncState("error");}
@@ -2516,6 +2742,7 @@
           if(d.chantiersPipeline)setChantiersPipeline(d.chantiersPipeline);
           if(d.acomptes)setAcomptes(d.acomptes);
           if(d.savTickets)setSavTickets(d.savTickets);
+          if(d.objectifs)setObjectifs(d.objectifs);
           setSyncState("saved");
         }).subscribe();
         return()=>sb.removeChannel(ch);
@@ -2523,11 +2750,12 @@
 
       const setSyncState=v=>setSync(v);
 
-      const SV=v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(stock,orders,hist,n,chantiersPipeline,acomptes,savTickets);};
-      const SC2=v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(stock,orders,hist,ventes,n,acomptes,savTickets);};
+      const SV=v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(stock,orders,hist,n,chantiersPipeline,acomptes,savTickets,objectifs);};
+      const SC2=v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(stock,orders,hist,ventes,n,acomptes,savTickets,objectifs);};
       const SA=v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,n,savTickets);};
-      const SSAV=v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,n);};
-      const saveDB=useCallback((ns,no,nh,nv,nc,na,nsav)=>{
+      const SSAV=v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,n,objectifs);};
+      const SOBJ=v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,n);};
+      const saveDB=useCallback((ns,no,nh,nv,nc,na,nsav,nobj)=>{
         if(firstLoad.current)return;
         if(timer.current)clearTimeout(timer.current);
         setSync("saving");
@@ -2537,27 +2765,28 @@
             const nc2=nc!==undefined?nc:chantiersPipeline;
             const na2=na!==undefined?na:acomptes;
             const nsav2=nsav!==undefined?nsav:savTickets;
-            const{error}=await sb.from("app_data").upsert({id:"main",stock:ns,orders:no,hist:nh,ventes:nv2,chantiersPipeline:nc2,acomptes:na2,savTickets:nsav2,updated_at:new Date().toISOString()});
+            const nobj2=nobj!==undefined?nobj:objectifs;
+            const{error}=await sb.from("app_data").upsert({id:"main",stock:ns,orders:no,hist:nh,ventes:nv2,chantiersPipeline:nc2,acomptes:na2,savTickets:nsav2,objectifs:nobj2,updated_at:new Date().toISOString()});
             if(error)throw error;
             setSync("saved");
           }catch(e){setSync("error");}
         },800);
       },[]);
 
-      const SS=v=>{const n=typeof v==="function"?v(stock):v;setStock(n);saveDB(n,orders,hist,ventes,chantiersPipeline,acomptes,savTickets);};
+      const SS=v=>{const n=typeof v==="function"?v(stock):v;setStock(n);saveDB(n,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);};
       // expose finishChantier for ChantierTab
       useEffect(()=>{
         window._appState={
           finishChantier:(ns,newHistItems,updatedChantiers)=>{
             const nh=[...newHistItems,...hist];
             setStock(ns);setHist(nh);setChantiersPipeline(updatedChantiers);
-            saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes,savTickets);
+            saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes,savTickets,objectifs);
           },
           getChantiers:()=>chantiersPipeline,
           getVentes:()=>ventes
         };
       });
-      const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes,savTickets);};
+      const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);};
 
       const role=profile?.role||"installateur";
       const allowedTabs=ROLE_TABS[role]||["dashboard"];
@@ -2588,7 +2817,7 @@
         const d=new Date().toLocaleDateString("fr-FR");
         const nh=[...cItems.map(i=>{const a=stock.find(s=>s.id===Number(i.id));return{date:d,chantier:cNom,article:a?.article,cat:a?.cat,unite:a?.unite,qty:Number(i.qty),par:profile?.nom||""};}), ...hist];
         const ns=stock.map(s=>{const u=cItems.find(i=>Number(i.id)===s.id);return u?{...s,stock:Math.max(0,s.stock-Number(u.qty))}:s;});
-        setStock(ns);setHist(nh);saveDB(ns,orders,nh,ventes,chantiersPipeline,acomptes,savTickets);setCNom("");setCItems([]);
+        setStock(ns);setHist(nh);saveDB(ns,orders,nh,ventes,chantiersPipeline,acomptes,savTickets,objectifs);setCNom("");setCItems([]);
       };
       const openO=id=>{const a=stock.find(s=>s.id===id);setOModal(id);setOForm({qty:String(a.seuil>a.stock?a.seuil-a.stock:1),desc:""});};
       const subO=()=>{
@@ -2601,7 +2830,7 @@
         const o=orders.find(x=>x.id===oid);if(!o)return;
         const no=orders.map(x=>x.id===oid?{...x,statut:"livré",livraison_date:new Date().toLocaleDateString("fr-FR")}:x);
         const ns=stock.map(s=>s.id===o.articleId?{...s,stock:s.stock+o.qty}:s);
-        setOrders(no);setStock(ns);saveDB(ns,no,hist,ventes,chantiersPipeline,acomptes,savTickets);
+        setOrders(no);setStock(ns);saveDB(ns,no,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);
       };
       const saveC=()=>{
         if(!cForm.article||!cForm.cat)return;
@@ -2849,7 +3078,7 @@
             {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
 
             {/* ── STATS ── */}
-            {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} acomptes={acomptes} stock={stock} fmt={fmt}/>}
+            {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} acomptes={acomptes} stock={stock} fmt={fmt} objectifs={objectifs} setObjectifs={SOBJ} role={role}/>}
 
             {/* ── SAV ── */}
             {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
