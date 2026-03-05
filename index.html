@@ -31,7 +31,9 @@
 
     const SUPABASE_URL = "https://vanwpskkxxojrtjcsqir.supabase.co";
     const SUPABASE_KEY = "sb_publishable_RYcQo6n6AQXnYhheV1vjKg_o5zzW28b";
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const sb = (typeof supabase !== "undefined")
+      ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+      : {auth:{getSession:()=>Promise.resolve({data:{session:null}}),onAuthStateChange:()=>({data:{subscription:{unsubscribe:()=>{}}}}),signOut:()=>Promise.resolve()},from:()=>({select:()=>({eq:()=>({single:()=>Promise.resolve({data:null}),order:()=>Promise.resolve({data:[]})}),order:()=>Promise.resolve({data:[]})}),upsert:()=>Promise.resolve(),insert:()=>Promise.resolve(),update:()=>({eq:()=>Promise.resolve()}),delete:()=>({eq:()=>Promise.resolve()})}),channel:()=>({on:()=>({subscribe:()=>{}})}),removeChannel:()=>{}};
 
     const INIT = [
       {id:1,cat:"Easee",article:"One",unite:"pce",stock:4,seuil:15,prix:299,rupture:false},
@@ -3749,17 +3751,23 @@
           }catch(e){console.error("profile:",e);}
         };
 
-        sb.auth.getSession().then(({data:{session}})=>{
-          setAuthUser(session?.user||null);
-          setAuthLoading(false);  // ← débloque IMMÉDIATEMENT
-          if(session?.user) loadProfile(session.user);
-        }).catch(()=>{setAuthLoading(false);});
+        try{
+          sb.auth.getSession().then(({data:{session}})=>{
+            setAuthUser(session?.user||null);
+            if(session?.user) loadProfile(session.user);
+            else setAuthLoading(false);
+          }).catch(()=>{setAuthLoading(false);});
 
-        const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-          if(event==="SIGNED_OUT"){setAuthUser(null);setProfile(null);}
-          else if(event==="SIGNED_IN"&&session?.user){setAuthUser(session.user);loadProfile(session.user);}
-        });
-        return()=>subscription.unsubscribe();
+          const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
+            if(event==="SIGNED_OUT"){setAuthUser(null);setProfile(null);setAuthLoading(false);}
+            else if((event==="SIGNED_IN"||event==="INITIAL_SESSION")&&session?.user){
+              setAuthUser(session.user);loadProfile(session.user);
+            }else if(event==="INITIAL_SESSION"&&!session?.user){
+              setAuthLoading(false);
+            }
+          });
+          return()=>subscription.unsubscribe();
+        }catch(e){setAuthLoading(false);}
       },[]);
 
       // Load data
