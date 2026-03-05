@@ -2374,6 +2374,351 @@
     // ══════════════════════════════════════
     // ONGLET CHANTIER (pipeline complet)
     // ══════════════════════════════════════
+    // ══════════════════════════════════════
+    // RAPPORT D'INTERVENTION
+    // ══════════════════════════════════════
+    function RapportModal({isMobile, data, onClose, onSave, onSaveAndFinish, sb}) {
+      const {ch} = data;
+      const isReadOnly = ch.statut === "termine" && !!ch.rapport;
+      const[rapport, setRapport] = useState(data.rapport || {
+        heures_debut:"", heures_fin:"", observations:"",
+        materiel_supp:"", photos_chantier:[], photo_pv:null,
+        signature:null, rapport_date:"", rapport_par:"",
+      });
+      const[uploading, setUploading]     = useState(false);
+      const[uploadingPV, setUploadingPV] = useState(false);
+      const[lightbox, setLightbox]       = useState(null);
+      const[editMode, setEditMode]       = useState(!ch.rapport);
+      const canvasRef = useRef(null);
+      const[drawing, setDrawing]         = useState(false);
+      const[hasSig, setHasSig]           = useState(!!rapport.signature);
+
+      const set = (k,v) => setRapport(p => ({...p, [k]:v}));
+
+      // ── Init canvas signature ──────────────────────────────
+      useEffect(()=>{
+        if(!canvasRef.current) return;
+        const ctx = canvasRef.current.getContext("2d");
+        ctx.fillStyle = "#070D1A";
+        ctx.fillRect(0,0,canvasRef.current.width,canvasRef.current.height);
+        if(rapport.signature){
+          const img = new Image();
+          img.onload = () => ctx.drawImage(img,0,0);
+          img.src = rapport.signature;
+        }
+      }, [canvasRef.current, editMode]);
+
+      const getPos = (e,canvas) => {
+        const r = canvas.getBoundingClientRect();
+        const t = e.touches ? e.touches[0] : e;
+        return { x: (t.clientX - r.left)*(canvas.width/r.width),
+                 y: (t.clientY - r.top)*(canvas.height/r.height) };
+      };
+      const startDraw = e => {
+        if(!editMode) return;
+        e.preventDefault();
+        const c = canvasRef.current;
+        const ctx = c.getContext("2d");
+        const p = getPos(e,c);
+        ctx.beginPath(); ctx.moveTo(p.x,p.y);
+        setDrawing(true); setHasSig(true);
+      };
+      const draw = e => {
+        if(!drawing||!editMode) return;
+        e.preventDefault();
+        const c = canvasRef.current;
+        const ctx = c.getContext("2d");
+        const p = getPos(e,c);
+        ctx.lineTo(p.x,p.y);
+        ctx.strokeStyle = "#3B82F6"; ctx.lineWidth = 2.5;
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.stroke();
+      };
+      const endDraw = () => setDrawing(false);
+      const clearSig = () => {
+        const c = canvasRef.current;
+        if(!c) return;
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#070D1A";
+        ctx.fillRect(0,0,c.width,c.height);
+        setHasSig(false);
+        set("signature", null);
+      };
+      const saveSig = () => {
+        if(!canvasRef.current) return;
+        set("signature", canvasRef.current.toDataURL("image/png"));
+      };
+
+      // ── Upload photos chantier ─────────────────────────────
+      const uploadChantierPhotos = async(files) => {
+        setUploading(true);
+        const urls = [];
+        for(const file of Array.from(files)){
+          const ext = file.name.split(".").pop();
+          const path = `rapport-${ch.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const{data:up, error} = await sb.storage.from("chantier-photos").upload(path,file,{cacheControl:"3600",upsert:false});
+          if(!error){
+            const{data:pub} = sb.storage.from("chantier-photos").getPublicUrl(path);
+            if(pub?.publicUrl) urls.push(pub.publicUrl);
+          }
+        }
+        set("photos_chantier", [...(rapport.photos_chantier||[]), ...urls]);
+        setUploading(false);
+      };
+
+      // ── Upload PV réception ────────────────────────────────
+      const uploadPV = async(file) => {
+        setUploadingPV(true);
+        const ext = file.name.split(".").pop();
+        const path = `pv-${ch.id}/${Date.now()}.${ext}`;
+        const{data:up, error} = await sb.storage.from("chantier-photos").upload(path,file,{cacheControl:"3600",upsert:false});
+        if(!error){
+          const{data:pub} = sb.storage.from("chantier-photos").getPublicUrl(path);
+          if(pub?.publicUrl) set("photo_pv", pub.publicUrl);
+        }
+        setUploadingPV(false);
+      };
+
+      const removeChantierPhoto = async(url) => {
+        const path = url.split("/chantier-photos/")[1];
+        if(path) await sb.storage.from("chantier-photos").remove([path]);
+        set("photos_chantier", (rapport.photos_chantier||[]).filter(p=>p!==url));
+      };
+
+      const handleSave = (andFinish=false) => {
+        const finalRapport = {...rapport};
+        if(hasSig && canvasRef.current) finalRapport.signature = canvasRef.current.toDataURL("image/png");
+        if(andFinish) onSaveAndFinish(finalRapport);
+        else onSave(finalRapport);
+      };
+
+      const S = {background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,
+        color:"#F0F6FF",padding:"10px 14px",fontSize:14,width:"100%",outline:"none",
+        boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'};
+      const L = ({t}) => <label style={{display:"block",fontSize:10,fontWeight:700,
+        color:"#4A6A9E",marginBottom:7,textTransform:"uppercase",letterSpacing:"0.08em"}}>{t}</label>;
+
+      const heuresDuree = () => {
+        if(!rapport.heures_debut||!rapport.heures_fin) return null;
+        const[h1,m1]=rapport.heures_debut.split(":").map(Number);
+        const[h2,m2]=rapport.heures_fin.split(":").map(Number);
+        const mins=(h2*60+m2)-(h1*60+m1);
+        if(mins<=0) return null;
+        return `${Math.floor(mins/60)}h${String(mins%60).padStart(2,"0")}`;
+      };
+
+      return(
+        <>
+          {/* Lightbox */}
+          {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",objectFit:"contain",borderRadius:8}}/>
+            <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:16,right:16,background:"#1B2D4F",border:"none",borderRadius:50,color:"#FFF",width:36,height:36,cursor:"pointer",fontSize:18,fontWeight:700}}>✕</button>
+          </div>}
+
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,
+            display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
+            backdropFilter:"blur(6px)"}} onClick={onClose}>
+            <div style={{
+              background:"#0D1828",
+              borderRadius:isMobile?"20px 20px 0 0":18,
+              border:"1px solid #1B2D4F",
+              width:isMobile?"100%":"680px", maxWidth:"98vw",
+              maxHeight:isMobile?"96vh":"92vh",
+              overflowY:"auto",
+              boxShadow:"0 32px 80px rgba(0,0,0,0.7)"
+            }} onClick={e=>e.stopPropagation()}>
+
+              {/* Handle mobile */}
+              {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"12px auto 0"}}/>}
+
+              {/* Header */}
+              <div style={{padding:"20px 24px 0",borderBottom:"1px solid #1B2D4F",paddingBottom:16,marginBottom:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div>
+                    <div style={{fontWeight:900,fontSize:18,color:"#F0F6FF",letterSpacing:"-0.3px",marginBottom:4}}>
+                      📋 Rapport d'intervention
+                    </div>
+                    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:"#3B82F6"}}>🔧 {ch.client}</span>
+                      {ch.technicien&&<span style={{fontSize:12,color:"#4A6A9E"}}>👤 {ch.technicien}</span>}
+                      {ch.date_installation&&<span style={{fontSize:12,color:"#4A6A9E"}}>📅 {ch.date_installation}</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    {ch.statut==="termine"&&ch.rapport&&(
+                      <button onClick={()=>setEditMode(p=>!p)} style={{background:editMode?"rgba(245,158,11,0.1)":"rgba(59,130,246,0.08)",border:`1px solid ${editMode?"#F59E0B40":"#1B2D4F"}`,borderRadius:8,color:editMode?"#F59E0B":"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                        {editMode?"👁️ Lecture":"✏️ Modifier"}
+                      </button>
+                    )}
+                    <button onClick={onClose} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",width:32,height:32,cursor:"pointer",fontSize:16,fontWeight:700}}>✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{padding:"20px 24px"}}>
+
+                {/* ── MATÉRIEL INSTALLÉ (lecture) ── */}
+                {(ch.materiels?.length>0||ch.cables?.length>0)&&(
+                  <div style={{background:"#070D1A",borderRadius:12,padding:"12px 14px",marginBottom:20,border:"1px solid #1B2D4F"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Matériel prévu</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {(ch.materiels||[]).map((m,i)=><span key={i} style={{background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#60A5FA",fontWeight:600}}>{m.qty}× {m.article}</span>)}
+                      {(ch.cables||[]).map((m,i)=><span key={i} style={{background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#34D399",fontWeight:600}}>{m.qty}ml {m.article}</span>)}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── HEURES ── */}
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+                  <div>
+                    <L t="Heure de début"/>
+                    {editMode
+                      ? <input type="time" value={rapport.heures_debut} onChange={e=>set("heures_debut",e.target.value)} style={S}/>
+                      : <div style={{...S,opacity:0.7}}>{rapport.heures_debut||"—"}</div>}
+                  </div>
+                  <div>
+                    <L t="Heure de fin"/>
+                    {editMode
+                      ? <input type="time" value={rapport.heures_fin} onChange={e=>set("heures_fin",e.target.value)} style={S}/>
+                      : <div style={{...S,opacity:0.7}}>{rapport.heures_fin||"—"}</div>}
+                  </div>
+                  <div>
+                    <L t="Durée totale"/>
+                    <div style={{...S,color: heuresDuree()?"#10B981":"#2E4D82",fontWeight:800,fontSize:16,display:"flex",alignItems:"center"}}>
+                      {heuresDuree()||"—"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── OBSERVATIONS ── */}
+                <div style={{marginBottom:20}}>
+                  <L t="Observations / Compte rendu d'intervention"/>
+                  {editMode
+                    ? <textarea value={rapport.observations} onChange={e=>set("observations",e.target.value)}
+                        placeholder="Décrivez le déroulement de l'intervention, difficultés rencontrées, état de l'installation…"
+                        rows={5} style={{...S,resize:"vertical",lineHeight:1.6,minHeight:110}}/>
+                    : <div style={{...S,opacity:0.8,whiteSpace:"pre-wrap",minHeight:80,lineHeight:1.6}}>
+                        {rapport.observations||<span style={{color:"#2E4D82"}}>Aucune observation</span>}
+                      </div>}
+                </div>
+
+                {/* ── MATÉRIEL SUPPLÉMENTAIRE ── */}
+                <div style={{marginBottom:20}}>
+                  <L t="Matériel supplémentaire posé (hors devis)"/>
+                  {editMode
+                    ? <textarea value={rapport.materiel_supp} onChange={e=>set("materiel_supp",e.target.value)}
+                        placeholder="Ex: 2m de gaine supplémentaire, 1 disjoncteur 32A, raccord T45…"
+                        rows={3} style={{...S,resize:"vertical",lineHeight:1.6}}/>
+                    : <div style={{...S,opacity:0.8,whiteSpace:"pre-wrap",minHeight:60,lineHeight:1.6}}>
+                        {rapport.materiel_supp
+                          ? <><span style={{display:"inline-block",background:"rgba(245,158,11,0.12)",color:"#F59E0B",borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700,marginBottom:6}}>⚠️ Matériel supplémentaire</span><br/>{rapport.materiel_supp}</>
+                          : <span style={{color:"#2E4D82"}}>Aucun matériel supplémentaire</span>}
+                      </div>}
+                </div>
+
+                {/* ── PHOTOS CHANTIER ── */}
+                <div style={{marginBottom:20}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <L t={`Photos du chantier (${(rapport.photos_chantier||[]).length})`}/>
+                    {editMode&&<label style={{background:"rgba(59,130,246,0.1)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:8,color:"#3B82F6",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                      {uploading?"⏳ Envoi…":"📷 Ajouter"}
+                      <input type="file" accept="image/*" multiple onChange={e=>uploadChantierPhotos(e.target.files)} style={{display:"none"}} disabled={uploading}/>
+                    </label>}
+                  </div>
+                  {(rapport.photos_chantier||[]).length===0
+                    ? <div style={{background:"#070D1A",borderRadius:10,border:"2px dashed #1B2D4F",padding:"24px",textAlign:"center",color:"#2E4D82",fontSize:12}}>
+                        {editMode?"📷 Ajoutez les photos de l'installation":"Aucune photo"}
+                      </div>
+                    : <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                        {(rapport.photos_chantier||[]).map((url,i)=>(
+                          <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",aspectRatio:"1",border:"1px solid #1B2D4F"}}>
+                            <img src={url} onClick={()=>setLightbox(url)} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                            {editMode&&<button onClick={()=>removeChantierPhoto(url)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.7)",border:"none",borderRadius:"50%",color:"#FFF",width:24,height:24,cursor:"pointer",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>}
+                          </div>
+                        ))}
+                      </div>}
+                </div>
+
+                {/* ── PV DE RÉCEPTION ── */}
+                <div style={{marginBottom:20}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <L t="Photo du PV de réception"/>
+                    {editMode&&!rapport.photo_pv&&<label style={{background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:8,color:"#10B981",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                      {uploadingPV?"⏳ Envoi…":"📄 Photo PV"}
+                      <input type="file" accept="image/*" onChange={e=>uploadPV(e.target.files[0])} style={{display:"none"}} disabled={uploadingPV}/>
+                    </label>}
+                  </div>
+                  {rapport.photo_pv
+                    ? <div style={{position:"relative",display:"inline-block"}}>
+                        <img src={rapport.photo_pv} onClick={()=>setLightbox(rapport.photo_pv)} style={{width:"100%",maxWidth:340,borderRadius:12,border:"2px solid #10B98140",cursor:"zoom-in",display:"block"}}/>
+                        {editMode&&<button onClick={()=>set("photo_pv",null)} style={{position:"absolute",top:8,right:8,background:"rgba(239,68,68,0.8)",border:"none",borderRadius:"50%",color:"#FFF",width:28,height:28,cursor:"pointer",fontSize:14,fontWeight:700}}>✕</button>}
+                        <div style={{marginTop:6,fontSize:11,color:"#10B981",fontWeight:700}}>✅ PV de réception joint</div>
+                      </div>
+                    : <div style={{background:"#070D1A",borderRadius:10,border:"2px dashed #1B2D4F",padding:"24px",textAlign:"center",color:"#2E4D82",fontSize:12}}>
+                        {editMode?"📄 Photographiez et importez le PV signé par le client":"Aucun PV joint"}
+                      </div>}
+                </div>
+
+                {/* ── SIGNATURE CLIENT ── */}
+                <div style={{marginBottom:24}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <L t="Signature du client"/>
+                    {editMode&&hasSig&&<button onClick={clearSig} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:8,color:"#EF4444",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️ Effacer</button>}
+                  </div>
+                  {editMode
+                    ? <div style={{border:"2px solid #1B2D4F",borderRadius:12,overflow:"hidden",background:"#070D1A",touchAction:"none"}}>
+                        <canvas ref={canvasRef} width={600} height={180}
+                          style={{width:"100%",height:180,display:"block",cursor:"crosshair",touchAction:"none"}}
+                          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}/>
+                        <div style={{padding:"6px 12px",fontSize:10,color:"#2E4D82",borderTop:"1px solid #1B2D4F"}}>
+                          {hasSig?"✍️ Signature enregistrée":"Signez ici avec votre doigt ou la souris"}
+                        </div>
+                      </div>
+                    : rapport.signature
+                      ? <div style={{border:"2px solid #1B2D4F",borderRadius:12,overflow:"hidden",background:"#070D1A"}}>
+                          <img src={rapport.signature} style={{width:"100%",maxHeight:180,objectFit:"contain",display:"block"}}/>
+                          <div style={{padding:"6px 12px",fontSize:10,color:"#10B981",fontWeight:700,borderTop:"1px solid #1B2D4F"}}>✅ Signature client</div>
+                        </div>
+                      : <div style={{background:"#070D1A",borderRadius:10,border:"2px dashed #1B2D4F",padding:"24px",textAlign:"center",color:"#2E4D82",fontSize:12}}>
+                          Aucune signature
+                        </div>}
+                </div>
+
+                {/* ── INFOS RAPPORT ── */}
+                {editMode&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
+                  <div><L t="Date du rapport"/>
+                    <input value={rapport.rapport_date} onChange={e=>set("rapport_date",e.target.value)} style={S}/>
+                  </div>
+                  <div><L t="Rédigé par"/>
+                    <input value={rapport.rapport_par} onChange={e=>set("rapport_par",e.target.value)} style={S}/>
+                  </div>
+                </div>}
+
+                {/* ── ACTIONS ── */}
+                {editMode&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  <button onClick={onClose} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",padding:"12px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',minWidth:100}}>
+                    Annuler
+                  </button>
+                  {ch.statut!=="termine"&&<button onClick={()=>handleSave(false)} style={{flex:1,background:"#112038",border:"1px solid #1B2D4F",borderRadius:10,color:"#7B96C8",padding:"12px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',minWidth:100}}>
+                    💾 Sauvegarder
+                  </button>}
+                  {ch.statut==="termine"
+                    ? <button onClick={()=>handleSave(false)} style={{flex:2,background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:10,color:"#FFF",padding:"12px",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:'"Outfit",sans-serif',boxShadow:"0 4px 16px rgba(59,130,246,0.3)",minWidth:160}}>
+                        💾 Enregistrer les modifications
+                      </button>
+                    : <button onClick={()=>handleSave(true)} style={{flex:2,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,color:"#FFF",padding:"12px",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:'"Outfit",sans-serif',boxShadow:"0 4px 16px rgba(16,185,129,0.3)",minWidth:160}}>
+                        ✅ Valider & Terminer le chantier
+                      </button>}
+                </div>}
+
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
     function ChantierTab({isMobile, chantiers, setChantiers, stock, hist, profile, fmt, role, goTo, BTN, INP, BDG}) {
       const canEdit = r => ["administrateur","installateur"].includes(r);
 
@@ -2398,6 +2743,7 @@
       const[calMonth,setCalMonth]=useState(new Date().getMonth());
       const[calYear,setCalYear]=useState(new Date().getFullYear());
       const[photosModal,setPhotosModal]=useState(null); // chantier en cours de visualisation
+      const[rapportModal,setRapportModal]=useState(null); // {ch, rapport}
       const[lightbox,setLightbox]=useState(null);       // URL photo plein écran
       const[uploading,setUploading]=useState(false);
 
@@ -2560,7 +2906,40 @@
           </div>}
 
           {/* MODAL PHOTOS */}
-          {photosModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setPhotosModal(null)}><div style={{...MBX,width:isMobile?"100%":620}} onClick={e=>e.stopPropagation()}>
+          {rapportModal&&<RapportModal
+            isMobile={isMobile}
+            data={rapportModal}
+            onClose={()=>setRapportModal(null)}
+            onSave={(rapport)=>{
+              const ch=rapportModal.ch;
+              const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,rapport}:c2);
+              setChantiers(updated);
+              if(window._appState)window._appState.getChantiers&&setChantiers(updated);
+              setRapportModal(null);
+            }}
+            onSaveAndFinish={(rapport)=>{
+              const ch=rapportModal.ch;
+              // Déduire stock
+              const ns=stock.map(s=>{
+                const u=(ch.materiels||[]).find(m=>Number(m.id)===s.id);
+                const uc=(ch.cables||[]).find(m=>Number(m.id)===s.id);
+                const q=(u?Number(u.qty):0)+(uc?Number(uc.qty):0);
+                return q>0?{...s,stock:Math.max(0,s.stock-q)}:s;
+              });
+              const d=new Date().toLocaleDateString("fr-FR");
+              const newHist=[
+                ...(ch.materiels||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:m.cat,unite:m.unite||"pce",qty:m.qty,par:ch.technicien||profile?.nom||""})),
+                ...(ch.cables||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:"Câble",unite:"ml",qty:m.qty,par:ch.technicien||profile?.nom||""})),
+              ];
+              const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,statut:"termine",date_fin:d,rapport}:c2);
+              setChantiers(updated);
+              if(window._appState)window._appState.finishChantier(ns,newHist,updated);
+              setRapportModal(null);
+            }}
+            uploadPhotos={uploadPhotos}
+            sb={sb}
+          />}
+                    {photosModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setPhotosModal(null)}><div style={{...MBX,width:isMobile?"100%":620}} onClick={e=>e.stopPropagation()}>
             <Handle/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div>
@@ -2674,7 +3053,10 @@
                         </div>}
                         <div style={{display:"flex",gap:6}}>
                           <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
-                          {S.next&&<button onClick={()=>nextStatut(ch)} style={BTN(S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11})}>
+                          {S.next&&<button onClick={()=>{
+                            if(S.next==="termine"){setRapportModal({ch,rapport:{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:new Date().toLocaleDateString("fr-FR"),rapport_par:profile?.nom||""}});}
+                            else nextStatut(ch);
+                          }} style={BTN(S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11})}>
                             {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
                           </button>}
                           <label style={{background:"#1B2D4F80",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"7px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
@@ -2749,7 +3131,10 @@
                       </div>}
                       <div style={{display:"flex",gap:6}}>
                         <button onClick={()=>setPhotosModal(ch)} style={{flex:1,background:"#1B2D4F40",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"7px",cursor:"pointer",fontSize:12,fontWeight:700}}>
-                          📸 {(ch.photos||[]).length>0?`${(ch.photos||[]).length} photo(s)`:"Ajouter photos"}
+                          📸 {(ch.photos||[]).length>0?`${(ch.photos||[]).length} photo(s)`:"Photos"}
+                        </button>
+                        <button onClick={()=>setRapportModal({ch, rapport:ch.rapport||{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:ch.date_fin||"",rapport_par:ch.technicien||""}})} style={{flex:1,background:ch.rapport?"rgba(16,185,129,0.1)":"rgba(59,130,246,0.08)",border:`1px solid ${ch.rapport?"#10B98140":"#1B2D4F"}`,borderRadius:8,color:ch.rapport?"#10B981":"#7B96C8",padding:"7px",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                          📋 {ch.rapport?"Voir rapport":"Rapport"}
                         </button>
                       </div>
                     </div>
