@@ -100,6 +100,7 @@
       return "ok";
     };
     const EC = {cat:"",article:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false};
+    const BDG=cat=>({background:(CC[cat]||'#1B2D4F')+'22',color:CC[cat]||'#7B96C8',padding:'2px 8px',borderRadius:5,fontSize:11,fontWeight:700});
 
     function useIsMobile(){ const[m,setM]=useState(window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m; }
 
@@ -3739,16 +3740,24 @@
       React.useEffect(()=>{
         const{data:{subscription}}=sb.auth.onAuthStateChange(async(_,session)=>{
           setAuthUser(session?.user||null);
-          setAuthLoading(false);
           if(session?.user){
+            let prof=null;
             const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
-            if(data){
-              setProfile(data);
-              const tabs=ROLE_TABS[data.role]||["accueil"];
-              const cur=view;
-              if(!tabs.includes(cur))goTo(tabs[0]);
+            if(data){prof=data;}
+            else{
+              await new Promise(r=>setTimeout(r,1000));
+              const{data:d2}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+              if(d2)prof=d2;
             }
-          }else{setProfile(null);}
+            if(prof){
+              setProfile(prof);
+              const tabs=ROLE_TABS[prof.role]||["accueil"];
+              try{const cur=localStorage.getItem("app_view")||"accueil";if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
+            }
+          }else{
+            setProfile(null);
+          }
+          setAuthLoading(false);
         });
         return()=>subscription.unsubscribe();
       },[]);
@@ -4045,21 +4054,23 @@
               {/* Contenu */}
               <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 12px 90px":"16px 20px"}}>
 
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
+                {!profile&&authUser&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#4A6A9E",fontSize:13,gap:8}}><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Chargement du profil…</div>}
+
+                {profile&&view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toISOString(),statut:"prospect",adresse:"",notes:""},...p]);
                   SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date:new Date().toISOString()},...p]);
                 }}/>}
 
-                {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
-                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
-                {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
-                {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
-                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
-                {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} acomptes={acomptes} setAcomptes={SA} profile={profile} fmt={fmt} role={role} goTo={goTo}/>}
+                {profile&&view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
+                {profile&&view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+                {profile&&view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {profile&&view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
+                {profile&&view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
+                {profile&&view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
+                {profile&&view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
+                {profile&&view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} acomptes={acomptes} setAcomptes={SA} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
 
-                {view==="accueil"&&<>
+                {profile&&view==="accueil"&&<>
                   <div style={{marginBottom:20}}>
                     <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>Bonjour {profile?.nom?.split(" ")[0]||""} {rCfg.icon}</div>
                     <div style={{fontSize:12,color:"#4A6A9E"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
@@ -4134,7 +4145,7 @@
                   </div>
                 </>}
 
-                {view==="stock"&&<>
+                {profile&&view==="stock"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
                     {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Ajouter</button>}
@@ -4153,7 +4164,7 @@
                           <div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#0D1828",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#1D4ED860":"#1B2D4F"}`,padding:14}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                               <div style={{flex:1,paddingRight:8}}>
-                                <span style={{background:BDG(item.cat).split(";")[0].split(":")[1]?.trim()||"#1B2D4F",color:"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{item.cat}</span>
+                                <span style={{background:CC[item.cat]||"#1B2D4F22",color:CC[item.cat]||"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{item.cat}</span>
                                 <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF",marginTop:5}}>{item.article}</div>
                                 {hasO&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((a,o)=>a+o.qty,0)} commandé(s)</div>}
                               </div>
@@ -4202,7 +4213,7 @@
                             const s=SC[st];
                             return(
                               <tr key={item.id} style={{borderBottom:"1px solid #0D182866",background:item.rupture?"#1A0A2A08":"transparent"}}>
-                                <td style={{padding:"11px 14px"}}><span style={{background:BDG(item.cat).split(";")[0].split(":")[1]?.trim()||"#1B2D4F",color:"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:700}}>{item.cat}</span></td>
+                                <td style={{padding:"11px 14px"}}><span style={{background:CC[item.cat]||"#1B2D4F22",color:CC[item.cat]||"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:700}}>{item.cat}</span></td>
                                 <td style={{padding:"11px 14px",fontWeight:700,color:"#F0F6FF"}}>{item.article}{hasO&&<span style={{marginLeft:6,fontSize:10,color:"#3B82F6"}}>🚚</span>}</td>
                                 <td style={{padding:"11px 14px"}}>
                                   {eSId===item.id?(
@@ -4239,7 +4250,7 @@
                   )}
                 </>}
 
-                {view==="commandes"&&<>
+                {profile&&view==="commandes"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>🛒 Commandes</h2>
                   </div>
@@ -4308,7 +4319,7 @@
                   )}
                 </>}
 
-                {view==="parametres"&&<>
+                {profile&&view==="parametres"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                     <div><h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>⚙️ Paramètres</h2><p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Gestion des composants du stock</p></div>
                     <button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>+ Nouveau</button>
