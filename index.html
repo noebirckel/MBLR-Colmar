@@ -3875,11 +3875,6 @@
         </div>
       );
       if(!authUser)return <LoginScreen/>;
-      if(!profile)return(
-        <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{color:"#4A6A9E"}}>Chargement profil…</div>
-        </div>
-      );
 
       // Modal helpers
       const OVL={position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16};
