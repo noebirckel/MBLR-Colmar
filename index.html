@@ -3699,440 +3699,276 @@
 
     // APPLICATION PRINCIPALE
     // ══════════════════════════════════════
+
     function App(){
       const isMobile=useIsMobile();
-      // Auth
-      const[authUser,setAuthUser]=useState(null);
-      const[profile,setProfile]=useState(null);
-      const[authLoading,setAuthLoading]=useState(true);
-      // Data
-      const[stock,setStock]=useState(INIT);
-      const[orders,setOrders]=useState([]);
-      const[hist,setHist]=useState([]);
-      const[chantiersPipeline,setChantiersPipeline]=useState([]);
-      const[acomptes,setAcomptes]=useState([]);
-      const[savTickets,setSavTickets]=useState([]);
-      const[objectifs,setObjectifs]=useState({});
-      const[rapports,setRapports]=useState([]);
-      const[sync,setSync]=useState("loading");
-      const[ventes,setVentes]=useState([]);
-      // UI
-      const[view,setView]=useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
-      const goTo=v=>{try{localStorage.setItem("app_view",v);}catch(e){}setView(v);};
-      const[fCat,setFCat]=useState("Toutes");
-      const[cNom,setCNom]=useState("");
-      const[cItems,setCItems]=useState([]);
-      const[aItem,setAItem]=useState({id:"",qty:""});
-      const[oModal,setOModal]=useState(null);
-      const[oForm,setOForm]=useState({qty:"",desc:""});
-      const[eComp,setEComp]=useState(null);
-      const[cForm,setCForm]=useState(EC);
-      const[eSId,setESId]=useState(null);
-      const[eSVal,setESVal]=useState("");
-      const[pSearch,setPSearch]=useState("");
-      const[pCat,setPCat]=useState("Toutes");
-      const[delConf,setDelConf]=useState(null);
-      const[oDelConf,setODelConf]=useState(null);
-      const[oEditModal,setOEditModal]=useState(null);
-      const[oEditForm,setOEditForm]=useState({qty:"",desc:""});
-      const timer=useRef(null);
-      const firstLoad=useRef(true);
+      const[authUser,setAuthUser]=React.useState(null);
+      const[authLoading,setAuthLoading]=React.useState(true);
+      const[profile,setProfile]=React.useState(null);
+      const[sync,setSync]=React.useState("saved");
+      const[stock,setStock]=React.useState([]);
+      const[orders,setOrders]=React.useState([]);
+      const[hist,setHist]=React.useState([]);
+      const[ventes,setVentes]=React.useState([]);
+      const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
+      const[acomptes,setAcomptes]=React.useState([]);
+      const[savTickets,setSavTickets]=React.useState([]);
+      const[objectifs,setObjectifs]=React.useState([]);
+      const[rapports,setRapports]=React.useState([]);
+      const[view,setView]=React.useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
+      const[fCat,setFCat]=React.useState("Toutes");
+      const[oModal,setOModal]=React.useState(null);
+      const[oForm,setOForm]=React.useState({qty:1,notes:""});
+      const[oEditModal,setOEditModal]=React.useState(null);
+      const[oEditForm,setOEditForm]=React.useState({});
+      const[oDelConf,setODelConf]=React.useState(null);
+      const[eComp,setEComp]=React.useState(null);
+      const[cForm,setCForm]=React.useState({cat:"",article:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false});
+      const[delConf,setDelConf]=React.useState(null);
+      const[eSId,setESId]=React.useState(null);
+      const[eSVal,setESVal]=React.useState("");
+      const[pSearch,setPSearch]=React.useState("");
+      const[pCat,setPCat]=React.useState("Toutes");
+      const firstLoad=React.useRef(true);
+      const timer=React.useRef(null);
 
-      // ── Auth ──
-      useEffect(()=>{
-        sb.auth.getSession().then(({data:{session}})=>{
-          if(session){setAuthUser(session.user);loadProfile(session.user.id);}
-          else setAuthLoading(false);
-        });
-        const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
-          if(session){setAuthUser(session.user);loadProfile(session.user.id);}
-          else{setAuthUser(null);setProfile(null);setAuthLoading(false);}
+      const goTo=v=>{try{localStorage.setItem("app_view",v);}catch(e){}setView(v);};
+      const logout=()=>sb.auth.signOut();
+
+      // Auth
+      React.useEffect(()=>{
+        const{data:{subscription}}=sb.auth.onAuthStateChange(async(_,session)=>{
+          setAuthUser(session?.user||null);
+          setAuthLoading(false);
+          if(session?.user){
+            const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+            if(data){
+              setProfile(data);
+              const tabs=ROLE_TABS[data.role]||["accueil"];
+              const cur=view;
+              if(!tabs.includes(cur))goTo(tabs[0]);
+            }
+          }else{setProfile(null);}
         });
         return()=>subscription.unsubscribe();
       },[]);
 
-      const loadProfile=async(uid)=>{
-        const{data}=await sb.from("profiles").select("*").eq("id",uid).single();
-        if(data){
-          setProfile(data);
-          if(!data.actif){await sb.auth.signOut();return;}
-          const tabs=ROLE_TABS[data.role]||["accueil"];
-          const savedView=localStorage.getItem("app_view");
-          const targetView=savedView&&tabs.includes(savedView)?savedView:tabs[0];
-          try{localStorage.setItem("app_view",targetView);}catch(e){}
-          setView(targetView);
-        }
-        setAuthLoading(false);
-      };
-
-      const logout=()=>sb.auth.signOut();
-
-      // ── Data sync ──
-      useEffect(()=>{
-        if(!authUser)return;
-        async function load(){
-          setSyncState("loading");
-          try{
-            const{data,error}=await sb.from("app_data").select("*").eq("id","main").single();
-            if(error)throw error;
-            if(data){
-              if(data.stock&&data.stock.length>0)setStock(data.stock);
-              if(data.orders)setOrders(data.orders);
-              if(data.hist)setHist(data.hist);
-              if(data.ventes)setVentes(data.ventes);
-              if(data.chantiersPipeline)setChantiersPipeline(data.chantiersPipeline);
-              if(data.acomptes)setAcomptes(data.acomptes);
-              if(data.savTickets)setSavTickets(data.savTickets);
-              if(data.objectifs)setObjectifs(data.objectifs);
-              if(data.rapports)setRapports(data.rapports);
-            }
-            setSyncState("saved");
-          }catch(e){setSyncState("error");}
+      // Load data
+      React.useEffect(()=>{
+        if(!profile)return;
+        const loadAll=async()=>{
+          const[rs,ro,rh,rv,rc,ra,rsav,robj,rrapp]=await Promise.all([
+            sb.from("stock").select("*").order("cat"),
+            sb.from("orders").select("*").order("created_at",{ascending:false}),
+            sb.from("historique").select("*").order("date",{ascending:false}),
+            sb.from("ventes").select("*").order("created_at",{ascending:false}),
+            sb.from("chantiers").select("*").order("date_creation",{ascending:false}),
+            sb.from("acomptes").select("*").order("created_at",{ascending:false}),
+            sb.from("sav_tickets").select("*").order("created_at",{ascending:false}),
+            sb.from("objectifs").select("*"),
+            sb.from("rapports").select("*").order("date",{ascending:false}),
+          ]);
+          if(rs.data)setStock(rs.data);
+          if(ro.data)setOrders(ro.data);
+          if(rh.data)setHist(rh.data);
+          if(rv.data)setVentes(rv.data);
+          if(rc.data)setChantiersPipeline(rc.data);
+          if(ra.data)setAcomptes(ra.data);
+          if(rsav.data)setSavTickets(rsav.data);
+          if(robj.data)setObjectifs(robj.data);
+          if(rrapp.data)setRapports(rrapp.data);
           firstLoad.current=false;
-        }
-        load();
-        const ch=sb.channel("realtime_app").on("postgres_changes",{event:"UPDATE",schema:"public",table:"app_data"},p=>{
-          const d=p.new;
-          if(d.stock&&d.stock.length>0)setStock(d.stock);
-          if(d.orders)setOrders(d.orders);
-          if(d.hist)setHist(d.hist);
-          if(d.ventes)setVentes(d.ventes);
-          if(d.chantiersPipeline)setChantiersPipeline(d.chantiersPipeline);
-          if(d.acomptes)setAcomptes(d.acomptes);
-          if(d.savTickets)setSavTickets(d.savTickets);
-          if(d.objectifs)setObjectifs(d.objectifs);
-          if(d.rapports)setRapports(d.rapports);
-          setSyncState("saved");
+        };
+        loadAll();
+      },[profile]);
+
+      // Realtime
+      React.useEffect(()=>{
+        if(!profile)return;
+        const ch=sb.channel("changes").on("postgres_changes",{event:"*",schema:"public"},(payload)=>{
+          const t=payload.table;
+          const refresh=async()=>{
+            if(t==="stock"){const{data}=await sb.from("stock").select("*").order("cat");if(data)setStock(data);}
+            if(t==="orders"){const{data}=await sb.from("orders").select("*").order("created_at",{ascending:false});if(data)setOrders(data);}
+            if(t==="ventes"){const{data}=await sb.from("ventes").select("*").order("created_at",{ascending:false});if(data)setVentes(data);}
+            if(t==="chantiers"){const{data}=await sb.from("chantiers").select("*").order("date_creation",{ascending:false});if(data)setChantiersPipeline(data);}
+            if(t==="acomptes"){const{data}=await sb.from("acomptes").select("*").order("created_at",{ascending:false});if(data)setAcomptes(data);}
+            if(t==="sav_tickets"){const{data}=await sb.from("sav_tickets").select("*").order("created_at",{ascending:false});if(data)setSavTickets(data);}
+            if(t==="rapports"){const{data}=await sb.from("rapports").select("*").order("date",{ascending:false});if(data)setRapports(data);}
+          };
+          refresh();
         }).subscribe();
         return()=>sb.removeChannel(ch);
-      },[authUser]);
+      },[profile]);
 
-      const setSyncState=v=>setSync(v);
-
-      const SV=v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(stock,orders,hist,n,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
-      const SC2=v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(stock,orders,hist,ventes,n,acomptes,savTickets,objectifs,rapports);};
-      const SA=v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,n,savTickets,objectifs,rapports);};
-      const SSAV=v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,n,objectifs,rapports);};
-      const SOBJ=v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,n,rapports);};
-      const SRAPP=v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,n);};
-      const saveDB=useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
+      const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
         if(firstLoad.current)return;
         if(timer.current)clearTimeout(timer.current);
         setSync("saving");
         timer.current=setTimeout(async()=>{
           try{
-            const nv2=nv!==undefined?nv:ventes;
-            const nc2=nc!==undefined?nc:chantiersPipeline;
-            const na2=na!==undefined?na:acomptes;
-            const nsav2=nsav!==undefined?nsav:savTickets;
-            const nobj2=nobj!==undefined?nobj:objectifs;
-            const nrapp2=nrapp!==undefined?nrapp:rapports;
-            const{error}=await sb.from("app_data").upsert({id:"main",stock:ns,orders:no,hist:nh,ventes:nv2,chantiersPipeline:nc2,acomptes:na2,savTickets:nsav2,objectifs:nobj2,rapports:nrapp2,updated_at:new Date().toISOString()});
-            if(error)throw error;
+            if(ns)await sb.from("stock").upsert(ns);
+            if(no)await sb.from("orders").upsert(no);
+            if(nh)await sb.from("historique").upsert(nh);
+            if(nv)await sb.from("ventes").upsert(nv);
+            if(nc)await sb.from("chantiers").upsert(nc);
+            if(na)await sb.from("acomptes").upsert(na);
+            if(nsav)await sb.from("sav_tickets").upsert(nsav);
+            if(nobj)await sb.from("objectifs").upsert(nobj);
+            if(nrapp)await sb.from("rapports").upsert(nrapp);
             setSync("saved");
-          }catch(e){setSync("error");}
+          }catch(e){setSync("error");console.error(e);}
         },800);
       },[]);
 
-      const SS=v=>{const n=typeof v==="function"?v(stock):v;setStock(n);saveDB(n,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
-      // expose finishChantier for ChantierTab
-      useEffect(()=>{
-        window._appState={
-          finishChantier:(ns,newHistItems,updatedChantiers)=>{
-            const nh=[...newHistItems,...hist];
-            setStock(ns);setHist(nh);setChantiersPipeline(updatedChantiers);
-            saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes,savTickets,objectifs,rapports);
-          },
-          getChantiers:()=>chantiersPipeline,
-          getVentes:()=>ventes
-        };
-      });
-      const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
+      const upd=(id,field,val)=>{const n=stock.map(s=>s.id===id?{...s,[field]:val}:s);setStock(n);saveDB(n,null,null,null,null,null,null,null,null);};
+      const SV=React.useCallback(v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(null,null,null,n,null,null,null,null,null);},[ventes]);
+      const SC2=React.useCallback(v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(null,null,null,null,n,null,null,null,null);},[chantiersPipeline]);
+      const SA=React.useCallback(v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(null,null,null,null,null,n,null,null,null);},[acomptes]);
+      const SSAV=React.useCallback(v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(null,null,null,null,null,null,n,null,null);},[savTickets]);
+      const SOBJ=React.useCallback(v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(null,null,null,null,null,null,null,n,null);},[objectifs]);
+      const SR=React.useCallback(v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(null,null,null,null,null,null,null,null,n);},[rapports]);
 
       const role=profile?.role||"installateur";
-      const allowedTabs=ROLE_TABS[role]||["dashboard"];
+      const allowedTabs=ROLE_TABS[role]||["accueil"];
       const uCats=[...new Set(stock.map(s=>s.cat))];
       const cats=["Toutes",...uCats];
-      const aOIds=useMemo(()=>new Set(orders.filter(o=>o.statut==="en_cours").map(o=>o.articleId)),[orders]);
-      const aOByA=useMemo(()=>{const m={};orders.filter(o=>o.statut==="en_cours").forEach(o=>{if(!m[o.articleId])m[o.articleId]=[];m[o.articleId].push(o);});return m;},[orders]);
-      const fil=useMemo(()=>stock.filter(s=>fCat==="Toutes"||s.cat===fCat),[stock,fCat]);
-      const alerts=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="alert");
-      const ordered=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="ordered");
-      const warns=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="warn");
-      const rupts=stock.filter(s=>s.rupture);
-      const totalCmd=alerts.reduce((a,s)=>a+(s.seuil-s.stock)*(s.prix||0),0);
-      const pFil=useMemo(()=>stock.filter(s=>(pCat==="Toutes"||s.cat===pCat)&&(!pSearch||s.article.toLowerCase().includes(pSearch.toLowerCase())||s.cat.toLowerCase().includes(pSearch.toLowerCase()))),[stock,pCat,pSearch]);
-
-      const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
-      const BTN=(bg="#3B82F6",e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",fontWeight:700,fontSize:13,...e});
-      const BDG=cat=>{ /* badges catégories */const c=CC[cat]||"#7B96C8";return{background:c+"25",color:c,padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,display:"inline-block",whiteSpace:"nowrap"};};
-      const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#0D1828",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #1B2D4F",maxHeight:"92vh",overflowY:"auto"}:{background:"#0D1828",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"};
-      const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:5,letterSpacing:"0.05em"}}>{c}</label>;
-      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"8px auto 16px"}}/>:null;
-
-      const upd=(id,f,v)=>SS(p=>p.map(s=>s.id===id?{...s,[f]:v}:s));
-      const addCI=()=>{if(!aItem.id||!aItem.qty)return;setCItems(p=>[...p.filter(i=>i.id!==aItem.id),{...aItem}]);setAItem({id:"",qty:""});};
-      const subC=()=>{
-        if(!cNom||cItems.length===0)return;
-        const d=new Date().toLocaleDateString("fr-FR");
-        const nh=[...cItems.map(i=>{const a=stock.find(s=>s.id===Number(i.id));return{date:d,chantier:cNom,article:a?.article,cat:a?.cat,unite:a?.unite,qty:Number(i.qty),par:profile?.nom||""};}), ...hist];
-        const ns=stock.map(s=>{const u=cItems.find(i=>Number(i.id)===s.id);return u?{...s,stock:Math.max(0,s.stock-Number(u.qty))}:s;});
-        setStock(ns);setHist(nh);saveDB(ns,orders,nh,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);setCNom("");setCItems([]);
-      };
-      const openO=id=>{const a=stock.find(s=>s.id===id);setOModal(id);setOForm({qty:String(a.seuil>a.stock?a.seuil-a.stock:1),desc:""});};
-      const subO=()=>{
-        if(!oModal||!oForm.qty)return;
-        const a=stock.find(s=>s.id===oModal);
-        SO(p=>[{id:Date.now(),date:new Date().toLocaleDateString("fr-FR"),articleId:oModal,article:a.article,cat:a.cat,unite:a.unite,qty:Number(oForm.qty),prix_unit:a.prix,total:Number(oForm.qty)*a.prix,description:oForm.desc,statut:"en_cours",livraison_date:null,par:profile?.nom||""},...p]);
-        setOModal(null);
-      };
-      const markD=oid=>{
-        const o=orders.find(x=>x.id===oid);if(!o)return;
-        const no=orders.map(x=>x.id===oid?{...x,statut:"livré",livraison_date:new Date().toLocaleDateString("fr-FR")}:x);
-        const ns=stock.map(s=>s.id===o.articleId?{...s,stock:s.stock+o.qty}:s);
-        setOrders(no);setStock(ns);saveDB(ns,no,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);
-      };
-      const saveC=()=>{
-        if(!cForm.article||!cForm.cat)return;
-        const p={...cForm,stock:Number(cForm.stock),seuil:Number(cForm.seuil),prix:Number(cForm.prix)};
-        if(eComp===-1)SS(prev=>[...prev,{...p,id:Math.max(...prev.map(s=>s.id))+1}]);
-        else SS(prev=>prev.map(s=>s.id===eComp?{...p,id:s.id}:s));
-        setEComp(null);
-      };
-      const openOEdit=o=>{setOEditModal(o);setOEditForm({qty:String(o.qty),desc:o.description||""});};
-      const saveOEdit=()=>{
-        if(!oEditModal)return;
-        const newQty=Math.max(1,Number(oEditForm.qty));
-        SO(p=>p.map(x=>x.id===oEditModal.id?{...x,qty:newQty,total:newQty*x.prix_unit,description:oEditForm.desc}:x));
-        setOEditModal(null);
-      };
-      const deleteOrder=oid=>{
-        const o=orders.find(x=>x.id===oid);
-        // If en_cours, nothing to revert in stock. Just remove.
-        SO(p=>p.filter(x=>x.id!==oid));
-        setODelConf(null);
-      };
-      const oArt=oModal?stock.find(s=>s.id===oModal):null;
-
-      const syncCfg={loading:{c:"#4A6A9E",t:"Connexion…",spin:true},saving:{c:"#F59E0B",t:"Sync…",spin:true},saved:{c:"#10B981",t:"✅ Sync",spin:false},error:{c:"#EF4444",t:"⚠️ Offline",spin:false}};
-      const sc2=syncCfg[sync]||syncCfg.saved;
-
-      // ── GROUPES DE NAVIGATION ──────────────────────────────
-      const NAV_GROUPS = [
-        { id:"accueil",   icon:"🏠", label:"Accueil",  tabs:["accueil"],                                    single:true  },
-        { id:"pilotage",  icon:"📊", label:"Pilotage", tabs:["stats","messagerie"],                          single:false },
-        { id:"ventes",    icon:"💰", label:"Ventes",   tabs:["ventes","commandes","administratif"],          single:false },
-        { id:"terrain",   icon:"🔧", label:"Terrain",  tabs:["chantier","sav","rapports","cartes"],          single:false },
-        { id:"stock",     icon:"📦", label:"Stock",    tabs:["stock"],                                       single:true  },
-        { id:"admin",     icon:"⚙️", label:"Admin",    tabs:["parametres","equipe"],                        single:false },
-      ];
-      const TAB_LABELS = {
-        accueil:"Accueil", stock:"Stock", chantier:"Chantier", commandes:"Commandes",
-        ventes:"Ventes", administratif:"Administratif", cartes:"Cartes",
-        messagerie:"Messagerie", stats:"Stats", sav:"SAV", rapports:"Rapports",
-        parametres:"Paramètres", equipe:"Équipe",
-      };
-      const TAB_ICONS = {
-        accueil:"🏠", stock:"📦", chantier:"🔧", commandes:"🛒", ventes:"💰",
-        administratif:"📄", cartes:"🗺️", messagerie:"💬", stats:"📊",
-        sav:"🛠️", rapports:"📋", parametres:"⚙️", equipe:"👥",
-      };
-      // Groupes visibles selon rôle (filtre les tabs autorisés)
-      const visibleGroups = NAV_GROUPS.map(g=>({
-        ...g, tabs: g.tabs.filter(t=>allowedTabs.includes(t))
-      })).filter(g=>g.tabs.length>0);
-
-      // Groupe actif = celui qui contient le view courant
-      const activeGroup = visibleGroups.find(g=>g.tabs.includes(view))?.id || visibleGroups[0]?.id;
-
-      // Sous-tabs du groupe actif (mobile: second row)
-      const activeGroupObj = visibleGroups.find(g=>g.id===activeGroup);
-      const subTabs = activeGroupObj?.tabs || [];
-
-      const ALL_TABS=[
-        ["accueil","🏠","Accueil"],
-        ["stock","📦","Stock"],
-        ["chantier","🔧","Chantier"],
-        ["commandes","📦","Commandes"],
-        ["ventes","💰","Ventes"],
-        ["administratif","📄","Administratif"],
-        ["cartes","🗺️","Cartes"],
-        ["messagerie","💬","Messagerie"],
-        ["stats","📊","Stats"],
-        ["sav","🛠️","SAV"],
-        ["rapports","📋","Rapports"],
-        ["parametres","⚙️","Paramètres"],
-        ["equipe","👥","Équipe"],
-      ];
-      const TABS=ALL_TABS.filter(([v])=>allowedTabs.includes(v));
+      const aOIds=React.useMemo(()=>new Set(orders.filter(o=>o.statut==="en_cours").map(o=>o.articleId)),[orders]);
+      const aOByA=React.useMemo(()=>{const m={};orders.filter(o=>o.statut==="en_cours").forEach(o=>{if(!m[o.articleId])m[o.articleId]=[];m[o.articleId].push(o);});return m;},[orders]);
+      const fil=React.useMemo(()=>stock.filter(s=>fCat==="Toutes"||s.cat===fCat),[stock,fCat]);
+      const pFil=React.useMemo(()=>stock.filter(s=>{const matchCat=pCat==="Toutes"||s.cat===pCat;const matchSearch=!pSearch||s.article.toLowerCase().includes(pSearch.toLowerCase());return matchCat&&matchSearch;}),[stock,pCat,pSearch]);
       const rCfg=ROLES[role]||ROLES.installateur;
 
-      if(authLoading) return <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><div style={{
-            width:100,height:100,borderRadius:22,
-            background:"linear-gradient(135deg,#0D1828,#112038)",
-            border:"1px solid rgba(59,130,246,0.25)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            boxShadow:"0 0 40px rgba(59,130,246,0.2)",
-            animation:"glow 2s infinite"
-          }}>
-            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:76,height:76,borderRadius:14}}/>
-          </div><div style={{color:"#4A6A9E",fontSize:14}}>Chargement…</div></div>;
-      if(!authUser) return <LoginScreen/>;
-      if(!profile) return <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:20,textAlign:"center"}}><div style={{fontSize:48}}>⚠️</div><h2 style={{fontWeight:800}}>Accès non configuré</h2><p style={{color:"#4A6A9E",maxWidth:360}}>Votre compte n'a pas encore de profil. Contactez votre administrateur.</p><button onClick={logout} style={BTN("#1B2D4F",{marginTop:8})}>Se déconnecter</button></div>;
+      const openO=id=>{setOModal(id);setOForm({qty:1,notes:""});};
+      const openOEdit=o=>{setOEditModal(o);setOEditForm({qty:o.qty,notes:o.notes||""});};
+      const oArt=stock.find(s=>s.id===oModal);
+      const aOByAModal=oModal&&oArt?aOByA[oModal]:null;
 
-      // ── Article card mobile ──
-      const ArtCard=({item})=>{
-        const hasO=aOIds.has(item.id);
-        const st=gS(item.stock,item.seuil,item.rupture,hasO);
-        const s=SC[st];
-        const aCmd=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:0;
-        return(
-          <div style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#0D1828",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#1D4ED860":"#1B2D4F"}`,padding:"14px",marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-              <div style={{flex:1,paddingRight:8}}>
-                <span style={BDG(item.cat)}>{item.cat}</span>
-                <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF",marginTop:5}}>{item.article}</div>
-                {hasO&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
-              </div>
-              <span style={{background:s.bg,color:s.color,padding:"4px 9px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{s.icon} {s.label}</span>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-              {[["STOCK",`${item.stock}`,st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E8F0FF"],["SEUIL",`${item.seuil}`,"#7B96C8"],["PRIX",fmt(item.prix),"#10B981"],["À CMD",aCmd>0?"+"+aCmd:"—",aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#2E4D82"]].map(([l,v,c])=>(
-                <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
-                  <div style={{fontSize:13,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                  <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,marginTop:3}}>{l}</div>
-                </div>
-              ))}
-            </div>
-            {eSId===item.id&&(
-              <div style={{display:"flex",gap:6,marginBottom:8}}>
-                <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={INP({flex:1})} autoFocus/>
-                <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={BTN("#10B981",{padding:"11px 18px"})}>✓</button>
-                <button onClick={()=>setESId(null)} style={BTN("#1B2D4F",{padding:"11px 14px"})}>✕</button>
-              </div>
-            )}
-            <div style={{display:"flex",gap:6}}>
-              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{flex:1,background:item.rupture?"#A855F720":"#0D1828",border:`1px solid ${item.rupture?"#A855F7":"#1B2D4F"}`,borderRadius:10,color:item.rupture?"#A855F7":"#4A6A9E",padding:"10px 4px",cursor:"pointer",fontSize:11,fontWeight:700}}>{item.rupture?"⛔":"Rupture"}</button>}
-              {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={BTN("#1B2D4F",{flex:1,padding:"10px 4px",fontSize:12})}>✏️ Stock</button>}
-              {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{flex:1,padding:"10px 4px",fontSize:12})}>📦 Cmd</button>}
-            </div>
-          </div>
-        );
+      const syncCfg={
+        saving:{c:"#F59E0B",t:"Sauvegarde…",spin:true},
+        saved:{c:"#10B981",t:"Synchronisé",spin:false},
+        error:{c:"#EF4444",t:"Erreur sync",spin:false},
       };
+      const sc2=syncCfg[sync]||syncCfg.saved;
+
+      // Navigation groups
+      const NAV_GROUPS=[
+        {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
+        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","messagerie"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","commandes","administratif"]},
+        {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports","cartes"]},
+        {id:"stock",icon:"📦",label:"Stock",tabs:["stock"]},
+        {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
+      ];
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
+      const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
+      const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
+      const subTabs=activeGroupObj?.tabs||[];
+
+      if(authLoading)return(
+        <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+          <div style={{width:80,height:80,borderRadius:18,background:"linear-gradient(135deg,#0D1828,#112038)",border:"1px solid rgba(59,130,246,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:56,height:56}}/>
+          </div>
+          <div style={{color:"#4A6A9E",fontSize:14}}>Chargement…</div>
+        </div>
+      );
+      if(!authUser)return <LoginScreen/>;
+      if(!profile)return(
+        <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{color:"#4A6A9E"}}>Chargement profil…</div>
+        </div>
+      );
+
+      // Modal helpers
+      const OVL={position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16};
+      const MBX={background:"#0D1828",borderRadius:16,padding:"20px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"};
 
       return(
-        <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:"#070D1A",minHeight:"100vh",color:"#E8F0FF",fontSize:14,paddingBottom:isMobile?72:0}}>
+        <div style={{background:"#070D1A",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif',minHeight:"100vh"}}>
 
-          {/* MODAL ÉDITION COMMANDE */}
+          {/* Modals */}
           {oEditModal&&<div style={OVL} onClick={()=>setOEditModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
-            <Handle/>
             <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>✏️ Modifier la commande</h3>
-            <div style={{background:"#070D1A",borderRadius:10,padding:"11px 14px",marginBottom:14}}>
-              <span style={BDG(oEditModal.cat)}>{oEditModal.cat}</span>
-              <div style={{fontWeight:800,fontSize:15,marginTop:4}}>{oEditModal.article}</div>
-              <div style={{fontSize:12,color:"#4A6A9E",marginTop:3}}>Prix unit. : <strong style={{color:"#3B82F6"}}>{fmt(oEditModal.prix_unit)}</strong> / {oEditModal.unite}</div>
-            </div>
-            <L c="QUANTITÉ"/>
-            <input type="number" min="1" value={oEditForm.qty} onChange={e=>setOEditForm(p=>({...p,qty:e.target.value}))} style={{...INP(),marginBottom:8}}/>
-            {Number(oEditForm.qty)>0&&<div style={{background:"#10B98118",border:"1px solid #10B98140",borderRadius:10,padding:"10px 14px",marginBottom:12,fontWeight:700,color:"#10B981",fontSize:15}}>💶 Nouveau total : {fmt(Number(oEditForm.qty)*oEditModal.prix_unit)}</div>}
-            <L c="NOTE"/>
-            <textarea value={oEditForm.desc} onChange={e=>setOEditForm(p=>({...p,desc:e.target.value}))} style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
-            <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button onClick={()=>setOEditModal(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={saveOEdit} style={BTN("#3B82F6",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
+            <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Quantité</label><input type="number" value={oEditForm.qty} onChange={e=>setOEditForm(p=>({...p,qty:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{marginBottom:16}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Notes</label><input value={oEditForm.notes||""} onChange={e=>setOEditForm(p=>({...p,notes:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{const n=orders.map(o=>o.id===oEditModal.id?{...o,...oEditForm,qty:Number(oEditForm.qty)}:o);setOrders(n);saveDB(null,n,null,null,null,null,null,null,null);setOEditModal(null);}} style={{flex:1,background:"#3B82F6",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Enregistrer</button>
+              <button onClick={()=>setOEditModal(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"11px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
 
-          {/* MODAL SUPPRESSION COMMANDE */}
-          {oDelConf&&<div style={OVL} onClick={()=>setODelConf(null)}><div style={{...MBX,maxWidth:360,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-            <Handle/>
+          {oDelConf&&<div style={OVL} onClick={()=>setODelConf(null)}><div style={{...MBX,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:44,marginBottom:10}}>🗑️</div>
-            <h3 style={{margin:"0 0 8px",fontWeight:800,fontSize:17}}>Supprimer cette commande ?</h3>
-            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 6px"}}><strong style={{color:"#E8F0FF"}}>{oDelConf.article}</strong></p>
-            <p style={{color:"#4A6A9E",fontSize:12,margin:"0 0 20px"}}>{oDelConf.qty} {oDelConf.unite} · {fmt(oDelConf.total)}</p>
-            {oDelConf.statut==="livré"&&<div style={{background:"#F59E0B18",border:"1px solid #F59E0B40",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:11,color:"#F59E0B"}}>⚠️ Cette commande est déjà livrée. Le stock ne sera pas recalculé.</div>}
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setODelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={()=>deleteOrder(oDelConf.id)} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+            <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer cette commande ?</h3>
+            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>{oDelConf.article} — qté {oDelConf.qty}</p>
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              <button onClick={()=>{const n=orders.filter(o=>o.id!==oDelConf.id);setOrders(n);saveDB(null,n,null,null,null,null,null,null,null);setODelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+              <button onClick={()=>setODelConf(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"10px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
 
-          {/* MODAL COMMANDE */}
           {oModal&&oArt&&<div style={OVL} onClick={()=>setOModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
-            <Handle/>
-            <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>📦 Passer une commande</h3>
-            <div style={{background:"#070D1A",borderRadius:12,padding:"13px 14px",marginBottom:14}}>
-              <span style={BDG(oArt.cat)}>{oArt.cat}</span>
-              <div style={{fontWeight:800,fontSize:16,marginTop:5}}>{oArt.article}</div>
-              <div style={{fontSize:12,color:"#4A6A9E",marginTop:4}}>Prix : <strong style={{color:"#3B82F6"}}>{fmt(oArt.prix)}</strong> / {oArt.unite} · Stock : <strong style={{color:"#EF4444"}}>{oArt.stock}</strong> · Seuil : {oArt.seuil}</div>
-              {aOByA[oModal]&&<div style={{marginTop:8,padding:"6px 10px",background:"#0F1F3D",borderRadius:8,fontSize:12,color:"#3B82F6",fontWeight:600}}>🚚 Déjà en cours : {aOByA[oModal].reduce((x,o)=>x+o.qty,0)} {oArt.unite} en transit</div>}
-            </div>
-            <L c="QUANTITÉ"/><input type="number" min="1" value={oForm.qty} onChange={e=>setOForm(p=>({...p,qty:e.target.value}))} style={{...INP(),marginBottom:8}}/>
-            {Number(oForm.qty)>0&&<div style={{background:"#10B98118",border:"1px solid #10B98140",borderRadius:10,padding:"11px 14px",marginBottom:12,fontWeight:700,color:"#10B981",fontSize:16}}>💶 Total : {fmt(Number(oForm.qty)*oArt.prix)}</div>}
-            <L c="NOTE"/>
-            <textarea value={oForm.desc} onChange={e=>setOForm(p=>({...p,desc:e.target.value}))} placeholder="Ex: Fournisseur XYZ, commande urgente…" style={{...INP(),height:80,resize:"none",lineHeight:1.6}}/>
-            <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button onClick={()=>setOModal(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={subO} style={BTN("#3B82F6",{flex:2,padding:"13px"})}>✅ Valider</button>
+            <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>🛒 Commander</h3>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{oArt.article}</div>
+            <div style={{fontSize:12,color:"#4A6A9E",marginBottom:12}}>Stock actuel: {oArt.stock} {oArt.unite}</div>
+            <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Quantité</label><input type="number" value={oForm.qty} onChange={e=>setOForm(p=>({...p,qty:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{marginBottom:16}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Notes</label><input value={oForm.notes} onChange={e=>setOForm(p=>({...p,notes:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{if(Number(oForm.qty)<=0)return;const o={id:Date.now(),articleId:oModal,article:oArt.article,qty:Number(oForm.qty),notes:oForm.notes,statut:"en_cours",created_at:new Date().toISOString()};const n=[o,...orders];setOrders(n);saveDB(null,n,null,null,null,null,null,null,null);setOModal(null);}} style={{flex:1,background:"#3B82F6",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Commander</button>
+              <button onClick={()=>setOModal(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"11px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
 
-          {/* MODAL ÉDITION */}
           {eComp!==null&&<div style={OVL} onClick={()=>setEComp(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
-            <Handle/>
-            <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:17}}>{eComp===-1?"➕ Nouveau composant":"✏️ Modifier"}</h3>
-            <L c="CATÉGORIE"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-              <select value={uCats.includes(cForm.cat)?cForm.cat:""} onChange={e=>e.target.value&&setCForm(p=>({...p,cat:e.target.value}))} style={INP()}><option value="">— Existante —</option>{uCats.map(c=><option key={c} value={c}>{c}</option>)}</select>
-              <input value={cForm.cat} onChange={e=>setCForm(p=>({...p,cat:e.target.value}))} placeholder="Ou nouvelle…" style={INP()}/>
+            <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>{eComp===-1?"➕ Nouveau composant":"✏️ Modifier"}</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>NOM</label><input value={cForm.article} onChange={e=>setCForm(p=>({...p,article:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>UNITÉ</label><input value={cForm.unite} onChange={e=>setCForm(p=>({...p,unite:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-              <div><L c="NOM"/><input value={cForm.article} onChange={e=>setCForm(p=>({...p,article:e.target.value}))} style={INP()}/></div>
-              <div><L c="UNITÉ"/><input value={cForm.unite} onChange={e=>setCForm(p=>({...p,unite:e.target.value}))} style={INP()}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>STOCK</label><input type="number" value={cForm.stock} onChange={e=>setCForm(p=>({...p,stock:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>SEUIL</label><input type="number" value={cForm.seuil} onChange={e=>setCForm(p=>({...p,seuil:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-              <div><L c="STOCK"/><input type="number" value={cForm.stock} onChange={e=>setCForm(p=>({...p,stock:e.target.value}))} style={INP()}/></div>
-              <div><L c="SEUIL"/><input type="number" value={cForm.seuil} onChange={e=>setCForm(p=>({...p,seuil:e.target.value}))} style={INP()}/></div>
-              <div><L c="PRIX €"/><input type="number" step="0.01" value={cForm.prix} onChange={e=>setCForm(p=>({...p,prix:e.target.value}))} style={INP()}/></div>
-            </div>
-            <div style={{background:"#070D1A",borderRadius:12,padding:"13px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div><div style={{fontWeight:700,fontSize:13}}>⛔ Rupture centrale</div><div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>Indisponible fournisseur</div></div>
-              <button onClick={()=>setCForm(p=>({...p,rupture:!p.rupture}))} style={{background:cForm.rupture?"#A855F7":"#1B2D4F",border:"none",borderRadius:20,color:"#FFF",padding:"8px 18px",cursor:"pointer",fontWeight:700,fontSize:13}}>{cForm.rupture?"⛔ Oui":"Non"}</button>
+            <div style={{marginBottom:12}}><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>CATÉGORIE</label><input value={cForm.cat} onChange={e=>setCForm(p=>({...p,cat:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+              <input type="checkbox" checked={cForm.rupture} onChange={e=>setCForm(p=>({...p,rupture:e.target.checked}))} id="rupt_cb" style={{width:16,height:16}}/>
+              <label htmlFor="rupt_cb" style={{fontSize:13,color:"#E8F0FF",cursor:"pointer"}}>Rupture centrale fournisseur</label>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setEComp(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={saveC} disabled={!cForm.article||!cForm.cat} style={BTN(!cForm.article||!cForm.cat?"#0D1828":"#3B82F6",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
+              <button onClick={()=>{
+                if(!cForm.article.trim())return;
+                let n;
+                if(eComp===-1){n=[...stock,{...cForm,id:Date.now(),prix:Number(cForm.prix)||0}];}
+                else{n=stock.map(s=>s.id===eComp?{...s,...cForm}:s);}
+                setStock(n);saveDB(n,null,null,null,null,null,null,null,null);setEComp(null);
+              }} style={{flex:1,background:"#10B981",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Enregistrer</button>
+              <button onClick={()=>setEComp(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"11px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
 
-          {/* MODAL SUPPRESSION */}
           {delConf&&<div style={OVL} onClick={()=>setDelConf(null)}><div style={{...MBX,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-            <Handle/>
             <div style={{fontSize:48,marginBottom:10}}>🗑️</div>
-            <h3 style={{margin:"0 0 8px",fontWeight:800,fontSize:17}}>Supprimer ?</h3>
-            <p style={{margin:"0 0 22px",color:"#4A6A9E",fontSize:13}}><strong style={{color:"#E8F0FF"}}>{delConf.cat} — {delConf.article}</strong><br/>Action irréversible.</p>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={()=>{SS(p=>p.filter(s=>s.id!==delConf.id));setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+            <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer ce composant ?</h3>
+            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>{delConf?.article}</p>
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              <button onClick={()=>{const n=stock.filter(s=>s.id!==delConf.id);setStock(n);saveDB(n,null,null,null,null,null,null,null,null);setDelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+              <button onClick={()=>setDelConf(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"10px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
 
-
-          {/* ══ SIDEBAR LAYOUT ══ */}
+          {/* Layout principal */}
           <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
 
-            {/* SIDEBAR DESKTOP */}
+            {/* Sidebar desktop */}
             {!isMobile&&(
-              <aside style={{width:220,flexShrink:0,background:"#08101F",borderRight:"1px solid #1B2D4F",
-                display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
-                <div style={{padding:"16px 14px 12px",borderBottom:"1px solid #1B2D4F",display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:34,height:34,borderRadius:8,flexShrink:0,background:"linear-gradient(135deg,#0D1828,#112038)",border:"1px solid rgba(59,130,246,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:26,height:26,borderRadius:4}}/>
-                  </div>
+              <aside style={{width:220,flexShrink:0,background:"#08101F",borderRight:"1px solid #1B2D4F",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
+                <div style={{padding:"14px 12px",borderBottom:"1px solid #1B2D4F",display:"flex",alignItems:"center",gap:10}}>
+                  <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:32,height:32,borderRadius:7}}/>
                   <div>
-                    <div style={{fontWeight:800,fontSize:12,color:"#F0F6FF",lineHeight:1.2}}>Ma Borne LR</div>
-                    <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,textTransform:"uppercase"}}>Colmar</div>
+                    <div style={{fontWeight:800,fontSize:12,color:"#F0F6FF"}}>Ma Borne LR</div>
+                    <div style={{fontSize:9,color:"#4A6A9E",textTransform:"uppercase",fontWeight:600}}>Colmar</div>
                   </div>
                 </div>
                 <nav style={{flex:1,padding:"8px 6px",overflowY:"auto"}}>
@@ -4142,20 +3978,20 @@
                       <div key={g.id} style={{marginBottom:2}}>
                         {g.tabs.length===1?(
                           <button onClick={()=>goTo(g.tabs[0])} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"9px 10px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isGA?"rgba(59,130,246,0.12)":"transparent"}}>
-                            <span style={{fontSize:15,flexShrink:0}}>{g.icon}</span>
+                            <span style={{fontSize:15}}>{g.icon}</span>
                             <span style={{fontSize:13,fontWeight:700,color:isGA?"#60A5FA":"#7B96C8"}}>{g.label}</span>
                             {isGA&&<div style={{marginLeft:"auto",width:4,height:4,borderRadius:"50%",background:"#3B82F6"}}/>}
                           </button>
                         ):(
                           <div>
-                            <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 10px 3px",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:isGA?"#4A6A9E":"#2A3F66"}}>
-                              <span>{g.icon}</span><span>{g.label}</span>
+                            <div style={{padding:"7px 10px 3px",fontSize:10,fontWeight:700,textTransform:"uppercase",color:isGA?"#4A6A9E":"#2A3F66",letterSpacing:"0.07em"}}>
+                              {g.icon} {g.label}
                             </div>
                             {g.tabs.map(t=>{
                               const isAct=view===t;
                               return(
-                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"7px 10px 7px 26px",borderRadius:7,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.12)":"transparent"}}>
-                                  <span style={{fontSize:13,flexShrink:0}}>{TAB_ICONS[t]}</span>
+                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:7,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.12)":"transparent"}}>
+                                  <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
                                   <span style={{fontSize:12,fontWeight:isAct?700:500,color:isAct?"#60A5FA":"#5A7AAA"}}>{TAB_LABELS[t]}</span>
                                   {isAct&&<div style={{marginLeft:"auto",width:3,height:14,borderRadius:2,background:"#3B82F6"}}/>}
                                 </button>
@@ -4167,38 +4003,40 @@
                     );
                   })}
                 </nav>
-                <div style={{borderTop:"1px solid #1B2D4F",padding:"8px 6px",display:"flex",flexDirection:"column",gap:5}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px"}}>
+                <div style={{borderTop:"1px solid #1B2D4F",padding:"8px 6px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",marginBottom:4}}>
                     {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
                     <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"6px 10px",background:rCfg.bg,borderRadius:8,border:`1px solid ${rCfg.color}25`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"6px 10px",background:rCfg.bg,borderRadius:8,marginBottom:6}}>
                     <span style={{fontSize:13}}>{rCfg.icon}</span>
                     <span style={{fontSize:11,color:rCfg.color,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.nom||rCfg.label}</span>
                   </div>
-                  <button onClick={logout} style={{display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",cursor:"pointer",width:"100%",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+                  <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
                     <span>🚪</span><span>Déconnexion</span>
                   </button>
                 </div>
               </aside>
             )}
 
+            {/* Zone principale */}
             <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
+
+              {/* Topbar mobile */}
               {isMobile&&(
-                <div style={{background:"#08101F",borderBottom:"1px solid #1B2D4F",padding:"0 14px",height:50,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+                <div style={{background:"#08101F",borderBottom:"1px solid #1B2D4F",height:50,padding:"0 14px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:28,height:28,borderRadius:6}}/>
                     <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>Ma Borne LR</span>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 7px",background:"#0D1828",borderRadius:6}}>
-                      {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
-                      <span style={{fontSize:9,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
-                    </div>
-                    <button onClick={logout} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"4px 7px",cursor:"pointer",fontSize:11}}>🚪</button>
+                    <span style={{fontSize:10,color:sc2.c}}>{sc2.t}</span>
+                    <button onClick={logout} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"4px 8px",cursor:"pointer",fontSize:11}}>🚪</button>
                   </div>
                 </div>
               )}
+
+              {/* Sous-tabs mobile */}
               {isMobile&&subTabs.length>1&&(
                 <div style={{background:"#0B1422",borderBottom:"1px solid #1B2D4F",display:"flex",overflowX:"auto",padding:"5px 10px",gap:4,flexShrink:0,scrollbarWidth:"none"}}>
                   {subTabs.map(t=>(
@@ -4208,447 +4046,332 @@
                   ))}
                 </div>
               )}
+
+              {/* Contenu */}
               <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 12px 90px":"16px 20px"}}>
-            {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
-              // Créer chantier auto
-              SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),date_installation:"",technicien:"",statut:"a_planifier",checklist:{client_contacte:false,materiel_prepare:false,acces_confirme:false},notes:""},...p]);
-              // Créer acompte auto
-              SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3*100)/100,date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",date_envoi:"",date_paiement:"",notes:"",par:v.par||""},...p]);
-            }}/>}
 
-            {/* ── ADMINISTRATIF ── */}
-            {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
+                  SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toISOString(),statut:"prospect",adresse:"",notes:""},...p]);
+                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date:new Date().toISOString()},...p]);
+                }}/>}
 
-            {/* ── CARTES ── */}
-            {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+                {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
+                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+                {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
+                {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
+                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
+                {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
+                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} acomptes={acomptes} setAcomptes={SA} profile={profile} fmt={fmt} role={role} goTo={goTo}/>}
 
-            {/* ── MESSAGERIE ── */}
-            {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-
-            {/* ── STATS ── */}
-            {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} acomptes={acomptes} stock={stock} fmt={fmt} objectifs={objectifs} setObjectifs={SOBJ} role={role}/>}
-
-            {/* ── SAV ── */}
-            {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
-
-            {/* ── RAPPORTS ── */}
-            {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SRAPP} chantiers={chantiersPipeline} profile={profile} role={role}/>}
-
-            {/* ── ÉQUIPE ── */}
-            {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-
-            {/* ── ACCUEIL ── */}
-            {view==="accueil"&&<>
-              {/* Bonjour */}
-              <div style={{marginBottom:20}}>
-                <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>
-                  Bonjour {profile?.nom?.split(" ")[0]||""} {rCfg.icon}
-                </div>
-                <div style={{fontSize:12,color:"#4A6A9E"}}>
-                  {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                </div>
-              </div>
-
-              {/* Météo stock + CA — rangée principale */}
-              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
-                {[
-                  {l:"À commander",v:alerts.length,c:"#EF4444",i:"🔴",sub:"articles urgents",action:()=>goTo("stock")},
-                  {l:"En transit",  v:ordered.length,c:"#3B82F6",i:"🚚",sub:"commandes en cours",action:()=>goTo("commandes")},
-                  {l:"Surveiller",  v:warns.length,  c:"#F59E0B",i:"🟡",sub:"proches du seuil",action:()=>goTo("stock")},
-                  {l:"Ruptures",    v:rupts.length,  c:"#A855F7",i:"⛔",sub:"fournisseur",action:()=>goTo("stock")},
-                ].map(({l,v,c,i,sub,action})=>(
-                  <div key={l} onClick={action} style={{background:"#0D1828",borderRadius:12,padding:isMobile?"12px 10px":"14px 16px",border:`1px solid ${c}30`,cursor:"pointer",transition:"border-color 0.15s"}}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor=c}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor=c+"30"}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <div>
-                        <div style={{fontSize:isMobile?22:28,fontWeight:800,color:v>0?c:"#1B2D4F",lineHeight:1}}>{v}</div>
-                        <div style={{fontSize:11,fontWeight:700,color:"#7B96C8",marginTop:4}}>{l}</div>
-                        <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{sub}</div>
-                      </div>
-                      <span style={{fontSize:isMobile?20:22,opacity:v>0?1:0.3}}>{i}</span>
-                    </div>
+                {view==="accueil"&&<>
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>Bonjour {profile?.nom?.split(" ")[0]||""} {rCfg.icon}</div>
+                    <div style={{fontSize:12,color:"#4A6A9E"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
                   </div>
-                ))}
-              </div>
-
-              {/* Météo stock par catégorie */}
-              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px",marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#7B96C8",textTransform:"uppercase",letterSpacing:"0.05em"}}>Météo stock par catégorie</h3>
-                  <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir tout →</button>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {uCats.map(cat=>{
-                    const items=stock.filter(s=>s.cat===cat);
-                    const nbAlert=items.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="alert").length;
-                    const nbWarn=items.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="warn").length;
-                    const nbOk=items.filter(s=>["ok","vide","ordered"].includes(gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id)))).length;
-                    const nbRupt=items.filter(s=>s.rupture).length;
-                    const pctOk=Math.round((nbOk/items.length)*100);
-                    const cc=CC[cat]||"#7B96C8";
-                    const statusIcon = nbAlert>0?"🔴":nbWarn>0?"🟡":"✅";
-                    return(
-                      <div key={cat} style={{display:"flex",alignItems:"center",gap:10}}>
-                        <div style={{width:3,height:28,borderRadius:2,background:cc,flexShrink:0}}/>
-                        <div style={{flex:1}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                            <span style={{fontSize:12,fontWeight:700,color:cc}}>{cat}</span>
-                            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                              {nbAlert>0&&<span style={{fontSize:10,color:"#EF4444",fontWeight:700}}>{nbAlert} à commander</span>}
-                              {nbWarn>0&&<span style={{fontSize:10,color:"#F59E0B",fontWeight:700}}>{nbWarn} à surveiller</span>}
-                              {nbRupt>0&&<span style={{fontSize:10,color:"#A855F7",fontWeight:700}}>{nbRupt} rupture</span>}
-                              <span style={{fontSize:11}}>{statusIcon}</span>
-                            </div>
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                    {[
+                      {l:"À commander",v:stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil&&!aOIds.has(s.id)).length,c:"#EF4444",i:"🔴",action:()=>goTo("stock")},
+                      {l:"En transit",v:orders.filter(o=>o.statut==="en_cours").length,c:"#3B82F6",i:"🚚",action:()=>goTo("commandes")},
+                      {l:"Surveiller",v:stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock>=s.seuil&&s.stock<s.seuil*1.3).length,c:"#F59E0B",i:"🟡",action:()=>goTo("stock")},
+                      {l:"Ruptures",v:stock.filter(s=>s.rupture).length,c:"#A855F7",i:"⛔",action:()=>goTo("stock")},
+                    ].map(({l,v,c,i,action})=>(
+                      <div key={l} onClick={action} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                          <div>
+                            <div style={{fontSize:isMobile?22:26,fontWeight:900,color:c}}>{v}</div>
+                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{l}</div>
                           </div>
-                          <div style={{background:"#070D1A",borderRadius:4,height:5,width:"100%",overflow:"hidden"}}>
-                            <div style={{height:5,borderRadius:4,width:`${pctOk}%`,background:nbAlert>0?"#EF4444":nbWarn>0?"#F59E0B":"#10B981",transition:"width 0.3s"}}/>
-                          </div>
+                          <span style={{fontSize:20}}>{i}</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Grille : alertes + CA + dernières commandes + dernières ventes + chantiers */}
-              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-
-                {/* Alertes stock */}
-                {alerts.length>0&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #EF444430",padding:"14px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#EF4444"}}>🔴 Articles à commander</h3>
-                    {canOrder(role)&&<button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>}
+                    ))}
                   </div>
-                  {alerts.slice(0,5).map(item=>(
-                    <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0D182888"}}>
-                      <div>
-                        <span style={{fontSize:10,...BDG(item.cat)}}>{item.cat}</span>
-                        <span style={{fontSize:13,fontWeight:700,color:"#F0F6FF",marginLeft:7}}>{item.article}</span>
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:16}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <span style={{fontWeight:700,fontSize:14}}>📦 Stock critique</span>
+                        <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#3B82F6",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Voir tout</button>
                       </div>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>+{item.seuil-item.stock}</span>
-                        {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#1D4ED8"),padding:"4px 10px",fontSize:11}}>📦</button>}
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>{
+                          const st=gS(item.stock,item.seuil,item.rupture,aOIds.has(item.id));
+                          const sc=SC[st];
+                          return(
+                            <div key={item.id} style={{display:"flex",alignItems:"center",gap:10}}>
+                              <div style={{width:3,height:28,borderRadius:2,background:sc.color,flexShrink:0}}/>
+                              <div style={{flex:1}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                                  <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{item.article}</span>
+                                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                                    <span style={{fontSize:12,color:sc.color,fontWeight:700}}>{item.stock}/{item.seuil}</span>
+                                    {canOrder(role)&&<button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"none",color:"#3B82F6",cursor:"pointer",fontSize:11,padding:0}}>Commander</button>}
+                                  </div>
+                                </div>
+                                <div style={{background:"#070D1A",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
+                                  <div style={{height:4,borderRadius:4,width:`${Math.min(100,Math.round(item.stock/item.seuil*100))}%`,background:sc.color}}/>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"10px 0"}}>✅ Aucune alerte</div>}
                       </div>
                     </div>
-                  ))}
-                  {alerts.length>5&&<div style={{fontSize:11,color:"#4A6A9E",marginTop:8,textAlign:"center"}}>+{alerts.length-5} autres articles…</div>}
-                </div>}
-
-                {/* CA résumé — visible si rôle y a accès */}
-                {allowedTabs.includes("ventes")&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #10B98130",padding:"14px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#10B981"}}>💰 Chiffre d'affaires</h3>
-                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
-                  </div>
-                  {(()=>{
-                    const mM2=String(new Date().getMonth()+1).padStart(2,"0");
-                    const mY2=String(new Date().getFullYear());
-                    const caM=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM2&&v.date.split("/")[2]===mY2).reduce((s,v)=>s+Number(v.prix_ht||0),0);
-                    const caT=ventes.reduce((s,v)=>s+Number(v.prix_ht||0),0);
-                    const today=new Date().toLocaleDateString("fr-FR");
-                    const caJ=ventes.filter(v=>v.date===today).reduce((s,v)=>s+Number(v.prix_ht||0),0);
-                    return <>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        {[{l:"Aujourd'hui",v:fmt(caJ),c:"#F59E0B"},{l:"Ce mois",v:fmt(caM),c:"#10B981"},{l:"Total",v:fmt(caT),c:"#3B82F6"},{l:"Ventes",v:ventes.length,c:"#7B96C8"}].map(({l,v,c})=>(
-                          <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"8px 10px"}}>
-                            <div style={{fontSize:14,fontWeight:800,color:c}}>{v}</div>
-                            <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{l}</div>
+                    {allowedTabs.includes("ventes")&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:16}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <span style={{fontWeight:700,fontSize:14}}>💰 Dernières ventes</span>
+                        <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#3B82F6",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Voir tout</button>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {ventes.slice(0,4).map(v=>(
+                          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.client}</div>
+                              <div style={{fontSize:10,color:"#4A6A9E"}}>{v.date||""}</div>
+                            </div>
+                            <span style={{fontSize:12,fontWeight:700,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
                           </div>
                         ))}
+                        {ventes.length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"10px 0"}}>Aucune vente</div>}
                       </div>
-                    </>;
-                  })()}
-                </div>}
-
-                {/* Dernières commandes */}
-                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#3B82F6"}}>🚚 Dernières commandes</h3>
-                    <button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                    </div>}
                   </div>
-                  {orders.length===0?<p style={{color:"#2E4D82",fontSize:12,margin:0}}>Aucune commande.</p>
-                    :orders.slice(0,4).map(o=>(
-                      <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0D182888"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:700,color:"#F0F6FF",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{o.article}</div>
-                          <div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{o.date} · {o.qty} {o.unite}</div>
-                        </div>
-                        <span style={{background:o.statut==="livré"?"#0A2218":"#0F1F3D",color:o.statut==="livré"?"#10B981":"#3B82F6",padding:"2px 7px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0,marginLeft:8}}>{o.statut==="livré"?"✅ LIVRÉ":"🚚 EN COURS"}</span>
-                      </div>
-                    ))
-                  }
-                </div>
+                </>}
 
-                {/* Dernières ventes */}
-                {allowedTabs.includes("ventes")&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#10B981"}}>💰 Dernières ventes</h3>
-                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                {view==="stock"&&<>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
+                    {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Ajouter</button>}
                   </div>
-                  {ventes.length===0?<p style={{color:"#2E4D82",fontSize:12,margin:0}}>Aucune vente.</p>
-                    :ventes.slice(0,4).map(v=>(
-                      <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0D182888"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:700,color:"#F0F6FF",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.client}</div>
-                          <div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{v.date} · {v.par||""}</div>
-                        </div>
-                        <span style={{fontSize:13,fontWeight:800,color:"#10B981",flexShrink:0,marginLeft:8}}>{fmt(v.prix_ht)}</span>
-                      </div>
-                    ))
-                  }
-                </div>}
-
-                {/* Activité chantiers */}
-                {allowedTabs.includes("chantier")&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#F59E0B"}}>🔧 Derniers chantiers</h3>
-                    <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                  <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
+                    {cats.map(cat=><button key={cat} onClick={()=>setFCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===cat?"#3B82F6":"#1B2D4F"}`,background:fCat===cat?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",color:fCat===cat?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",fontFamily:'"Outfit",sans-serif'}}>{cat}</button>)}
                   </div>
-                  {hist.length===0?<p style={{color:"#2E4D82",fontSize:12,margin:0}}>Aucun chantier.</p>
-                    :[...new Set(hist.map(h=>h.chantier))].slice(0,3).map(ch=>{
-                      const items=hist.filter(h=>h.chantier===ch);
-                      return(
-                        <div key={ch} style={{padding:"7px 0",borderBottom:"1px solid #0D182888"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <span style={{fontSize:12,fontWeight:700,color:"#F0F6FF"}}>{ch}</span>
-                            <span style={{fontSize:10,color:"#4A6A9E"}}>{items[0]?.date}</span>
-                          </div>
-                          <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{items.length} article{items.length>1?"s":""} · {items[0]?.par||""}</div>
-                        </div>
-                      );
-                    })
-                  }
-                </div>}
-
-              </div>
-            </>}
-
-            </div>
-          </div>
-            {/* ── STOCK ── */}
-            {view==="stock"&&<>
-              <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch"}}>
-                {cats.map(cat=><button key={cat} onClick={()=>setFCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===cat?(CC[cat]||"#3B82F6"):"#1B2D4F"}`,background:fCat===cat?(CC[cat]||"#3B82F6")+"25":"transparent",color:fCat===cat?(CC[cat]||"#93C5FD"):"#7B96C8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
-              </div>
-              {isMobile
-                ?<div>{fil.map(item=><ArtCard key={item.id} item={item}/>)}</div>
-                :<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflow:"hidden"}}>
-                  <div style={{overflowX:"auto"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse"}}>
-                      <thead><tr>{["Catégorie","Article","Stock","Seuil","Prix","Statut","À cmd","Valeur","Rupture","Actions"].map((h,i)=>{
-                        const TH={padding:"10px 12px",textAlign:i>=2&&i<=7?"center":"left",fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #1B2D4F",background:"#070D1A",whiteSpace:"nowrap"};
-                        return <th key={h} style={TH}>{h}</th>;
-                      })}</tr></thead>
-                      <tbody>{fil.map((item,idx)=>{
+                  {isMobile?(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {fil.map(item=>{
                         const hasO=aOIds.has(item.id);
                         const st=gS(item.stock,item.seuil,item.rupture,hasO);
                         const s=SC[st];
                         const aCmd=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:0;
-                        const TD={padding:"9px 12px",borderBottom:"1px solid #0D182844",verticalAlign:"middle"};
                         return(
-                          <tr key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":idx%2===0?"#0D1828":"#182030"}}>
-                            <td style={TD}><span style={BDG(item.cat)}>{item.cat}</span></td>
-                            <td style={{...TD,fontWeight:600}}>{item.article}</td>
-                            <td style={{...TD,textAlign:"center"}}>
-                              {eSId===item.id&&canEditStock(role)
-                                ?<input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} onBlur={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} onKeyDown={e=>e.key==="Enter"&&(upd(item.id,"stock",Math.max(0,Number(eSVal))),setESId(null))} style={{width:55,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:6,color:"#E8F0FF",textAlign:"center",padding:"3px",fontSize:13,fontWeight:700}} autoFocus/>
-                                :<span onClick={()=>canEditStock(role)&&(setESId(item.id),setESVal(String(item.stock)))} style={{fontWeight:800,cursor:canEditStock(role)?"pointer":"default",color:st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E8F0FF"}}>{item.stock} <span style={{fontSize:9,color:"#2E4D82"}}>{item.unite}</span></span>
-                              }
-                            </td>
-                            <td style={{...TD,textAlign:"center",color:"#4A6A9E"}}>{item.seuil}</td>
-                            <td style={{...TD,textAlign:"center",color:"#7B96C8",fontSize:12}}>{fmt(item.prix)}</td>
-                            <td style={{...TD,textAlign:"center"}}>
-                              <span style={{background:s.bg,color:s.color,padding:"3px 7px",borderRadius:7,fontSize:10,fontWeight:700}}>{s.icon} {s.label}</span>
-                              {hasO&&aOByA[item.id]&&<div style={{marginTop:3}}><span style={{background:"#0F1F3D",color:"#3B82F6",padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:700}}>🚚 {aOByA[item.id].reduce((x,o)=>x+o.qty,0)} en transit</span></div>}
-                            </td>
-                            <td style={{...TD,textAlign:"center",fontWeight:700,color:aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#1B2D4F"}}>{aCmd>0?"+"+aCmd:"—"}</td>
-                            <td style={{...TD,textAlign:"center",fontSize:12,color:aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#1B2D4F"}}>{aCmd>0?fmt(aCmd*item.prix):"—"}</td>
-                            <td style={{...TD,textAlign:"center"}}>
-                              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F720":"transparent",border:`1px solid ${item.rupture?"#A855F7":"#1B2D4F"}`,borderRadius:6,color:item.rupture?"#A855F7":"#2E4D82",padding:"3px 8px",cursor:"pointer",fontSize:10,fontWeight:700}}>{item.rupture?"⛔":"Signaler"}</button>}
-                            </td>
-                            <td style={{...TD,textAlign:"center"}}>
-                              <div style={{display:"flex",gap:4,justifyContent:"center"}}>
-                                {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{...BTN("#1B2D4F"),padding:"4px 8px",fontSize:12}}>✏️</button>}
-                                {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#1D4ED8"),padding:"4px 8px",fontSize:12}}>📦</button>}
+                          <div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#0D1828",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#1D4ED860":"#1B2D4F"}`,padding:14}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                              <div style={{flex:1,paddingRight:8}}>
+                                <span style={{background:BDG(item.cat).split(";")[0].split(":")[1]?.trim()||"#1B2D4F",color:"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{item.cat}</span>
+                                <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF",marginTop:5}}>{item.article}</div>
+                                {hasO&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((a,o)=>a+o.qty,0)} commandé(s)</div>}
                               </div>
-                            </td>
-                          </tr>
+                              <span style={{background:s.bg,color:s.color,padding:"4px 9px",borderRadius:8,fontSize:11,fontWeight:700,flexShrink:0}}>{s.label}</span>
+                            </div>
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
+                              {[["STOCK",item.stock,st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E8F0FF"],["SEUIL",item.seuil,"#4A6A9E"],["PRIX",item.prix?`${item.prix}€`:"—","#10B981"],["UNITÉ",item.unite,"#7B96C8"]].map(([l,v,c])=>(
+                                <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                                  <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,marginTop:3}}>{l}</div>
+                                </div>
+                              ))}
+                            </div>
+                            {eSId===item.id&&(
+                              <div style={{display:"flex",gap:6,marginBottom:8}}>
+                                <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{flex:1,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:8,padding:"9px 12px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif'}}/>
+                                <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer"}}>✓</button>
+                                <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px 14px",color:"#7B96C8",cursor:"pointer"}}>✕</button>
+                              </div>
+                            )}
+                            <div style={{display:"flex",gap:6}}>
+                              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F720":"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:item.rupture?"#A855F7":"#7B96C8",cursor:"pointer",fontSize:12}}>⛔</button>}
+                              {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>📝</button>}
+                              {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{flex:1,background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:8,padding:"9px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>🛒 Commander</button>}
+                              {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>✏️</button>}
+                              {canEditStock(role)&&<button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,padding:"9px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
+                            </div>
+                          </div>
                         );
-                      })}</tbody>
-                    </table>
+                      })}
+                    </div>
+                  ):(
+                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                        <thead>
+                          <tr style={{borderBottom:"1px solid #1B2D4F"}}>
+                            {["Catégorie","Article","Stock","Seuil","Prix","Statut","Actions"].map(h=>(
+                              <th key={h} style={{padding:"12px 14px",textAlign:"left",fontSize:11,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fil.map(item=>{
+                            const hasO=aOIds.has(item.id);
+                            const st=gS(item.stock,item.seuil,item.rupture,hasO);
+                            const s=SC[st];
+                            return(
+                              <tr key={item.id} style={{borderBottom:"1px solid #0D182866",background:item.rupture?"#1A0A2A08":"transparent"}}>
+                                <td style={{padding:"11px 14px"}}><span style={{background:BDG(item.cat).split(";")[0].split(":")[1]?.trim()||"#1B2D4F",color:"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:700}}>{item.cat}</span></td>
+                                <td style={{padding:"11px 14px",fontWeight:700,color:"#F0F6FF"}}>{item.article}{hasO&&<span style={{marginLeft:6,fontSize:10,color:"#3B82F6"}}>🚚</span>}</td>
+                                <td style={{padding:"11px 14px"}}>
+                                  {eSId===item.id?(
+                                    <div style={{display:"flex",gap:4}}>
+                                      <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{width:70,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:6,padding:"5px 8px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif'}}/>
+                                      <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:6,padding:"5px 8px",color:"#fff",cursor:"pointer"}}>✓</button>
+                                      <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:6,padding:"5px 8px",color:"#7B96C8",cursor:"pointer"}}>✕</button>
+                                    </div>
+                                  ):(
+                                    <span style={{color:s.color,fontWeight:700}}>{item.stock} {item.unite}</span>
+                                  )}
+                                </td>
+                                <td style={{padding:"11px 14px",color:"#4A6A9E"}}>{item.seuil||"—"}</td>
+                                <td style={{padding:"11px 14px",color:"#10B981",fontWeight:600}}>{item.prix?`${item.prix}€`:"—"}</td>
+                                <td style={{padding:"11px 14px"}}><span style={{background:s.bg,color:s.color,padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:700}}>{s.label}</span></td>
+                                <td style={{padding:"11px 14px"}}>
+                                  <div style={{display:"flex",gap:4}}>
+                                    {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} title="Toggle rupture" style={{background:item.rupture?"#A855F720":"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:item.rupture?"#A855F7":"#4A6A9E",cursor:"pointer",fontSize:12}}>⛔</button>}
+                                    {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:"#4A6A9E",cursor:"pointer",fontSize:12}}>📝</button>}
+                                    {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:6,padding:"5px 10px",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>🛒</button>}
+                                    {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:"#4A6A9E",cursor:"pointer",fontSize:12}}>✏️</button>}
+                                    {canEditStock(role)&&<button onClick={()=>setDelConf(item)} style={{background:"#EF444410",border:"1px solid #EF444430",borderRadius:6,padding:"5px 8px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{display:"flex",gap:4,justifyContent:"center",padding:"10px",flexWrap:"wrap"}}>
+                        {fil.length===0&&<div style={{color:"#2E4D82",fontSize:12,padding:"20px"}}>Aucun article</div>}
+                      </div>
+                    </div>
+                  )}
+                </>}
+
+                {view==="commandes"&&<>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <h2 style={{margin:0,fontSize:18,fontWeight:800}}>🛒 Commandes</h2>
                   </div>
-                </div>
-              }
-            </>}
+                  <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+                    {["Toutes","en_cours","livrée partielle","livré"].map(s=>(
+                      <button key={s} onClick={()=>setFCat(s)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===s?"#3B82F6":"#1B2D4F"}`,background:fCat===s?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",color:fCat===s?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",fontFamily:'"Outfit",sans-serif'}}>{s==="Toutes"?"Toutes":s}</button>
+                    ))}
+                  </div>
+                  {isMobile?(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {(fCat==="Toutes"?orders:orders.filter(o=>o.statut===fCat)).map(o=>{
+                        const item=stock.find(s=>s.id===o.articleId);
+                        return(
+                          <div key={o.id} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:14}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                              <div>
+                                <div style={{fontWeight:700,fontSize:14,color:"#E8F0FF"}}>{o.article}</div>
+                                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>Qté: {o.qty} • {o.created_at?.slice(0,10)||""}</div>
+                              </div>
+                              <span style={{background:o.statut==="livré"?"#10B98120":o.statut==="en_cours"?"#3B82F620":"#F59E0B20",color:o.statut==="livré"?"#10B981":o.statut==="en_cours"?"#3B82F6":"#F59E0B",padding:"3px 8px",borderRadius:6,fontSize:11,fontWeight:700,flexShrink:0}}>{o.statut}</span>
+                            </div>
+                            <div style={{display:"flex",gap:6}}>
+                              {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>{const n=orders.map(x=>x.id===o.id?{...x,statut:"livré"}:x);setOrders(n);if(item){const ns=stock.map(s=>s.id===item.id?{...s,stock:Math.max(0,s.stock+o.qty)}:s);setStock(ns);saveDB(ns,n,null,null,null,null,null,null,null);}else{saveDB(null,n,null,null,null,null,null,null,null);}}} style={{flex:1,background:"#10B98120",border:"1px solid #10B98140",borderRadius:8,padding:"8px",color:"#10B981",fontWeight:700,cursor:"pointer",fontSize:12}}>✅ Livré</button>}
+                              {canOrder(role)&&<button onClick={()=>openOEdit(o)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"8px 12px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>✏️</button>}
+                              {canOrder(role)&&<button onClick={()=>setODelConf(o)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,padding:"8px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ):(
+                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                        <thead>
+                          <tr style={{borderBottom:"1px solid #1B2D4F"}}>
+                            {["Article","Quantité","Date","Statut","Actions"].map(h=>(
+                              <th key={h} style={{padding:"12px 14px",textAlign:"left",fontSize:11,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(fCat==="Toutes"?orders:orders.filter(o=>o.statut===fCat)).map(o=>{
+                            const item=stock.find(s=>s.id===o.articleId);
+                            return(
+                              <tr key={o.id} style={{borderBottom:"1px solid #0D182866"}}>
+                                <td style={{padding:"11px 14px",fontWeight:700,color:"#F0F6FF"}}>{o.article}</td>
+                                <td style={{padding:"11px 14px",color:"#E8F0FF"}}>{o.qty}</td>
+                                <td style={{padding:"11px 14px",color:"#4A6A9E"}}>{o.created_at?.slice(0,10)||""}</td>
+                                <td style={{padding:"11px 14px"}}><span style={{background:o.statut==="livré"?"#10B98120":o.statut==="en_cours"?"#3B82F620":"#F59E0B20",color:o.statut==="livré"?"#10B981":o.statut==="en_cours"?"#3B82F6":"#F59E0B",padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:700}}>{o.statut}</span></td>
+                                <td style={{padding:"11px 14px"}}>
+                                  <div style={{display:"flex",gap:4}}>
+                                    {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>{const n=orders.map(x=>x.id===o.id?{...x,statut:"livré"}:x);setOrders(n);if(item){const ns=stock.map(s=>s.id===item.id?{...s,stock:s.stock+o.qty}:s);setStock(ns);saveDB(ns,n,null,null,null,null,null,null,null);}else{saveDB(null,n,null,null,null,null,null,null,null);}}} style={{background:"#10B98120",border:"1px solid #10B98140",borderRadius:6,padding:"5px 10px",color:"#10B981",fontWeight:700,cursor:"pointer",fontSize:12}}>✅ Livré</button>}
+                                    {canOrder(role)&&<button onClick={()=>openOEdit(o)} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:"#4A6A9E",cursor:"pointer",fontSize:12}}>✏️</button>}
+                                    {canOrder(role)&&<button onClick={()=>setODelConf(o)} style={{background:"#EF444410",border:"1px solid #EF444430",borderRadius:6,padding:"5px 8px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap",padding:"10px"}}>
+                        {orders.length===0&&<div style={{color:"#2E4D82",fontSize:12,padding:20}}>Aucune commande</div>}
+                      </div>
+                    </div>
+                  )}
+                </>}
 
-            {/* ── CHANTIER ── */}
-            {view==="chantier"&&<ChantierTab
-              isMobile={isMobile}
-              chantiers={chantiersPipeline}
-              setChantiers={SC2}
-              stock={stock}
-              hist={hist}
-              profile={profile}
-              fmt={fmt}
-              role={role}
-              goTo={goTo}
-              BTN={BTN}
-              INP={INP}
-              BDG={BDG}
-            />}
-
-            {/* ── COMMANDES ── */}
-            {view==="commandes"&&<>
-              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:14,marginBottom:14}}>
-                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:16}}>
-                  <h2 style={{margin:"0 0 12px",fontSize:15,fontWeight:800,letterSpacing:"-0.3px",color:"#EF4444"}}>🔴 Articles à commander</h2>
-                  {alerts.length===0?<p style={{color:"#2E4D82",fontSize:13}}>✅ Tous commandés ou en ordre.</p>
-                    :<>{alerts.map(item=>(
-                      <div key={item.id} style={{background:"#070D1A",borderRadius:10,padding:"11px 13px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div><span style={BDG(item.cat)}>{item.cat}</span><div style={{fontWeight:700,fontSize:14,marginTop:4}}>{item.article}</div><div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{item.stock} stock · seuil {item.seuil}</div></div>
-                        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-                          <span style={{fontWeight:800,color:"#EF4444",fontSize:17}}>+{item.seuil-item.stock}</span>
-                          <span style={{fontSize:11,color:"#4A6A9E"}}>{fmt((item.seuil-item.stock)*item.prix)}</span>
-                          {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{padding:"6px 12px",fontSize:12})}>📦 Commander</button>}
+                {view==="parametres"&&<>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                    <div><h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>⚙️ Paramètres</h2><p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Gestion des composants du stock</p></div>
+                    <button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>+ Nouveau</button>
+                  </div>
+                  <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{width:"100%",boxSizing:"border-box",background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontSize:13,marginBottom:10,fontFamily:'"Outfit",sans-serif'}}/>
+                  <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+                    {cats.map(cat=><button key={cat} onClick={()=>setPCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${pCat===cat?"#3B82F6":"#1B2D4F"}`,background:pCat===cat?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",color:pCat===cat?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",fontFamily:'"Outfit",sans-serif'}}>{cat}</button>)}
+                  </div>
+                  {uCats.filter(cat=>pCat==="Toutes"||cat===pCat).map(cat=>{
+                    const ci=pFil.filter(s=>s.cat===cat);
+                    if(ci.length===0)return null;
+                    const cc=CC[cat]||"#7B96C8";
+                    return(
+                      <div key={cat} style={{marginBottom:20}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                          <div style={{width:4,height:18,borderRadius:2,background:cc}}/>
+                          <span style={{fontWeight:800,fontSize:14,color:cc}}>{cat}</span>
+                          <span style={{fontSize:11,color:"#2E4D82"}}>{ci.length} article{ci.length>1?"s":""}</span>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+                          {ci.map(item=>{
+                            const hasO=aOIds.has(item.id);
+                            const st=gS(item.stock,item.seuil,item.rupture,hasO);
+                            const s=SC[st];
+                            return(
+                              <div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO?"#0A1628":"#0D1828",borderRadius:12,border:`1px solid ${item.rupture?"#A855F740":"#1B2D4F"}`,padding:14,position:"relative"}}>
+                                <div style={{position:"absolute",top:12,right:12}}><span style={{background:s.bg,color:s.color,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{s.label}</span></div>
+                                <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF",marginBottom:4,paddingRight:80}}>{item.article}</div>
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
+                                  {[["STOCK",item.stock,s.color],["SEUIL",item.seuil,"#4A6A9E"],["PRIX",item.prix?`${item.prix}€`:"—","#10B981"]].map(([l,v,c])=>(
+                                    <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"7px 4px",textAlign:"center"}}>
+                                      <div style={{fontSize:12,fontWeight:800,color:c}}>{v}</div>
+                                      <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,marginTop:1}}>{l}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {item.rupture&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,padding:"5px 8px",background:"#A855F710",borderRadius:6}}>
+                                  <span style={{fontSize:11,color:"#A855F7",fontWeight:600}}>⛔ Rupture centrale</span>
+                                  <button onClick={()=>upd(item.id,"rupture",false)} style={{background:"transparent",border:"none",color:"#A855F7",cursor:"pointer",fontSize:11}}>Lever</button>
+                                </div>}
+                                <div style={{display:"flex",gap:6}}>
+                                  <button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:8,padding:"8px",color:"#7B96C8",cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>✏️ Modifier</button>
+                                  {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{flex:1,background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:8,padding:"8px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>🛒 Commander</button>}
+                                  <button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,padding:"8px 10px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    ))}
-                    <div style={{background:"#070D1A",borderRadius:10,padding:"11px 13px",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontWeight:700,color:"#7B96C8"}}>Total estimé</span>
-                      <span style={{fontWeight:800,color:"#10B981",fontSize:17}}>{fmt(totalCmd)}</span>
-                    </div></>
-                  }
-                </div>
-                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"12px 14px"}}>
-                  <h2 style={{margin:"0 0 8px",fontSize:12,fontWeight:800,color:"#A855F7",textTransform:"uppercase",letterSpacing:"0.05em"}}>⛔ Ruptures centrale</h2>
-                  {rupts.length===0
-                    ?<p style={{color:"#2E4D82",fontSize:11,fontStyle:"italic"}}>Aucune rupture signalée.</p>
-                    :<div style={{display:"flex",flexDirection:"column",gap:4}}>
-                      {rupts.map(item=>(
-                        <div key={item.id} style={{background:"#1A0A2A",border:"1px solid #A855F730",borderRadius:7,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}><span style={BDG(item.cat)}>{item.cat}</span><span style={{fontWeight:600,fontSize:12}}>{item.article}</span></div>
-                          <span style={{background:"#A855F720",color:"#A855F7",padding:"1px 7px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0}}>⛔ RUPTURE</span>
-                        </div>
-                      ))}
-                    </div>
-                  }
-                </div>
-              </div>
-              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflow:"hidden"}}>
-                <div style={{padding:"14px 16px",borderBottom:"1px solid #1B2D4F"}}><h2 style={{margin:0,fontSize:15,fontWeight:800}}>📋 Historique des commandes</h2></div>
-                {orders.length===0?<p style={{color:"#2E4D82",fontSize:13,textAlign:"center",padding:24}}>Aucune commande passée.</p>
-                  :isMobile
-                    ?<div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
-                      {orders.map(o=>(
-                        <div key={o.id} style={{background:"#070D1A",borderRadius:12,padding:"13px 14px",border:`1px solid ${o.statut==="livré"?"#10B98130":"#1D4ED840"}`}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                            <div>
-                              <span style={BDG(o.cat)}>{o.cat}</span>
-                              <div style={{fontWeight:700,fontSize:15,marginTop:4}}>{o.article}</div>
-                              <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{o.date} · {o.qty} {o.unite} · <span style={{color:"#10B981",fontWeight:700}}>{fmt(o.total)}</span></div>
-                              {o.par&&<div style={{fontSize:10,color:"#2E4D82",marginTop:1}}>Par : {o.par}</div>}
-                            </div>
-                            {o.statut==="livré"
-                              ?<div style={{textAlign:"right",flexShrink:0,marginLeft:8}}><span style={{background:"#0A2218",color:"#10B981",padding:"3px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>✅ LIVRÉ</span><div style={{fontSize:10,color:"#4A6A9E",marginTop:3}}>{o.livraison_date}</div></div>
-                              :<span style={{background:"#0F1F3D",color:"#3B82F6",padding:"3px 9px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0,marginLeft:8}}>🚚 EN COURS</span>
-                            }
-                          </div>
-                          <input value={o.description} onChange={e=>SO(p=>p.map(x=>x.id===o.id?{...x,description:e.target.value}:x))} placeholder="Ajouter une note…" style={{...INP(),marginBottom:o.statut!=="livré"&&canDeliver(role)?8:0,fontSize:13}}/>
-                          {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>markD(o.id)} style={BTN("#10B981",{width:"100%",padding:"11px",marginBottom:6})}>✅ Marquer comme livré</button>}
-                          {canOrder(role)&&<div style={{display:"flex",gap:6}}>
-                            <button onClick={()=>openOEdit(o)} style={BTN("#1B2D4F",{flex:1,padding:"8px",fontSize:12})}>✏️ Modifier</button>
-                            <button onClick={()=>setODelConf(o)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:700,flex:1}}>🗑️ Supprimer</button>
-                          </div>}
-                        </div>
-                      ))}
-                    </div>
-                    :<div style={{overflowX:"auto"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse"}}>
-                        <thead><tr>{["Date","Par","Article","Qté","Total","Description","Statut",""].map((h,i)=><th key={i} style={{padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",borderBottom:"1px solid #1B2D4F",background:"#070D1A",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                        <tbody>{orders.map((o,idx)=>{
-                          const TD={padding:"9px 12px",borderBottom:"1px solid #0D182844",verticalAlign:"middle"};
-                          return(
-                            <tr key={o.id} style={{background:idx%2===0?"#0D1828":"#182030"}}>
-                              <td style={{...TD,fontSize:11,color:"#4A6A9E",whiteSpace:"nowrap"}}>{o.date}</td>
-                              <td style={{...TD,fontSize:11,color:"#7B96C8"}}>{o.par||"—"}</td>
-                              <td style={TD}><span style={BDG(o.cat)}>{o.cat}</span><span style={{marginLeft:7,fontWeight:600}}>{o.article}</span></td>
-                              <td style={{...TD,fontWeight:700}}>{o.qty} {o.unite}</td>
-                              <td style={{...TD,fontWeight:700,color:"#10B981"}}>{fmt(o.total)}</td>
-                              <td style={{...TD,minWidth:150}}><input value={o.description} onChange={e=>SO(p=>p.map(x=>x.id===o.id?{...x,description:e.target.value}:x))} placeholder="Note…" style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#7B96C8",padding:"4px 8px",fontSize:12,width:"100%"}}/></td>
-                              <td style={{...TD,textAlign:"center",whiteSpace:"nowrap"}}>
-                                {o.statut==="livré"?<div><span style={{background:"#0A2218",color:"#10B981",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>✅ LIVRÉ</span><div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{o.livraison_date}</div></div>:<span style={{background:"#0F1F3D",color:"#3B82F6",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>🚚 EN COURS</span>}
-                              </td>
-                              <td style={{...TD,textAlign:"center"}}>
-                                <div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap"}}>
-                                  {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>markD(o.id)} style={BTN("#10B981",{padding:"4px 8px",fontSize:11})}>✅ Livré</button>}
-                                  {canOrder(role)&&<button onClick={()=>openOEdit(o)} style={BTN("#1B2D4F",{padding:"4px 8px",fontSize:11})}>✏️</button>}
-                                  {canOrder(role)&&<button onClick={()=>setODelConf(o)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:7,color:"#EF4444",padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}</tbody>
-                      </table>
-                    </div>
-                }
-              </div>
-            </>}
+                    );
+                  })}
+                  {pFil.length===0&&<div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}><div style={{fontSize:36,marginBottom:8}}>🔍</div><div style={{fontWeight:700}}>Aucun composant trouvé</div></div>}
+                </>}
 
-            {/* ── PARAMÈTRES ── */}
-            {view==="parametres"&&<>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div><h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>⚙️ Paramètres</h2><p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{stock.length} composants · {uCats.length} catégories</p></div>
-                <button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={BTN("#10B981",{padding:"10px 14px",fontSize:13})}>➕ Nouveau</button>
               </div>
-              <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{...INP(),marginBottom:10}}/>
-              <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch"}}>
-                {cats.map(cat=><button key={cat} onClick={()=>setPCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${pCat===cat?(CC[cat]||"#3B82F6"):"#1B2D4F"}`,background:pCat===cat?(CC[cat]||"#3B82F6")+"25":"transparent",color:pCat===cat?(CC[cat]||"#93C5FD"):"#7B96C8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
-              </div>
-              {uCats.filter(cat=>pCat==="Toutes"||cat===pCat).map(cat=>{
-                const ci=pFil.filter(s=>s.cat===cat);
-                if(ci.length===0)return null;
-                const cc=CC[cat]||"#7B96C8";
-                return(<div key={cat} style={{marginBottom:20}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                    <div style={{width:4,height:18,borderRadius:2,background:cc}}/>
-                    <span style={{fontWeight:800,fontSize:14,color:cc}}>{cat}</span>
-                    <span style={{fontSize:11,color:"#2E4D82"}}>{ci.length} article{ci.length>1?"s":""}</span>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
-                    {ci.map(item=>{
-                      const hasO=aOIds.has(item.id);
-                      const st=gS(item.stock,item.seuil,item.rupture,hasO);
-                      const s=SC[st];
-                      return(<div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&item.stock<item.seuil?"#0A1628":"#0D1828",borderRadius:12,border:`1px solid ${item.rupture?"#A855F740":hasO&&item.stock<item.seuil?"#1D4ED840":st==="alert"?"#EF444430":"#1B2D4F"}`,padding:"13px 14px",position:"relative"}}>
-                        <div style={{position:"absolute",top:12,right:12}}><span style={{background:s.bg,color:s.color,padding:"2px 8px",borderRadius:20,fontSize:9,fontWeight:700}}>{s.icon} {s.label}</span></div>
-                        <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF",marginBottom:4,paddingRight:80}}>{item.article}</div>
-                        {hasO&&<div style={{fontSize:10,color:"#3B82F6",marginBottom:6,fontWeight:600}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                          {[["STOCK",item.stock,st==="alert"?"#EF4444":st==="warn"?"#F59E0B":"#E8F0FF"],["SEUIL",item.seuil,"#7B96C8"],["PRIX",fmt(item.prix),"#10B981"]].map(([l,v,c])=>(
-                            <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"7px 4px",textAlign:"center"}}>
-                              <div style={{fontSize:12,fontWeight:800,color:c}}>{v}</div>
-                              <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,marginTop:1}}>{l}</div>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,background:"#070D1A",borderRadius:8,padding:"9px 12px"}}>
-                          <span style={{fontSize:12,color:"#7B96C8",fontWeight:600}}>⛔ Rupture centrale</span>
-                          <button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F7":"#1B2D4F",border:"none",borderRadius:14,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>{item.rupture?"Oui ✓":"Non"}</button>
-                        </div>
-                        <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{...BTN("#1B2D4F"),flex:1,fontSize:12,padding:"9px 0"}}>✏️ Modifier</button>
-                          <button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{fontSize:12,padding:"9px 12px"})}>📦</button>
-                          <button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"9px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
-                        </div>
-                      </div>);
-                    })}
-                  </div>
-                </div>);
-              })}
-              {pFil.length===0&&<div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}><div style={{fontSize:36,marginBottom:8}}>🔍</div><div style={{fontWeight:700}}>Aucun composant trouvé</div></div>}
-            </>}
-            </div>
+
+              {/* Nav bas mobile */}
               {isMobile&&(
                 <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,16,31,0.97)",borderTop:"1px solid #1B2D4F",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom,6px)",backdropFilter:"blur(12px)"}}>
                   {visibleGroups.map(g=>{
@@ -4663,6 +4386,7 @@
                   })}
                 </div>
               )}
+
             </div>
           </div>
         </div>
