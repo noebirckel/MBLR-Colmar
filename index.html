@@ -3918,6 +3918,38 @@
       const syncCfg={loading:{c:"#4A6A9E",t:"Connexion…",spin:true},saving:{c:"#F59E0B",t:"Sync…",spin:true},saved:{c:"#10B981",t:"✅ Sync",spin:false},error:{c:"#EF4444",t:"⚠️ Offline",spin:false}};
       const sc2=syncCfg[sync]||syncCfg.saved;
 
+      // ── GROUPES DE NAVIGATION ──────────────────────────────
+      const NAV_GROUPS = [
+        { id:"accueil",   icon:"🏠", label:"Accueil",  tabs:["accueil"],                                    single:true  },
+        { id:"pilotage",  icon:"📊", label:"Pilotage", tabs:["stats","messagerie"],                          single:false },
+        { id:"ventes",    icon:"💰", label:"Ventes",   tabs:["ventes","commandes","administratif"],          single:false },
+        { id:"terrain",   icon:"🔧", label:"Terrain",  tabs:["chantier","sav","rapports","cartes"],          single:false },
+        { id:"stock",     icon:"📦", label:"Stock",    tabs:["stock"],                                       single:true  },
+        { id:"admin",     icon:"⚙️", label:"Admin",    tabs:["parametres","equipe"],                        single:false },
+      ];
+      const TAB_LABELS = {
+        accueil:"Accueil", stock:"Stock", chantier:"Chantier", commandes:"Commandes",
+        ventes:"Ventes", administratif:"Administratif", cartes:"Cartes",
+        messagerie:"Messagerie", stats:"Stats", sav:"SAV", rapports:"Rapports",
+        parametres:"Paramètres", equipe:"Équipe",
+      };
+      const TAB_ICONS = {
+        accueil:"🏠", stock:"📦", chantier:"🔧", commandes:"🛒", ventes:"💰",
+        administratif:"📄", cartes:"🗺️", messagerie:"💬", stats:"📊",
+        sav:"🛠️", rapports:"📋", parametres:"⚙️", equipe:"👥",
+      };
+      // Groupes visibles selon rôle (filtre les tabs autorisés)
+      const visibleGroups = NAV_GROUPS.map(g=>({
+        ...g, tabs: g.tabs.filter(t=>allowedTabs.includes(t))
+      })).filter(g=>g.tabs.length>0);
+
+      // Groupe actif = celui qui contient le view courant
+      const activeGroup = visibleGroups.find(g=>g.tabs.includes(view))?.id || visibleGroups[0]?.id;
+
+      // Sous-tabs du groupe actif (mobile: second row)
+      const activeGroupObj = visibleGroups.find(g=>g.id===activeGroup);
+      const subTabs = activeGroupObj?.tabs || [];
+
       const ALL_TABS=[
         ["accueil","🏠","Accueil"],
         ["stock","📦","Stock"],
@@ -4086,40 +4118,134 @@
             </div>
           </div></div>}
 
-          {/* HEADER */}
-          <div style={{background:"linear-gradient(135deg,#1E3A5F,#070D1A)",borderBottom:"1px solid #0D1828",padding:"0 16px",position:"sticky",top:0,zIndex:100}}>
-            <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:54}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:22}}>⚡</span>
-                <div>
-                  <div style={{fontWeight:800,fontSize:isMobile?14:16,color:"#F0F6FF"}}>Ma Borne LR Colmar</div>
-                  {!isMobile&&<div style={{fontSize:10,color:"#4A6A9E",fontWeight:600,letterSpacing:"0.05em"}}>BORNES DE RECHARGE</div>}
-                </div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {/* Sync */}
-                <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 9px",background:"#0D1828",borderRadius:8,border:`1px solid ${sc2.c}40`}}>
-                  {sc2.spin&&<div style={{width:6,height:6,borderRadius:"50%",border:`2px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
-                  <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
-                </div>
-                {/* Badge rôle */}
-                {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:rCfg.bg,borderRadius:8,border:`1px solid ${rCfg.color}40`}}>
-                  <span style={{fontSize:13}}>{rCfg.icon}</span>
-                  <span style={{fontSize:11,color:rCfg.color,fontWeight:700}}>{profile?.nom||rCfg.label}</span>
-                </div>}
-                {/* Desktop nav */}
-                {!isMobile&&<nav style={{display:"flex",gap:2}}>
-                  {TABS.map(([v,icon,label])=>(
-                    <button key={v} onClick={()=>goTo(v)} style={{padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:view===v?"#3B82F6":"transparent",color:view===v?"#FFF":"#7B96C8"}}>{icon} {label}</button>
-                  ))}
-                </nav>}
-                {/* Logout */}
-                <button onClick={logout} title="Déconnexion" style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",padding:"5px 8px",cursor:"pointer",fontSize:12}} >🚪</button>
-              </div>
-            </div>
-          </div>
+          {/* SIDEBAR LAYOUT */}
+          <div style={{display:"flex",height:"100vh",overflow:"hidden",background:"#070D1A"}}>
 
-          {/* CONTENU */}
+            {/* SIDEBAR DESKTOP */}
+            {!isMobile&&(
+              <aside style={{width:220,flexShrink:0,background:"#08101F",borderRight:"1px solid #1B2D4F",
+                display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
+                {/* Logo */}
+                <div style={{padding:"18px 16px 14px",borderBottom:"1px solid #1B2D4F",
+                  display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:36,height:36,borderRadius:9,flexShrink:0,
+                    background:"linear-gradient(135deg,#0D1828,#112038)",
+                    border:"1px solid rgba(59,130,246,0.2)",display:"flex",alignItems:"center",
+                    justifyContent:"center",boxShadow:"0 2px 10px rgba(59,130,246,0.15)"}}>
+                    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:28,height:28,borderRadius:5}}/>
+                  </div>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:12,color:"#F0F6FF",letterSpacing:"-0.2px",lineHeight:1.2}}>Ma Borne LR</div>
+                    <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase"}}>Colmar</div>
+                  </div>
+                </div>
+                {/* Nav groupée */}
+                <nav style={{flex:1,padding:"10px 8px",overflowY:"auto"}}>
+                  {visibleGroups.map(g=>{
+                    const isGroupActive=g.tabs.includes(view);
+                    const isSingle=g.tabs.length===1;
+                    return(
+                      <div key={g.id} style={{marginBottom:4}}>
+                        {isSingle?(
+                          <button onClick={()=>goTo(g.tabs[0])} style={{width:"100%",display:"flex",
+                            alignItems:"center",gap:9,padding:"9px 10px",borderRadius:9,border:"none",
+                            cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',
+                            background:isGroupActive?"rgba(59,130,246,0.12)":"transparent",transition:"all 0.15s"}}>
+                            <span style={{fontSize:16,lineHeight:1,flexShrink:0}}>{g.icon}</span>
+                            <span style={{fontSize:13,fontWeight:700,color:isGroupActive?"#60A5FA":"#7B96C8"}}>{g.label}</span>
+                            {isGroupActive&&<div style={{marginLeft:"auto",width:4,height:4,borderRadius:"50%",background:"#3B82F6"}}/>}
+                          </button>
+                        ):(
+                          <div>
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px 4px",
+                              fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",
+                              color:isGroupActive?"#4A6A9E":"#2E4D82"}}>
+                              <span style={{fontSize:13}}>{g.icon}</span>
+                              <span>{g.label}</span>
+                            </div>
+                            {g.tabs.map(t=>{
+                              const isActive=view===t;
+                              return(
+                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",
+                                  alignItems:"center",gap:9,padding:"8px 10px 8px 28px",borderRadius:8,
+                                  border:"none",cursor:"pointer",textAlign:"left",
+                                  fontFamily:'"Outfit",sans-serif',
+                                  background:isActive?"rgba(59,130,246,0.12)":"transparent",
+                                  transition:"all 0.15s"}}>
+                                  <span style={{fontSize:14,lineHeight:1,flexShrink:0}}>{TAB_ICONS[t]}</span>
+                                  <span style={{fontSize:13,fontWeight:isActive?700:500,
+                                    color:isActive?"#60A5FA":"#5A7AAA"}}>{TAB_LABELS[t]}</span>
+                                  {isActive&&<div style={{marginLeft:"auto",width:3,height:16,borderRadius:2,background:"#3B82F6"}}/>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </nav>
+                {/* Footer sidebar */}
+                <div style={{borderTop:"1px solid #1B2D4F",padding:"10px 8px",display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px"}}>
+                    {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
+                    <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 10px",
+                    background:rCfg.bg,borderRadius:9,border:`1px solid ${rCfg.color}30`}}>
+                    <span style={{fontSize:14}}>{rCfg.icon}</span>
+                    <span style={{fontSize:11,color:rCfg.color,fontWeight:700,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.nom||rCfg.label}</span>
+                  </div>
+                  <button onClick={logout} style={{display:"flex",alignItems:"center",gap:7,padding:"8px 10px",
+                    background:"transparent",border:"1px solid #1B2D4F",borderRadius:9,color:"#4A6A9E",
+                    cursor:"pointer",width:"100%",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+                    <span>🚪</span><span>Déconnexion</span>
+                  </button>
+                </div>
+              </aside>
+            )}
+
+            {/* ZONE PRINCIPALE */}
+            <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
+              {/* Topbar mobile */}
+              {isMobile&&(
+                <div style={{background:"#08101F",borderBottom:"1px solid #1B2D4F",padding:"0 14px",
+                  height:52,display:"flex",alignItems:"center",justifyContent:"space-between",
+                  flexShrink:0,position:"sticky",top:0,zIndex:100}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:30,height:30,borderRadius:7}}/>
+                    <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>Ma Borne LR</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:4,padding:"3px 8px",
+                      background:"#0D1828",borderRadius:7}}>
+                      {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
+                      <span style={{fontSize:9,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
+                    </div>
+                    <button onClick={logout} style={{background:"transparent",border:"1px solid #1B2D4F",
+                      borderRadius:7,color:"#4A6A9E",padding:"5px 7px",cursor:"pointer",fontSize:12}}>🚪</button>
+                  </div>
+                </div>
+              )}
+              {/* Sous-tabs mobiles */}
+              {isMobile&&subTabs.length>1&&(
+                <div style={{background:"#0B1422",borderBottom:"1px solid #1B2D4F",
+                  display:"flex",overflowX:"auto",padding:"6px 10px",gap:4,
+                  flexShrink:0,scrollbarWidth:"none"}}>
+                  {subTabs.map(t=>(
+                    <button key={t} onClick={()=>goTo(t)} style={{padding:"7px 12px",borderRadius:20,
+                      border:`1px solid ${view===t?"#3B82F6":"#1B2D4F"}`,whiteSpace:"nowrap",
+                      background:view===t?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",
+                      color:view===t?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:700,
+                      flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>
+                      {TAB_ICONS[t]} {TAB_LABELS[t]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* CONTENU */}
+              <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 12px 90px":"18px 20px"}}>
           <div style={{maxWidth:1200,margin:"0 auto",padding:isMobile?"12px 12px":"18px 16px"}}>
 
             {/* ── VENTES ── */}
@@ -4561,20 +4687,30 @@
               {pFil.length===0&&<div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}><div style={{fontSize:36,marginBottom:8}}>🔍</div><div style={{fontWeight:700}}>Aucun composant trouvé</div></div>}
             </>}
           </div>
-
-          {/* NAVIGATION BAS (mobile) */}
-          {isMobile&&(
-            <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#0D1828",borderTop:"1px solid #1B2D4F",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
-              {TABS.map(([v,icon,label])=>(
-                <button key={v} onClick={()=>goTo(v)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
-                  <span style={{fontSize:9,fontWeight:700,color:view===v?"#3B82F6":"#4A6A9E",lineHeight:1}}>{label}</span>
-                  {view===v&&<div style={{width:22,height:2,background:"#3B82F6",borderRadius:1,marginTop:2}}/>}
-                </button>
-              ))}
+              </div>
+              {/* NAV GROUPES BAS (mobile) */}
+              {isMobile&&(
+                <div style={{position:"fixed",bottom:0,left:0,right:0,
+                  background:"rgba(8,16,31,0.97)",borderTop:"1px solid #1B2D4F",
+                  display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom,6px)",
+                  backdropFilter:"blur(12px)"}}>
+                  {visibleGroups.map(g=>{
+                    const isGroupActive=g.tabs.includes(view);
+                    return(
+                      <button key={g.id} onClick={()=>goTo(g.tabs[0])} style={{flex:1,background:"none",
+                        border:"none",cursor:"pointer",padding:"10px 4px 6px",
+                        display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                        <span style={{fontSize:19,lineHeight:1}}>{g.icon}</span>
+                        <span style={{fontSize:9,fontWeight:700,lineHeight:1,
+                          color:isGroupActive?"#3B82F6":"#4A6A9E"}}>{g.label}</span>
+                        {isGroupActive&&<div style={{width:20,height:2,background:"#3B82F6",borderRadius:1,marginTop:2}}/>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
       );
     }
 
