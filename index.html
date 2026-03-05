@@ -26,6 +26,17 @@
 </head>
 <body>
   <div id="root"></div>
+  <div id="debug-msg" style="display:none;position:fixed;bottom:10px;right:10px;background:#1a1a2e;color:#ef4444;padding:8px 12px;border-radius:8px;font-size:12px;z-index:9999;font-family:monospace"></div>
+  <script>
+    window.onerror=function(msg,src,line){
+      var d=document.getElementById("debug-msg");
+      if(d){d.style.display="block";d.textContent="JS Error: "+msg+" (L"+line+")";}
+    };
+    setTimeout(function(){
+      if(typeof React==="undefined"){var d=document.getElementById("debug-msg");if(d){d.style.display="block";d.textContent="❌ React CDN non chargé";}}
+      if(typeof supabase==="undefined"){var d=document.getElementById("debug-msg");if(d){d.style.display="block";d.textContent="❌ Supabase CDN non chargé";}}
+    },3000);
+  </script>
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef, useCallback } = React;
 
@@ -3740,20 +3751,26 @@
 
       // Auth
       React.useEffect(()=>{
+        // Timeout de sécurité : débloque après 6s quoi qu'il arrive
+        const t=setTimeout(()=>setAuthLoading(false),6000);
+
         const{data:{subscription}}=sb.auth.onAuthStateChange(async(_,session)=>{
           setAuthUser(session?.user||null);
           if(session?.user){
-            const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
-            if(data){
-              setProfile(data);
-              try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
-            }
+            try{
+              const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+              if(data){
+                setProfile(data);
+                try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
+              }
+            }catch(e){console.warn("profile fetch:",e);}
           }else{
             setProfile(null);
           }
+          clearTimeout(t);
           setAuthLoading(false);
         });
-        return()=>subscription.unsubscribe();
+        return()=>{subscription.unsubscribe();clearTimeout(t);};
       },[]);
 
       // Load data
