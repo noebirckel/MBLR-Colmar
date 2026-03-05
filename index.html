@@ -3706,7 +3706,7 @@
     function App(){
       const isMobile=useIsMobile();
       const[authUser,setAuthUser]=React.useState(null);
-      const[authLoading,setAuthLoading]=React.useState(false);
+      const[authLoading,setAuthLoading]=React.useState(true);
       const[profile,setProfile]=React.useState(null);
       const[sync,setSync]=React.useState("saved");
       const[stock,setStock]=React.useState([]);
@@ -3740,34 +3740,20 @@
 
       // Auth
       React.useEffect(()=>{
-        // Charger profil sans bloquer l'UI
-        const loadProfile=async(user)=>{
-          try{
-            const{data}=await sb.from("profiles").select("*").eq("id",user.id).single();
+        const{data:{subscription}}=sb.auth.onAuthStateChange(async(_,session)=>{
+          setAuthUser(session?.user||null);
+          if(session?.user){
+            const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
             if(data){
               setProfile(data);
               try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
             }
-          }catch(e){console.error("profile:",e);}
-        };
-
-        try{
-          sb.auth.getSession().then(({data:{session}})=>{
-            setAuthUser(session?.user||null);
-            if(session?.user) loadProfile(session.user);
-            else setAuthLoading(false);
-          }).catch(()=>{setAuthLoading(false);});
-
-          const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-            if(event==="SIGNED_OUT"){setAuthUser(null);setProfile(null);setAuthLoading(false);}
-            else if((event==="SIGNED_IN"||event==="INITIAL_SESSION")&&session?.user){
-              setAuthUser(session.user);loadProfile(session.user);
-            }else if(event==="INITIAL_SESSION"&&!session?.user){
-              setAuthLoading(false);
-            }
-          });
-          return()=>subscription.unsubscribe();
-        }catch(e){setAuthLoading(false);}
+          }else{
+            setProfile(null);
+          }
+          setAuthLoading(false);
+        });
+        return()=>subscription.unsubscribe();
       },[]);
 
       // Load data
@@ -3883,6 +3869,14 @@
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
 
+      if(authLoading)return(
+        <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+          <div style={{width:80,height:80,borderRadius:18,background:"linear-gradient(135deg,#0D1828,#112038)",border:"1px solid rgba(59,130,246,0.25)",display:"flex",alignItems:"center",justifyContent:"center",animation:"glow 2s infinite"}}>
+            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIgdmlld0JveD0iMCAwIDQ0OSA0NDkiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDQ0OSA0NDk7IiB4bWw6c3BhY2U9InByZXNlcnZlIj48c3R5bGUgdHlwZT0idGV4dC9jc3MiPi5zdDB7ZmlsbDojMDQ1MjU0O30uc3Qxe2ZpbGw6I0ZGRkZGRjt9PC9zdHlsZT48ZyBpZD0iZm9uZCI+PHJlY3QgeD0iMC40IiB5PSIwLjMiIGNsYXNzPSJzdDAiIHdpZHRoPSI0NTAiIGhlaWdodD0iNDUwIi8+PC9nPjxnIGlkPSJMb2dvIj48cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+PHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz48L2c+PC9zdmc+" style={{width:52,height:52,borderRadius:10}}/>
+          </div>
+          <div style={{color:"#4A6A9E",fontSize:14}}>Chargement…</div>
+        </div>
+      );
       if(!authUser)return <LoginScreen/>;
 
       // Modal helpers
