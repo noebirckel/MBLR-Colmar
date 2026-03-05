@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>⚡ Suivi Stock — Bornes de Recharge</title>
+  <title>⚡ Ma Borne LR Colmar — Bornes de Recharge</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -12,10 +12,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0F172A; color: #E2E8F0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: #011515; color: #E2E8F0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #0F172A; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: #011515; }
+    ::-webkit-scrollbar-thumb { background: #0A3838; border-radius: 3px; }
     input, select, textarea { font-family: inherit; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes slideUp { from { transform: translateY(30px); opacity:0; } to { transform: translateY(0); opacity:1; } }
@@ -63,15 +63,15 @@
     const CC = {"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Compteur MID":"#F57C00","Disjoncteur diff.":"#37474F","Divers":"#558B2F"};
     const SC = {
       alert:{label:"COMMANDER",color:"#EF4444",bg:"#3B1212",icon:"🔴"},
-      ordered:{label:"COMMANDÉ",color:"#3B82F6",bg:"#0F1F3D",icon:"🚚"},
+      ordered:{label:"COMMANDÉ",color:"#0EA5A8",bg:"#0F1F3D",icon:"🚚"},
       warn:{label:"SURVEILLER",color:"#F59E0B",bg:"#2D2008",icon:"🟡"},
       ok:{label:"OK",color:"#10B981",bg:"#0A2218",icon:"✅"},
-      vide:{label:"—",color:"#94A3B8",bg:"#1E293B",icon:"—"},
+      vide:{label:"—",color:"#94A3B8",bg:"#052020",icon:"—"},
       rupture:{label:"RUPTURE",color:"#A855F7",bg:"#1E0A2D",icon:"⛔"},
     };
     const ROLES = {
       administrateur:{label:"Administrateur",color:"#EF4444",bg:"#3B1212",icon:"👑"},
-      commercial:{label:"Commercial",color:"#3B82F6",bg:"#0F1F3D",icon:"💼"},
+      commercial:{label:"Commercial",color:"#0EA5A8",bg:"#0F1F3D",icon:"💼"},
       installateur:{label:"Installateur",color:"#10B981",bg:"#0A2218",icon:"🔧"},
       secretaire:{label:"Secrétaire",color:"#F59E0B",bg:"#2D2008",icon:"📋"},
     };
@@ -118,14 +118,14 @@
         setLoading(false);
       };
 
-      const INP=(e={})=>({background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"13px 14px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
+      const INP=(e={})=>({background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"13px 14px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
 
       return(
-        <div style={{background:"linear-gradient(135deg,#0F172A,#1E293B)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.4s ease"}}>
-          <div style={{background:"#1E293B",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid #334155",boxShadow:"0 25px 60px #00000060"}}>
+        <div style={{background:"linear-gradient(135deg,#011515,#052020)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeIn 0.4s ease"}}>
+          <div style={{background:"#052020",borderRadius:20,padding:36,width:"100%",maxWidth:400,border:"1px solid #0A3838",boxShadow:"0 25px 60px #00000060"}}>
             <div style={{textAlign:"center",marginBottom:28}}>
               <div style={{fontSize:48,marginBottom:10}}>⚡</div>
-              <h1 style={{fontWeight:800,fontSize:22,color:"#F1F5F9",marginBottom:4}}>Suivi Stock</h1>
+              <h1 style={{fontWeight:800,fontSize:22,color:"#F1F5F9",marginBottom:4}}>Ma Borne LR Colmar</h1>
               <p style={{color:"#64748B",fontSize:13}}>Bornes de Recharge — Connexion</p>
             </div>
             <div style={{marginBottom:14}}>
@@ -137,7 +137,7 @@
               <input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()} placeholder="••••••••" style={INP()}/>
             </div>
             {err&&<div style={{background:"#EF444418",border:"1px solid #EF444440",borderRadius:8,padding:"10px 14px",marginBottom:14,color:"#EF4444",fontSize:13}}>⚠️ {err}</div>}
-            <button onClick={login} disabled={loading} style={{background:loading?"#334155":"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:12,color:"#FFF",padding:"14px",cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:15,width:"100%"}}>
+            <button onClick={login} disabled={loading} style={{background:loading?"#0A3838":"linear-gradient(135deg,#0EA5A8,#045254)",border:"none",borderRadius:12,color:"#FFF",padding:"14px",cursor:loading?"not-allowed":"pointer",fontWeight:800,fontSize:15,width:"100%"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
           </div>
@@ -210,7 +210,7 @@
         inputRef.current?.focus();
       };
 
-      const ROLE_COLORS={administrateur:"#A855F7",commercial:"#3B82F6",installateur:"#10B981",secretaire:"#F59E0B"};
+      const ROLE_COLORS={administrateur:"#A855F7",commercial:"#0EA5A8",installateur:"#10B981",secretaire:"#F59E0B"};
       const ROLE_ICONS={administrateur:"👑",commercial:"💼",installateur:"🔧",secretaire:"📋"};
 
       const fmt_time=iso=>{
@@ -226,19 +226,19 @@
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"240px 1fr",gap:12,height:isMobile?"auto":"78vh"}}>
 
           {/* SIDEBAR CANAUX */}
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"12px 10px",display:"flex",flexDirection:"column",gap:4,overflowY:"auto"}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"12px 10px",display:"flex",flexDirection:"column",gap:4,overflowY:"auto"}}>
             <div style={{fontSize:10,fontWeight:700,color:"#64748B",padding:"4px 8px",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>Canaux</div>
-            <button onClick={()=>setChannel("general")} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel==="general"?"#3B82F625":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
+            <button onClick={()=>setChannel("general")} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel==="general"?"#0EA5A825":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
               <span style={{fontSize:16}}>💬</span>
-              <span style={{fontSize:13,fontWeight:700,color:channel==="general"?"#3B82F6":"#94A3B8"}}>Général</span>
+              <span style={{fontSize:13,fontWeight:700,color:channel==="general"?"#0EA5A8":"#94A3B8"}}>Général</span>
             </button>
 
             <div style={{fontSize:10,fontWeight:700,color:"#64748B",padding:"12px 8px 4px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Messages privés</div>
             {users.map(u=>(
-              <button key={u.id} onClick={()=>setChannel(u.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel===u.id?"#3B82F625":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
-                <div style={{width:30,height:30,borderRadius:"50%",background:ROLE_COLORS[u.role]||"#334155",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{ROLE_ICONS[u.role]||"👤"}</div>
+              <button key={u.id} onClick={()=>setChannel(u.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel===u.id?"#0EA5A825":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:ROLE_COLORS[u.role]||"#0A3838",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{ROLE_ICONS[u.role]||"👤"}</div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:700,color:channel===u.id?"#3B82F6":"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nom}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:channel===u.id?"#0EA5A8":"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nom}</div>
                   <div style={{fontSize:10,color:ROLE_COLORS[u.role]||"#64748B"}}>{ROLE_ICONS[u.role]} {u.role}</div>
                 </div>
               </button>
@@ -246,9 +246,9 @@
           </div>
 
           {/* ZONE MESSAGES */}
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isMobile?"60vh":"auto"}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isMobile?"60vh":"auto"}}>
             {/* Header canal */}
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #334155",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #0A3838",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
               <span style={{fontSize:18}}>{channel==="general"?"💬":"💌"}</span>
               <div>
                 <div style={{fontWeight:800,fontSize:14,color:"#F1F5F9"}}>{currentUserName}</div>
@@ -268,11 +268,11 @@
                 const prevSame=i>0&&messages[i-1].sender_id===m.sender_id;
                 return(
                   <div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",gap:8,alignItems:"flex-end"}}>
-                    {!isMe&&!prevSame&&<div style={{width:28,height:28,borderRadius:"50%",background:ROLE_COLORS[m.sender_role]||"#334155",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{ROLE_ICONS[m.sender_role]||"👤"}</div>}
+                    {!isMe&&!prevSame&&<div style={{width:28,height:28,borderRadius:"50%",background:ROLE_COLORS[m.sender_role]||"#0A3838",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{ROLE_ICONS[m.sender_role]||"👤"}</div>}
                     {!isMe&&prevSame&&<div style={{width:28,flexShrink:0}}/>}
                     <div style={{maxWidth:"70%"}}>
                       {!isMe&&!prevSame&&<div style={{fontSize:10,color:ROLE_COLORS[m.sender_role]||"#64748B",fontWeight:700,marginBottom:3,marginLeft:4}}>{m.sender_nom}</div>}
-                      <div style={{background:isMe?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0F172A",borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"9px 12px",position:"relative"}}>
+                      <div style={{background:isMe?"linear-gradient(135deg,#0EA5A8,#045254)":"#010E0E",borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"9px 12px",position:"relative"}}>
                         {m.mention_type&&<div style={{fontSize:10,fontWeight:700,color:"#F59E0B",marginBottom:4,background:"#F59E0B15",borderRadius:5,padding:"2px 6px",display:"inline-block"}}>
                           {m.mention_type==="chantier"?"🔧":"💰"} {m.mention_label}
                         </div>}
@@ -287,7 +287,7 @@
             </div>
 
             {/* Zone saisie */}
-            <div style={{padding:"12px 14px",borderTop:"1px solid #334155",flexShrink:0}}>
+            <div style={{padding:"12px 14px",borderTop:"1px solid #0A3838",flexShrink:0}}>
               {/* Mention sélectionnée */}
               {mention&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#F59E0B15",borderRadius:8,padding:"6px 10px"}}>
                 <span style={{fontSize:12,color:"#F59E0B",fontWeight:700}}>{mention.type==="chantier"?"🔧":"💰"} {mention.label}</span>
@@ -302,16 +302,16 @@
                   onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}}}
                   placeholder="Écrire un message… (Entrée pour envoyer)"
                   rows={1}
-                  style={{flex:1,background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:13,outline:"none",resize:"none",lineHeight:1.4,maxHeight:100,overflow:"auto",fontFamily:"inherit"}}
+                  style={{flex:1,background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:13,outline:"none",resize:"none",lineHeight:1.4,maxHeight:100,overflow:"auto",fontFamily:"inherit"}}
                 />
                 <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                  <button title="Mentionner un chantier ou une vente" onClick={()=>setShowMention(p=>!p)} style={{background:"#334155",border:"none",borderRadius:8,color:"#94A3B8",width:36,height:36,cursor:"pointer",fontSize:16}}>@</button>
-                  <button onClick={sendMessage} disabled={(!text.trim()&&!mention)||sending} style={{background:(!text.trim()&&!mention)||sending?"#334155":"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:8,color:"#FFF",width:36,height:36,cursor:"pointer",fontSize:16,fontWeight:700}}>↑</button>
+                  <button title="Mentionner un chantier ou une vente" onClick={()=>setShowMention(p=>!p)} style={{background:"#0A3838",border:"none",borderRadius:8,color:"#94A3B8",width:36,height:36,cursor:"pointer",fontSize:16}}>@</button>
+                  <button onClick={sendMessage} disabled={(!text.trim()&&!mention)||sending} style={{background:(!text.trim()&&!mention)||sending?"#0A3838":"linear-gradient(135deg,#0EA5A8,#045254)",border:"none",borderRadius:8,color:"#FFF",width:36,height:36,cursor:"pointer",fontSize:16,fontWeight:700}}>↑</button>
                 </div>
               </div>
 
               {/* Popup mention */}
-              {showMention&&<div style={{marginTop:8,background:"#0F172A",borderRadius:10,border:"1px solid #334155",padding:10,maxHeight:160,overflowY:"auto"}}>
+              {showMention&&<div style={{marginTop:8,background:"#010E0E",borderRadius:10,border:"1px solid #0A3838",padding:10,maxHeight:160,overflowY:"auto"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase"}}>Mentionner…</div>
                 {window._appState?.getChantiers?.()?.filter(ch=>ch.statut!=="termine").slice(0,5).map(ch=>(
                   <div key={ch.id} onClick={()=>{setMention({type:"chantier",label:ch.client});setShowMention(false);}} style={{padding:"6px 8px",borderRadius:7,cursor:"pointer",fontSize:12,color:"#E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
@@ -362,7 +362,7 @@
       const maxVendeur=Math.max(...caParVendeur.map(v=>v.ca),1);
 
       // Chantiers par statut
-      const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#A855F7"},termine:{label:"Terminé",color:"#10B981"}};
+      const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#0EA5A8"},en_cours:{label:"En cours",color:"#A855F7"},termine:{label:"Terminé",color:"#10B981"}};
       const chantiersParStatut=Object.entries(STATUTS_CH).map(([k,s])=>({...s,key:k,nb:chantiers.filter(c=>c.statut===k).length}));
       const totalChantiers=chantiers.length||1;
 
@@ -383,7 +383,7 @@
       const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0);
 
       const Card=({icon,label,value,sub,color})=>(
-        <div style={{background:"#1E293B",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
+        <div style={{background:"#052020",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
           <div style={{fontSize:22,marginBottom:6}}>{icon}</div>
           <div style={{fontSize:isMobile?16:20,fontWeight:800,color}}>{value}</div>
           <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{label}</div>
@@ -400,7 +400,7 @@
             </div>
             <div style={{display:"flex",gap:5}}>
               {[3,6,12].map(p=>(
-                <button key={p} onClick={()=>setPeriod(p)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${period===p?"#3B82F6":"#334155"}`,background:period===p?"#3B82F625":"transparent",color:period===p?"#3B82F6":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>{p} mois</button>
+                <button key={p} onClick={()=>setPeriod(p)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${period===p?"#0EA5A8":"#0A3838"}`,background:period===p?"#0EA5A825":"transparent",color:period===p?"#0EA5A8":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>{p} mois</button>
               ))}
             </div>
           </div>
@@ -408,7 +408,7 @@
           {/* KPIs */}
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
             <Card icon="💶" label="CA total" value={fmt(caTotal)} sub={`${ventes.length} ventes`} color="#10B981"/>
-            <Card icon="📅" label="CA ce mois" value={fmt(caMois)} sub={`${ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).length} ventes`} color="#3B82F6"/>
+            <Card icon="📅" label="CA ce mois" value={fmt(caMois)} sub={`${ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).length} ventes`} color="#0EA5A8"/>
             <Card icon="🔧" label="Chantiers actifs" value={chantiers.filter(c=>c.statut!=="termine").length} sub={`${chantiers.filter(c=>c.statut==="termine").length} terminés`} color="#A855F7"/>
             <Card icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${Math.round(totalAcomptes>0?(totalPaye/totalAcomptes)*100:0)}% du total`} color="#F59E0B"/>
           </div>
@@ -416,7 +416,7 @@
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
 
             {/* GRAPHIQUE CA PAR MOIS */}
-            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+            <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px"}}>
               <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 CA mensuel</h3>
               <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,paddingBottom:24,position:"relative"}}>
                 {caParMois.map((m,i)=>{
@@ -424,8 +424,8 @@
                   const isCurrent=m.m===mM&&m.y===mY;
                   return(
                     <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,height:"100%",justifyContent:"flex-end"}}>
-                      <div title={`${fmt(m.ca)} — ${m.nb} vente(s)`} style={{width:"100%",height:h||2,background:isCurrent?"linear-gradient(180deg,#3B82F6,#1D4ED8)":"#334155",borderRadius:"4px 4px 0 0",minHeight:2,cursor:"default",transition:"height 0.3s"}}/>
-                      <div style={{fontSize:9,color:isCurrent?"#3B82F6":"#475569",fontWeight:isCurrent?700:400,textAlign:"center",lineHeight:1.2,position:"absolute",bottom:0}}>{m.label}</div>
+                      <div title={`${fmt(m.ca)} — ${m.nb} vente(s)`} style={{width:"100%",height:h||2,background:isCurrent?"linear-gradient(180deg,#0EA5A8,#045254)":"#0A3838",borderRadius:"4px 4px 0 0",minHeight:2,cursor:"default",transition:"height 0.3s"}}/>
+                      <div style={{fontSize:9,color:isCurrent?"#0EA5A8":"#475569",fontWeight:isCurrent?700:400,textAlign:"center",lineHeight:1.2,position:"absolute",bottom:0}}>{m.label}</div>
                     </div>
                   );
                 })}
@@ -439,13 +439,13 @@
             </div>
 
             {/* CA PAR COMMERCIAL */}
-            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+            <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px"}}>
               <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>👤 CA par commercial</h3>
               {caParVendeur.length===0?<div style={{textAlign:"center",color:"#475569",padding:"30px 0",fontSize:12}}>Aucune vente enregistrée</div>
                 :<div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {caParVendeur.map((v,i)=>{
                     const pct=maxVendeur>0?Math.round((v.ca/maxVendeur)*100):0;
-                    const colors=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444"];
+                    const colors=["#0EA5A8","#10B981","#A855F7","#F59E0B","#EF4444"];
                     const col=colors[i%colors.length];
                     return(
                       <div key={v.nom}>
@@ -453,7 +453,7 @@
                           <span style={{fontSize:12,fontWeight:700,color:"#E2E8F0"}}>{v.nom}</span>
                           <span style={{fontSize:12,color:col,fontWeight:800}}>{fmt(v.ca)}</span>
                         </div>
-                        <div style={{background:"#0F172A",borderRadius:6,height:8,overflow:"hidden"}}>
+                        <div style={{background:"#010E0E",borderRadius:6,height:8,overflow:"hidden"}}>
                           <div style={{height:8,borderRadius:6,width:pct+"%",background:col,transition:"width 0.4s"}}/>
                         </div>
                         <div style={{fontSize:10,color:"#475569",marginTop:2}}>{v.nb} vente{v.nb>1?"s":""}</div>
@@ -465,7 +465,7 @@
             </div>
 
             {/* CHANTIERS PAR STATUT */}
-            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+            <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px"}}>
               <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>🔧 Chantiers par statut</h3>
               {chantiers.length===0?<div style={{textAlign:"center",color:"#475569",padding:"30px 0",fontSize:12}}>Aucun chantier</div>
                 :<>
@@ -494,12 +494,12 @@
             </div>
 
             {/* ACOMPTES */}
-            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+            <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px"}}>
               <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 Suivi des acomptes</h3>
               {/* Barre segmentée */}
               {totalAcomptes>0&&<>
                 <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:20,marginBottom:12}}>
-                  {[{v:totalPaye,c:"#10B981"},{v:totalEnvoy,c:"#3B82F6"},{v:totalAttente,c:"#F59E0B"}].filter(x=>x.v>0).map((x,i)=>(
+                  {[{v:totalPaye,c:"#10B981"},{v:totalEnvoy,c:"#0EA5A8"},{v:totalAttente,c:"#F59E0B"}].filter(x=>x.v>0).map((x,i)=>(
                     <div key={i} style={{width:`${(x.v/totalAcomptes)*100}%`,background:x.c}}/>
                   ))}
                 </div>
@@ -507,7 +507,7 @@
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {[
                   {label:"✅ Payés",value:totalPaye,color:"#10B981",nb:acomptes.filter(a=>a.statut==="paye").length},
-                  {label:"📨 Envoyés",value:totalEnvoy,color:"#3B82F6",nb:acomptes.filter(a=>a.statut==="envoye").length},
+                  {label:"📨 Envoyés",value:totalEnvoy,color:"#0EA5A8",nb:acomptes.filter(a=>a.statut==="envoye").length},
                   {label:"📤 À envoyer",value:totalAttente,color:"#F59E0B",nb:acomptes.filter(a=>a.statut==="a_envoyer").length},
                 ].map(row=>(
                   <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -515,7 +515,7 @@
                     <span style={{fontSize:13,fontWeight:800,color:row.color}}>{fmt(row.value)}</span>
                   </div>
                 ))}
-                <div style={{borderTop:"1px solid #334155",paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                <div style={{borderTop:"1px solid #0A3838",paddingTop:8,display:"flex",justifyContent:"space-between"}}>
                   <span style={{fontSize:12,fontWeight:700,color:"#94A3B8"}}>Total</span>
                   <span style={{fontSize:14,fontWeight:800,color:"#E2E8F0"}}>{fmt(totalAcomptes)}</span>
                 </div>
@@ -524,10 +524,10 @@
           </div>
 
           {/* STOCK */}
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px"}}>
             <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>📦 Stock</h3>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
-              <Card icon="📦" label="Valeur totale stock" value={fmt(valeurStock)} sub={`${stock.length} références`} color="#3B82F6"/>
+              <Card icon="📦" label="Valeur totale stock" value={fmt(valeurStock)} sub={`${stock.length} références`} color="#0EA5A8"/>
               <Card icon="🔴" label="Articles à commander" value={stock.filter(s=>s.stock<=s.seuil&&s.stock>0).length} sub="sous le seuil" color="#EF4444"/>
               <Card icon="⛔" label="Ruptures" value={stock.filter(s=>s.stock===0).length} sub="stock à zéro" color="#7C3AED"/>
               <Card icon="✅" label="Articles OK" value={stock.filter(s=>s.stock>s.seuil).length} sub="au-dessus du seuil" color="#10B981"/>
@@ -595,8 +595,8 @@
 
         filtered.forEach(pt=>{
           const hasPhotos=pt.photos.length>0;
-          const STATUT_COLORS={a_planifier:"#F59E0B",planifie:"#3B82F6",en_cours:"#A855F7",termine:"#10B981"};
-          const color=pt.statut_chantier?STATUT_COLORS[pt.statut_chantier]||"#10B981":"#3B82F6";
+          const STATUT_COLORS={a_planifier:"#F59E0B",planifie:"#0EA5A8",en_cours:"#A855F7",termine:"#10B981"};
+          const color=pt.statut_chantier?STATUT_COLORS[pt.statut_chantier]||"#10B981":"#0EA5A8";
 
           const icon=L.divIcon({
             className:"",
@@ -630,7 +630,7 @@
 
       const STATUT_CH={
         a_planifier:{label:"À planifier",color:"#F59E0B"},
-        planifie:{label:"Planifié",color:"#3B82F6"},
+        planifie:{label:"Planifié",color:"#0EA5A8"},
         en_cours:{label:"En cours",color:"#A855F7"},
         termine:{label:"Terminé",color:"#10B981"},
       };
@@ -640,7 +640,7 @@
           {/* LIGHTBOX */}
           {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
             <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain"}}/>
-            <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#1E293B",border:"1px solid #334155",borderRadius:8,color:"#E2E8F0",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:3001}}>✕</button>
+            <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#052020",border:"1px solid #0A3838",borderRadius:8,color:"#E2E8F0",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:3001}}>✕</button>
           </div>}
 
           {/* HEADER */}
@@ -650,8 +650,8 @@
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{points.length} chantier(s) géolocalisé(s) sur {ventes.length} vente(s)</p>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {[["tous","Tous","#94A3B8"],["avec_photos","📸 Avec photos","#3B82F6"]].map(([k,l,col])=>(
-                <button key={k} onClick={()=>setFilter(k)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===k?col:"#334155"}`,background:filter===k?col+"25":"transparent",color:filter===k?col:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
+              {[["tous","Tous","#94A3B8"],["avec_photos","📸 Avec photos","#0EA5A8"]].map(([k,l,col])=>(
+                <button key={k} onClick={()=>setFilter(k)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===k?col:"#0A3838"}`,background:filter===k?col+"25":"transparent",color:filter===k?col:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
               ))}
             </div>
           </div>
@@ -682,10 +682,10 @@
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":selectedPoint?"1fr 360px":"1fr",gap:14,alignItems:"start"}}>
 
             {/* CARTE */}
-            <div style={{borderRadius:14,overflow:"hidden",border:"1px solid #334155",position:"relative"}}>
+            <div style={{borderRadius:14,overflow:"hidden",border:"1px solid #0A3838",position:"relative"}}>
               <div ref={mapRef} style={{height:isMobile?"65vh":"72vh",width:"100%"}}/>
               {filtered.length===0&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                <div style={{background:"#1E293B",borderRadius:12,padding:"20px 28px",textAlign:"center",border:"1px solid #334155"}}>
+                <div style={{background:"#052020",borderRadius:12,padding:"20px 28px",textAlign:"center",border:"1px solid #0A3838"}}>
                   <div style={{fontSize:40,marginBottom:8}}>📍</div>
                   <div style={{fontWeight:800,color:"#F1F5F9",marginBottom:4}}>Aucun point à afficher</div>
                   <div style={{fontSize:12,color:"#64748B"}}>Ajoutez des adresses à vos ventes</div>
@@ -694,13 +694,13 @@
             </div>
 
             {/* PANNEAU DÉTAIL */}
-            {selectedPoint&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px",maxHeight:isMobile?"auto":"72vh",overflowY:"auto"}}>
+            {selectedPoint&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"16px",maxHeight:isMobile?"auto":"72vh",overflowY:"auto"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
                 <div>
                   <div style={{fontWeight:800,fontSize:16,color:"#F1F5F9",marginBottom:3}}>{selectedPoint.client}</div>
                   {selectedPoint.statut_chantier&&<span style={{background:STATUT_CH[selectedPoint.statut_chantier]?.color+"20",color:STATUT_CH[selectedPoint.statut_chantier]?.color,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>{STATUT_CH[selectedPoint.statut_chantier]?.label}</span>}
                 </div>
-                <button onClick={()=>setSelectedPoint(null)} style={{background:"#334155",border:"none",borderRadius:7,color:"#94A3B8",width:28,height:28,cursor:"pointer",fontSize:14,fontWeight:700,flexShrink:0}}>✕</button>
+                <button onClick={()=>setSelectedPoint(null)} style={{background:"#0A3838",border:"none",borderRadius:7,color:"#94A3B8",width:28,height:28,cursor:"pointer",fontSize:14,fontWeight:700,flexShrink:0}}>✕</button>
               </div>
 
               <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:14}}>
@@ -714,11 +714,11 @@
               {selectedPoint.materiels.length>0&&<div style={{marginBottom:14}}>
                 <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>Matériel installé</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                  {selectedPoint.materiels.map((m,i)=><span key={i} style={{background:"#0F172A",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#94A3B8"}}>{m.qty}× {m.article}</span>)}
+                  {selectedPoint.materiels.map((m,i)=><span key={i} style={{background:"#010E0E",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#94A3B8"}}>{m.qty}× {m.article}</span>)}
                 </div>
               </div>}
 
-              {selectedPoint.description&&<div style={{fontSize:12,color:"#64748B",fontStyle:"italic",marginBottom:14,padding:"8px 10px",background:"#0F172A",borderRadius:8}}>"{selectedPoint.description}"</div>}
+              {selectedPoint.description&&<div style={{fontSize:12,color:"#64748B",fontStyle:"italic",marginBottom:14,padding:"8px 10px",background:"#010E0E",borderRadius:8}}>"{selectedPoint.description}"</div>}
 
               {/* Photos */}
               <div style={{marginBottom:4}}>
@@ -726,7 +726,7 @@
                   📸 Photos {selectedPoint.photos.length>0?`(${selectedPoint.photos.length})`:""}
                 </div>
                 {selectedPoint.photos.length===0
-                  ?<div style={{textAlign:"center",padding:"20px 0",color:"#475569",background:"#0F172A",borderRadius:10,fontSize:12}}>Aucune photo pour ce chantier</div>
+                  ?<div style={{textAlign:"center",padding:"20px 0",color:"#475569",background:"#010E0E",borderRadius:10,fontSize:12}}>Aucune photo pour ce chantier</div>
                   :<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5}}>
                     {selectedPoint.photos.map((url,i)=>(
                       <div key={i} style={{borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
@@ -740,11 +740,11 @@
           </div>
 
           {/* Liste des ventes sans coords */}
-          {ventes.filter(v=>!v.coords&&!v.adresse).length>0&&<div style={{marginTop:14,background:"#1E293B",borderRadius:12,border:"1px solid #334155",padding:"12px 14px"}}>
+          {ventes.filter(v=>!v.coords&&!v.adresse).length>0&&<div style={{marginTop:14,background:"#052020",borderRadius:12,border:"1px solid #0A3838",padding:"12px 14px"}}>
             <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:8}}>Ventes sans adresse ({ventes.filter(v=>!v.coords&&!v.adresse).length})</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
               {ventes.filter(v=>!v.coords&&!v.adresse).map(v=>(
-                <span key={v.id} style={{background:"#0F172A",borderRadius:7,padding:"4px 10px",fontSize:11,color:"#64748B"}}>{v.client}</span>
+                <span key={v.id} style={{background:"#010E0E",borderRadius:7,padding:"4px 10px",fontSize:11,color:"#64748B"}}>{v.client}</span>
               ))}
             </div>
           </div>}
@@ -760,7 +760,7 @@
 
       const STATUTS = {
         a_envoyer:  {label:"À envoyer",   color:"#F59E0B", bg:"#2D2008", icon:"📤"},
-        envoye:     {label:"Envoyé",      color:"#3B82F6", bg:"#0F1F3D", icon:"📨"},
+        envoye:     {label:"Envoyé",      color:"#0EA5A8", bg:"#0F1F3D", icon:"📨"},
         paye:       {label:"Payé",        color:"#10B981", bg:"#0A2218", icon:"✅"},
         annule:     {label:"Annulé",      color:"#EF4444", bg:"#3B1212", icon:"❌"},
       };
@@ -772,12 +772,12 @@
       const[newModal,setNewModal]=useState(false);
       const[newForm,setNewForm]=useState({client:"",montant_vente:"",montant_acompte:"",date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",notes:"",par:profile?.nom||""});
 
-      const INP=(e={})=>({background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
+      const INP=(e={})=>({background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,...e});
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:4,letterSpacing:"0.05em"}}>{c}</label>;
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#1E293B",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #334155",maxHeight:"92vh",overflowY:"auto"}:{background:"#1E293B",borderRadius:16,padding:24,width:500,maxWidth:"96vw",border:"1px solid #334155",maxHeight:"90vh",overflowY:"auto"};
-      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>:null;
+      const MBX=isMobile?{background:"#052020",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #0A3838",maxHeight:"92vh",overflowY:"auto"}:{background:"#052020",borderRadius:16,padding:24,width:500,maxWidth:"96vw",border:"1px solid #0A3838",maxHeight:"90vh",overflowY:"auto"};
+      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>:null;
 
       const totalAcomptes = acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
       const totalPaye     = acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
@@ -798,7 +798,7 @@
             <Handle/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <h3 style={{margin:0,fontWeight:800,fontSize:17}}>✏️ Modifier l'acompte</h3>
-              {editModal.vente_id&&<span style={{fontSize:10,color:"#64748B",background:"#0F172A",padding:"3px 8px",borderRadius:6}}>🔗 Depuis vente</span>}
+              {editModal.vente_id&&<span style={{fontSize:10,color:"#64748B",background:"#010E0E",padding:"3px 8px",borderRadius:6}}>🔗 Depuis vente</span>}
             </div>
 
             <div style={{marginBottom:12}}><L c="CLIENT"/><input value={editModal.client} onChange={e=>setEditModal(p=>({...p,client:e.target.value}))} style={INP()}/></div>
@@ -812,7 +812,7 @@
               </div>
             </div>
 
-            {editModal.montant_vente>0&&<div style={{background:"#3B82F615",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#3B82F6"}}>
+            {editModal.montant_vente>0&&<div style={{background:"#0EA5A815",border:"1px solid #0EA5A830",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#0EA5A8"}}>
               💡 Acompte = {editModal.montant_vente>0?((editModal.montant_acompte/editModal.montant_vente)*100).toFixed(0):"—"}% du montant HT
             </div>}
 
@@ -820,7 +820,7 @@
               <L c="STATUT"/>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {Object.entries(STATUTS).map(([k,s])=>(
-                  <button key={k} onClick={()=>setEditModal(p=>({...p,statut:k}))} style={{padding:"6px 12px",borderRadius:20,border:`2px solid ${editModal.statut===k?s.color:"#334155"}`,background:editModal.statut===k?s.bg:"transparent",color:editModal.statut===k?s.color:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                  <button key={k} onClick={()=>setEditModal(p=>({...p,statut:k}))} style={{padding:"6px 12px",borderRadius:20,border:`2px solid ${editModal.statut===k?s.color:"#0A3838"}`,background:editModal.statut===k?s.bg:"transparent",color:editModal.statut===k?s.color:"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>
                     {s.icon} {s.label}
                   </button>
                 ))}
@@ -835,8 +835,8 @@
             <div style={{marginBottom:16}}><L c="NOTES"/><textarea value={editModal.notes||""} onChange={e=>setEditModal(p=>({...p,notes:e.target.value}))} placeholder="Informations complémentaires…" style={{...INP(),height:70,resize:"none"}}/></div>
 
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setEditModal(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={()=>{updateAcompte(editModal.id,editModal);setEditModal(null);}} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px"})}>💾 Enregistrer</button>
+              <button onClick={()=>setEditModal(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={()=>{updateAcompte(editModal.id,editModal);setEditModal(null);}} style={BTN("linear-gradient(135deg,#0EA5A8,#045254)",{flex:2,padding:"12px"})}>💾 Enregistrer</button>
             </div>
           </div></div>}
 
@@ -850,13 +850,13 @@
               <div><L c="MONTANT VENTE HT (€)"/><input type="number" value={newForm.montant_vente} onChange={e=>{const mv=Number(e.target.value);setNewForm(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*0.3*100)/100}));}} style={INP()}/></div>
               <div><L c="ACOMPTE (€)"/><input type="number" value={newForm.montant_acompte} onChange={e=>setNewForm(p=>({...p,montant_acompte:Number(e.target.value)}))} style={INP()}/></div>
             </div>
-            {newForm.montant_vente>0&&<div style={{background:"#3B82F615",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#3B82F6"}}>
+            {newForm.montant_vente>0&&<div style={{background:"#0EA5A815",border:"1px solid #0EA5A830",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#0EA5A8"}}>
               💡 Acompte = {((newForm.montant_acompte/newForm.montant_vente)*100).toFixed(0)}% — par défaut 30%
             </div>}
             <div style={{marginBottom:12}}><L c="NOTES"/><textarea value={newForm.notes} onChange={e=>setNewForm(p=>({...p,notes:e.target.value}))} placeholder="Informations…" style={{...INP(),height:60,resize:"none"}}/></div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setNewModal(false)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button disabled={!newForm.client||!newForm.montant_acompte} onClick={()=>{setAcomptes(p=>[{...newForm,id:Date.now()},...p]);setNewModal(false);setNewForm({client:"",montant_vente:"",montant_acompte:"",date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",notes:"",par:profile?.nom||""});}} style={BTN(!newForm.client||!newForm.montant_acompte?"#1E293B":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"12px"})}>✅ Créer</button>
+              <button onClick={()=>setNewModal(false)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button disabled={!newForm.client||!newForm.montant_acompte} onClick={()=>{setAcomptes(p=>[{...newForm,id:Date.now()},...p]);setNewModal(false);setNewForm({client:"",montant_vente:"",montant_acompte:"",date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",notes:"",par:profile?.nom||""});}} style={BTN(!newForm.client||!newForm.montant_acompte?"#052020":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"12px"})}>✅ Créer</button>
             </div>
           </div></div>}
 
@@ -867,7 +867,7 @@
             <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer cet acompte ?</h3>
             <p style={{color:"#64748B",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E2E8F0"}}>{delConf.client}</strong> — {fmt(delConf.montant_acompte)}</p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
+              <button onClick={()=>setDelConf(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
               <button onClick={()=>{setAcomptes(p=>p.filter(a=>a.id!==delConf.id));setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
@@ -878,18 +878,18 @@
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📄 Administratif — Acomptes</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{acomptes.length} demande{acomptes.length>1?"s":""}</p>
             </div>
-            {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel acompte</button>}
+            {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#0EA5A8,#045254)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel acompte</button>}
           </div>
 
           {/* KPIs */}
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:16}}>
             {[
-              {l:"Total acomptes",v:fmt(totalAcomptes),c:"#3B82F6",i:"💶",sub:`${acomptes.length} demande(s)`},
+              {l:"Total acomptes",v:fmt(totalAcomptes),c:"#0EA5A8",i:"💶",sub:`${acomptes.length} demande(s)`},
               {l:"Encaissé",v:fmt(totalPaye),c:"#10B981",i:"✅",sub:`${acomptes.filter(a=>a.statut==="paye").length} payé(s)`},
               {l:"En attente",v:fmt(totalEnAttente),c:"#F59E0B",i:"⏳",sub:`${acomptes.filter(a=>["a_envoyer","envoye"].includes(a.statut)).length} en cours`},
               {l:"Taux encaissement",v:totalAcomptes>0?Math.round((totalPaye/totalAcomptes)*100)+"%":"—",c:"#A855F7",i:"📊",sub:"du total acomptes"},
             ].map(({l,v,c,i,sub})=>(
-              <div key={l} style={{background:"#1E293B",borderRadius:12,padding:"13px 15px",border:`1px solid ${c}30`}}>
+              <div key={l} style={{background:"#052020",borderRadius:12,padding:"13px 15px",border:`1px solid ${c}30`}}>
                 <div style={{fontSize:18,marginBottom:4}}>{i}</div>
                 <div style={{fontSize:isMobile?14:17,fontWeight:800,color:c}}>{v}</div>
                 <div style={{fontSize:11,color:"#64748B",marginTop:3}}>{l}</div>
@@ -912,7 +912,7 @@
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher client…" style={{...INP(),maxWidth:220,fontSize:13}}/>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
               {[["tous","Tous","#94A3B8"],...Object.entries(STATUTS).map(([k,s])=>[k,s.label,s.color])].map(([k,l,col])=>(
-                <button key={k} onClick={()=>setFilter(k)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${filter===k?col:"#334155"}`,background:filter===k?col+"25":"transparent",color:filter===k?col:"#64748B",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                <button key={k} onClick={()=>setFilter(k)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${filter===k?col:"#0A3838"}`,background:filter===k?col+"25":"transparent",color:filter===k?col:"#64748B",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
                   {l} {k!=="tous"&&<span style={{fontSize:10,opacity:0.8}}>({acomptes.filter(a=>a.statut===k).length})</span>}
                 </button>
               ))}
@@ -929,13 +929,13 @@
                 // Link to vente
                 const vente=a.vente_id?ventes.find(v=>v.id===a.vente_id):null;
                 return(
-                  <div key={a.id} style={{background:"#1E293B",borderRadius:14,border:`1px solid ${S.color}30`,padding:"14px 16px"}}>
+                  <div key={a.id} style={{background:"#052020",borderRadius:14,border:`1px solid ${S.color}30`,padding:"14px 16px"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
                           <span style={{fontWeight:800,fontSize:16,color:"#F1F5F9"}}>{a.client}</span>
                           <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>{S.icon} {S.label}</span>
-                          {a.vente_id&&<span style={{fontSize:10,color:"#64748B",background:"#0F172A",padding:"2px 7px",borderRadius:5}}>🔗 Vente liée</span>}
+                          {a.vente_id&&<span style={{fontSize:10,color:"#64748B",background:"#010E0E",padding:"2px 7px",borderRadius:5}}>🔗 Vente liée</span>}
                         </div>
                         <div style={{fontSize:11,color:"#64748B"}}>
                           Créé le {a.date_creation} · {a.par||""}
@@ -951,16 +951,16 @@
                     </div>
 
                     {/* Barre de progression paiement */}
-                    <div style={{background:"#0F172A",borderRadius:6,height:4,marginBottom:10,overflow:"hidden"}}>
+                    <div style={{background:"#010E0E",borderRadius:6,height:4,marginBottom:10,overflow:"hidden"}}>
                       <div style={{height:4,borderRadius:6,width:a.statut==="paye"?"100%":a.statut==="envoye"?"50%":a.statut==="annule"?"100%":"15%",background:a.statut==="paye"?"#10B981":a.statut==="annule"?"#EF4444":"#F59E0B",transition:"width 0.3s"}}/>
                     </div>
 
                     {/* Actions rapides statut */}
                     {canEdit(role)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      {a.statut==="a_envoyer"&&<button onClick={()=>updateAcompte(a.id,{statut:"envoye",date_envoi:new Date().toLocaleDateString("fr-FR")})} style={BTN("#3B82F6",{flex:2,padding:"7px 10px",fontSize:12})}>📨 Marquer envoyé</button>}
+                      {a.statut==="a_envoyer"&&<button onClick={()=>updateAcompte(a.id,{statut:"envoye",date_envoi:new Date().toLocaleDateString("fr-FR")})} style={BTN("#0EA5A8",{flex:2,padding:"7px 10px",fontSize:12})}>📨 Marquer envoyé</button>}
                       {a.statut==="envoye"&&<button onClick={()=>updateAcompte(a.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})} style={BTN("#10B981",{flex:2,padding:"7px 10px",fontSize:12})}>✅ Marquer payé</button>}
                       {a.statut==="paye"&&<div style={{flex:2,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:12,color:"#10B981",fontWeight:700}}>✅ Acompte encaissé le {a.date_paiement}</div>}
-                      <button onClick={()=>setEditModal({...a})} style={BTN("#334155",{padding:"7px 12px",fontSize:12})}>✏️</button>
+                      <button onClick={()=>setEditModal({...a})} style={BTN("#0A3838",{padding:"7px 12px",fontSize:12})}>✏️</button>
                       <button onClick={()=>setDelConf(a)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
                     </div>}
                   </div>
@@ -984,7 +984,7 @@
       const[saving,setSaving]=useState(false);
       const[editUser,setEditUser]=useState(null);
 
-      const INP=(e={})=>({background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
+      const INP=(e={})=>({background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:9,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,...e});
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:5,letterSpacing:"0.05em"}}>{c}</label>;
 
@@ -1023,13 +1023,13 @@
       };
 
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#1E293B",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #334155",maxHeight:"90vh",overflowY:"auto"}:{background:"#1E293B",borderRadius:16,padding:24,width:420,maxWidth:"95vw",border:"1px solid #334155"};
+      const MBX=isMobile?{background:"#052020",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #0A3838",maxHeight:"90vh",overflowY:"auto"}:{background:"#052020",borderRadius:16,padding:24,width:420,maxWidth:"95vw",border:"1px solid #0A3838"};
 
       return(
         <div>
           {/* Modal création */}
           {modal&&<div style={OVL} onClick={()=>setModal(false)}><div style={MBX} onClick={e=>e.stopPropagation()}>
-            {isMobile&&<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>}
+            {isMobile&&<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>}
             <h3 style={{margin:"0 0 18px",fontWeight:800,fontSize:16}}>👤 Créer un utilisateur</h3>
             <div style={{marginBottom:12}}><L c="NOM COMPLET"/><input value={form.nom} onChange={e=>setForm(p=>({...p,nom:e.target.value}))} placeholder="Ex: Jean Dupont" style={INP()}/></div>
             <div style={{marginBottom:12}}><L c="EMAIL"/><input type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="jean@societe.fr" style={INP()}/></div>
@@ -1038,19 +1038,19 @@
               <L c="RÔLE"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 {Object.entries(ROLES).map(([k,r])=>(
-                  <button key={k} onClick={()=>setForm(p=>({...p,role:k}))} style={{background:form.role===k?r.bg:"#0F172A",border:`2px solid ${form.role===k?r.color:"#334155"}`,borderRadius:10,color:form.role===k?r.color:"#64748B",padding:"10px 8px",cursor:"pointer",fontWeight:700,fontSize:12,textAlign:"left",display:"flex",alignItems:"center",gap:6}}>
+                  <button key={k} onClick={()=>setForm(p=>({...p,role:k}))} style={{background:form.role===k?r.bg:"#010E0E",border:`2px solid ${form.role===k?r.color:"#0A3838"}`,borderRadius:10,color:form.role===k?r.color:"#64748B",padding:"10px 8px",cursor:"pointer",fontWeight:700,fontSize:12,textAlign:"left",display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:16}}>{r.icon}</span><span>{r.label}</span>
                   </button>
                 ))}
               </div>
             </div>
             {err&&<div style={{background:"#EF444418",border:"1px solid #EF444440",borderRadius:8,padding:"9px 12px",marginBottom:12,color:"#EF4444",fontSize:12}}>⚠️ {err}</div>}
-            <div style={{background:"#0F172A",borderRadius:8,padding:"10px 12px",marginBottom:14,fontSize:11,color:"#64748B"}}>
+            <div style={{background:"#010E0E",borderRadius:8,padding:"10px 12px",marginBottom:14,fontSize:11,color:"#64748B"}}>
               💡 L'utilisateur recevra un email de confirmation. Il devra cliquer sur le lien pour activer son compte.
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setModal(false)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={createUser} disabled={saving} style={BTN(saving?"#334155":"#3B82F6",{flex:2})}>
+              <button onClick={()=>setModal(false)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={createUser} disabled={saving} style={BTN(saving?"#0A3838":"#0EA5A8",{flex:2})}>
                 {saving?"Création…":"✅ Créer le compte"}
               </button>
             </div>
@@ -1058,18 +1058,18 @@
 
           {/* Modal changement de rôle */}
           {editUser&&<div style={OVL} onClick={()=>setEditUser(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
-            {isMobile&&<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>}
+            {isMobile&&<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>}
             <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:15}}>🔄 Changer le rôle</h3>
             <p style={{color:"#64748B",fontSize:13,marginBottom:16}}>{editUser.nom}</p>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
               {Object.entries(ROLES).map(([k,r])=>(
-                <button key={k} onClick={()=>updateRole(editUser.id,k)} style={{background:editUser.role===k?r.bg:"#0F172A",border:`2px solid ${editUser.role===k?r.color:"#334155"}`,borderRadius:10,color:editUser.role===k?r.color:"#94A3B8",padding:"11px 14px",cursor:"pointer",fontWeight:700,fontSize:13,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
+                <button key={k} onClick={()=>updateRole(editUser.id,k)} style={{background:editUser.role===k?r.bg:"#010E0E",border:`2px solid ${editUser.role===k?r.color:"#0A3838"}`,borderRadius:10,color:editUser.role===k?r.color:"#94A3B8",padding:"11px 14px",cursor:"pointer",fontWeight:700,fontSize:13,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:18}}>{r.icon}</span><span>{r.label}</span>
                   {editUser.role===k&&<span style={{marginLeft:"auto",fontSize:11}}>✓ Actuel</span>}
                 </button>
               ))}
             </div>
-            <button onClick={()=>setEditUser(null)} style={BTN("#334155",{width:"100%"})}>Fermer</button>
+            <button onClick={()=>setEditUser(null)} style={BTN("#0A3838",{width:"100%"})}>Fermer</button>
           </div></div>}
 
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -1077,7 +1077,7 @@
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>👥 Équipe</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{users.length} utilisateur{users.length>1?"s":""}</p>
             </div>
-            <button onClick={()=>setModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel utilisateur</button>
+            <button onClick={()=>setModal(true)} style={BTN("linear-gradient(135deg,#0EA5A8,#045254)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel utilisateur</button>
           </div>
 
           {loading?<div style={{textAlign:"center",padding:40,color:"#64748B"}}>Chargement…</div>
@@ -1085,7 +1085,7 @@
               {users.map(u=>{
                 const r=ROLES[u.role]||ROLES.installateur;
                 return(
-                  <div key={u.id} style={{background:u.actif?"#1E293B":"#141E2D",borderRadius:12,border:`1px solid ${u.actif?r.color+"40":"#334155"}`,padding:"14px 16px",opacity:u.actif?1:0.6}}>
+                  <div key={u.id} style={{background:u.actif?"#052020":"#141E2D",borderRadius:12,border:`1px solid ${u.actif?r.color+"40":"#0A3838"}`,padding:"14px 16px",opacity:u.actif?1:0.6}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                       <div>
                         <div style={{fontWeight:800,fontSize:15,color:"#F1F5F9",marginBottom:4}}>{u.nom}</div>
@@ -1097,7 +1097,7 @@
                       Créé le {new Date(u.created_at).toLocaleDateString("fr-FR")} · {u.actif?"✅ Actif":"⛔ Désactivé"}
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>setEditUser(u)} style={BTN("#334155",{flex:1,fontSize:12})}>🔄 Rôle</button>
+                      <button onClick={()=>setEditUser(u)} style={BTN("#0A3838",{flex:1,fontSize:12})}>🔄 Rôle</button>
                       <button onClick={()=>toggleActif(u.id,u.actif)} style={{background:u.actif?"#EF444415":"#10B98115",border:`1px solid ${u.actif?"#EF444440":"#10B98140"}`,borderRadius:9,color:u.actif?"#EF4444":"#10B981",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,flex:1}}>
                         {u.actif?"Désactiver":"Réactiver"}
                       </button>
@@ -1154,12 +1154,12 @@
       const[editId,setEditId]=useState(null);
       const[delConf,setDelConf]=useState(null);
 
-      const INP=(e={})=>({background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
+      const INP=(e={})=>({background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,...e});
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:4,letterSpacing:"0.05em"}}>{c}</label>;
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#1E293B",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #334155",maxHeight:"90vh",overflowY:"auto"}:{background:"#1E293B",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #334155",maxHeight:"90vh",overflowY:"auto"};
-      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>:null;
+      const MBX=isMobile?{background:"#052020",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #0A3838",maxHeight:"90vh",overflowY:"auto"}:{background:"#052020",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #0A3838",maxHeight:"90vh",overflowY:"auto"};
+      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>:null;
 
       // Save form to localStorage on every change
       useEffect(()=>{
@@ -1251,7 +1251,7 @@
             <span style={{fontWeight:600}}>Brouillon auto-sauvegardé — tu peux changer d'onglet ou de page, ta saisie est conservée.</span>
           </div>
 
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:isMobile?16:24,maxWidth:620}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:isMobile?16:24,maxWidth:620}}>
             <h3 style={{margin:"0 0 20px",fontWeight:800,fontSize:17}}>{editId?"✏️ Modifier la vente":"💰 Nouvelle vente"}</h3>
 
             {/* Client + Date */}
@@ -1278,10 +1278,10 @@
                   {BORNES.map(s=><option key={s.id} value={s.id}>{s.cat} — {s.article} ({fmt(s.prix)})</option>)}
                 </select>
                 <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:65,textAlign:"center"}}/>
-                <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
+                <button onClick={addMat} style={BTN("#0EA5A8",{padding:"10px 16px",fontSize:18})}>+</button>
               </div>
               {form.materiels.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0F172A",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#010E0E",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
                   <span style={{fontSize:13}}>{m.article}</span>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
@@ -1300,10 +1300,10 @@
                   {CABLES.map(s=><option key={s.id} value={s.id}>{s.article} ({fmt(s.prix)}/ml)</option>)}
                 </select>
                 <input type="number" min="1" value={cItem.qty} onChange={e=>setCItem(p=>({...p,qty:e.target.value}))} placeholder="ml" style={{...INP(),width:65,textAlign:"center"}}/>
-                <button onClick={addCable} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
+                <button onClick={addCable} style={BTN("#0EA5A8",{padding:"10px 16px",fontSize:18})}>+</button>
               </div>
               {form.cables.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0F172A",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#010E0E",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
                   <span style={{fontSize:13}}>{m.article}</span>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty} ml</span>
@@ -1336,8 +1336,8 @@
             </div>
 
             <div style={{display:"flex",gap:8}}>
-              <button onClick={cancelForm} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={saveVente} disabled={!form.client||!form.prix_ht} style={BTN(!form.client||!form.prix_ht?"#1E293B":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"13px"})}>
+              <button onClick={cancelForm} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={saveVente} disabled={!form.client||!form.prix_ht} style={BTN(!form.client||!form.prix_ht?"#052020":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"13px"})}>
                 {editId?"💾 Mettre à jour":"💰 Enregistrer la vente"}
               </button>
             </div>
@@ -1353,7 +1353,7 @@
           <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer cette vente ?</h3>
           <p style={{color:"#64748B",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E2E8F0"}}>{delConf.client}</strong> — {fmt(delConf.prix_ht)}</p>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setDelConf(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
+            <button onClick={()=>setDelConf(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
             <button onClick={()=>{setVentes(p=>p.filter(v=>v.id!==delConf.id));setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
           </div>
         </div></div>
@@ -1369,8 +1369,8 @@
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{ventes.length} vente{ventes.length>1?"s":""} · {moisActuel}</p>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <div style={{display:"flex",background:"#1E293B",borderRadius:10,border:"1px solid #334155",overflow:"hidden"}}>
-                <button onClick={()=>goToView("list")} style={{padding:"7px 14px",background:"#3B82F6",border:"none",color:"#FFF",cursor:"pointer",fontSize:12,fontWeight:700}}>📋 Ventes</button>
+              <div style={{display:"flex",background:"#052020",borderRadius:10,border:"1px solid #0A3838",overflow:"hidden"}}>
+                <button onClick={()=>goToView("list")} style={{padding:"7px 14px",background:"#0EA5A8",border:"none",color:"#FFF",cursor:"pointer",fontSize:12,fontWeight:700}}>📋 Ventes</button>
                 <button onClick={()=>goToView("stats")} style={{padding:"7px 14px",background:"transparent",border:"none",color:"#64748B",cursor:"pointer",fontSize:12,fontWeight:700}}>📊 Stats</button>
               </div>
               {canEdit(role)&&<button onClick={openCreate} style={BTN("linear-gradient(135deg,#10B981,#059669)",{padding:"10px 16px",fontSize:13})}>➕ Nouvelle vente</button>}
@@ -1381,10 +1381,10 @@
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(3,1fr)",gap:8,marginBottom:18}}>
             {[
               {l:"CA Total",v:fmt(caTotal),c:"#10B981",i:"💶",sub:`${ventes.length} vente(s)`},
-              {l:"CA ce mois",v:fmt(caMonth),c:"#3B82F6",i:"📅",sub:moisActuel},
+              {l:"CA ce mois",v:fmt(caMonth),c:"#0EA5A8",i:"📅",sub:moisActuel},
               {l:"Panier moyen",v:ventes.length>0?fmt(caTotal/ventes.length):"—",c:"#F59E0B",i:"📊",sub:"par vente"},
             ].map(({l,v,c,i,sub})=>(
-              <div key={l} style={{background:"#1E293B",borderRadius:12,padding:"14px 16px",border:`1px solid ${c}30`}}>
+              <div key={l} style={{background:"#052020",borderRadius:12,padding:"14px 16px",border:`1px solid ${c}30`}}>
                 <div style={{fontSize:20,marginBottom:5}}>{i}</div>
                 <div style={{fontSize:isMobile?15:19,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:11,color:"#64748B",marginTop:4}}>{l}</div>
@@ -1399,7 +1399,7 @@
             ?<div style={{textAlign:"center",padding:"50px 0",color:"#475569"}}><div style={{fontSize:40,marginBottom:8}}>💰</div><div style={{fontWeight:700}}>{canEdit(role)?"Cliquez sur + Nouvelle vente pour commencer":"Aucune vente enregistrée."}</div></div>
             :<div style={{display:"flex",flexDirection:"column",gap:10}}>
               {filteredVentes.map(v=>(
-                <div key={v.id} style={{background:"#1E293B",borderRadius:14,border:"1px solid #10B98130",padding:"14px 16px"}}>
+                <div key={v.id} style={{background:"#052020",borderRadius:14,border:"1px solid #10B98130",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                     <div style={{flex:1,paddingRight:10}}>
                       <div style={{fontWeight:800,fontSize:16,color:"#F1F5F9",marginBottom:3}}>{v.client}</div>
@@ -1412,7 +1412,7 @@
                     </div>
                   </div>
                   {(v.materiels?.length>0||v.cables?.length>0)&&(
-                    <div style={{background:"#0F172A",borderRadius:10,padding:"9px 12px",marginBottom:canEdit(role)?10:0}}>
+                    <div style={{background:"#010E0E",borderRadius:10,padding:"9px 12px",marginBottom:canEdit(role)?10:0}}>
                       {v.materiels?.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:v.cables?.length>0?6:0}}>
                         {v.materiels.map((m,i)=>{const col=BC[m.cat]||"#94A3B8";return<span key={i} style={{background:col+"20",border:`1px solid ${col}40`,borderRadius:6,padding:"2px 8px",fontSize:11,color:col,fontWeight:600}}>{m.qty}× {m.article}</span>;})}
                       </div>}
@@ -1422,7 +1422,7 @@
                     </div>
                   )}
                   {canEdit(role)&&<div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
-                    <button onClick={()=>openEdit(v)} style={BTN("#334155",{padding:"6px 12px",fontSize:12})}>✏️ Modifier</button>
+                    <button onClick={()=>openEdit(v)} style={BTN("#0A3838",{padding:"6px 12px",fontSize:12})}>✏️ Modifier</button>
                     <button onClick={()=>setDelConf(v)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"6px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
                   </div>}
                 </div>
@@ -1441,9 +1441,9 @@
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📊 Statistiques de ventes</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{moisActuel}</p>
             </div>
-            <div style={{display:"flex",background:"#1E293B",borderRadius:10,border:"1px solid #334155",overflow:"hidden"}}>
+            <div style={{display:"flex",background:"#052020",borderRadius:10,border:"1px solid #0A3838",overflow:"hidden"}}>
               <button onClick={()=>goToView("list")} style={{padding:"7px 14px",background:"transparent",border:"none",color:"#64748B",cursor:"pointer",fontSize:12,fontWeight:700}}>📋 Ventes</button>
-              <button onClick={()=>goToView("stats")} style={{padding:"7px 14px",background:"#3B82F6",border:"none",color:"#FFF",cursor:"pointer",fontSize:12,fontWeight:700}}>📊 Stats</button>
+              <button onClick={()=>goToView("stats")} style={{padding:"7px 14px",background:"#0EA5A8",border:"none",color:"#FFF",cursor:"pointer",fontSize:12,fontWeight:700}}>📊 Stats</button>
             </div>
           </div>
 
@@ -1451,10 +1451,10 @@
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(3,1fr)",gap:8,marginBottom:18}}>
             {[
               {l:"CA Total",v:fmt(caTotal),c:"#10B981",i:"💶",sub:`${ventes.length} vente(s)`},
-              {l:"CA ce mois",v:fmt(caMonth),c:"#3B82F6",i:"📅",sub:moisActuel},
+              {l:"CA ce mois",v:fmt(caMonth),c:"#0EA5A8",i:"📅",sub:moisActuel},
               {l:"Panier moyen",v:ventes.length>0?fmt(caTotal/ventes.length):"—",c:"#F59E0B",i:"📊",sub:"par vente"},
             ].map(({l,v,c,i,sub})=>(
-              <div key={l} style={{background:"#1E293B",borderRadius:12,padding:"14px 16px",border:`1px solid ${c}30`}}>
+              <div key={l} style={{background:"#052020",borderRadius:12,padding:"14px 16px",border:`1px solid ${c}30`}}>
                 <div style={{fontSize:20,marginBottom:5}}>{i}</div>
                 <div style={{fontSize:isMobile?15:19,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                 <div style={{fontSize:11,color:"#64748B",marginTop:4}}>{l}</div>
@@ -1464,37 +1464,37 @@
           </div>
 
           {/* CA par vendeur */}
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:16,marginBottom:16}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:16,marginBottom:16}}>
             <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>👤 CA par vendeur</h3>
             {vendeurs.length===0?<p style={{color:"#475569",fontSize:13}}>Aucune vente enregistrée.</p>
               :<div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead><tr>
                     {["Vendeur","Nb ventes","CA Total","CA ce mois","Panier moy."].map(h=>(
-                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Vendeur"?"left":"center",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{h}</th>
+                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Vendeur"?"left":"center",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #0A3838",whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr></thead>
                   <tbody>
                     {caByVendeur.map((v,idx)=>{
                       const pct=caTotal>0?((v.ca/caTotal)*100).toFixed(0):0;
                       return(
-                        <tr key={v.nom} style={{background:idx%2===0?"#1E293B":"#182030"}}>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #1E293B44"}}>
+                        <tr key={v.nom} style={{background:idx%2===0?"#052020":"#182030"}}>
+                          <td style={{padding:"10px 12px",borderBottom:"1px solid #05202044"}}>
                             <div style={{fontWeight:700}}>{v.nom}</div>
-                            <div style={{marginTop:4,background:"#0F172A",borderRadius:4,height:4,width:"100%"}}><div style={{background:"#3B82F6",height:4,borderRadius:4,width:`${pct}%`}}/></div>
+                            <div style={{marginTop:4,background:"#010E0E",borderRadius:4,height:4,width:"100%"}}><div style={{background:"#0EA5A8",height:4,borderRadius:4,width:`${pct}%`}}/></div>
                           </td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #1E293B44",textAlign:"center",fontWeight:700}}>{v.nb}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #1E293B44",textAlign:"center",fontWeight:800,color:"#10B981",fontSize:15}}>{fmt(v.ca)}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #1E293B44",textAlign:"center",color:"#3B82F6",fontWeight:700}}>{fmt(v.caMois)}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #1E293B44",textAlign:"center",color:"#F59E0B",fontWeight:700}}>{v.nb>0?fmt(v.ca/v.nb):"—"}</td>
+                          <td style={{padding:"10px 12px",borderBottom:"1px solid #05202044",textAlign:"center",fontWeight:700}}>{v.nb}</td>
+                          <td style={{padding:"10px 12px",borderBottom:"1px solid #05202044",textAlign:"center",fontWeight:800,color:"#10B981",fontSize:15}}>{fmt(v.ca)}</td>
+                          <td style={{padding:"10px 12px",borderBottom:"1px solid #05202044",textAlign:"center",color:"#0EA5A8",fontWeight:700}}>{fmt(v.caMois)}</td>
+                          <td style={{padding:"10px 12px",borderBottom:"1px solid #05202044",textAlign:"center",color:"#F59E0B",fontWeight:700}}>{v.nb>0?fmt(v.ca/v.nb):"—"}</td>
                         </tr>
                       );
                     })}
-                    <tr style={{background:"#0F172A",borderTop:"2px solid #334155"}}>
+                    <tr style={{background:"#010E0E",borderTop:"2px solid #0A3838"}}>
                       <td style={{padding:"10px 12px",fontWeight:800,color:"#F1F5F9"}}>🏆 TOTAL</td>
                       <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800}}>{ventes.length}</td>
                       <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#10B981",fontSize:15}}>{fmt(caTotal)}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#3B82F6"}}>{fmt(caMonth)}</td>
+                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#0EA5A8"}}>{fmt(caMonth)}</td>
                       <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#F59E0B"}}>{ventes.length>0?fmt(caTotal/ventes.length):"—"}</td>
                     </tr>
                   </tbody>
@@ -1504,13 +1504,13 @@
           </div>
 
           {/* CA par marque */}
-          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:16}}>
+          <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:16}}>
             <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Ventes par marque</h3>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
               {ventesParBrand.map(({brand,list:bv,bornes:nb})=>{
                 const col=BC[brand]||"#94A3B8";
                 return(
-                  <div key={brand} style={{background:"#0F172A",borderRadius:12,padding:"12px 14px",border:`1px solid ${col}30`}}>
+                  <div key={brand} style={{background:"#010E0E",borderRadius:12,padding:"12px 14px",border:`1px solid ${col}30`}}>
                     <div style={{fontSize:12,fontWeight:800,color:col,marginBottom:4}}>{brand}</div>
                     <div style={{fontSize:22,fontWeight:800,color:"#F1F5F9"}}>{bv.length}</div>
                     <div style={{fontSize:10,color:"#64748B",marginTop:2}}>vente{bv.length>1?"s":""}</div>
@@ -1524,31 +1524,31 @@
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                   <thead><tr>
-                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #334155"}}>Vendeur</th>
-                    {BRANDS.map(b=><th key={b} style={{padding:"8px 12px",textAlign:"center",fontSize:10,fontWeight:700,color:BC[b],borderBottom:"1px solid #334155",whiteSpace:"nowrap"}}>{b}</th>)}
+                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #0A3838"}}>Vendeur</th>
+                    {BRANDS.map(b=><th key={b} style={{padding:"8px 12px",textAlign:"center",fontSize:10,fontWeight:700,color:BC[b],borderBottom:"1px solid #0A3838",whiteSpace:"nowrap"}}>{b}</th>)}
                   </tr></thead>
                   <tbody>
                     {vendeurs.map((nom,idx)=>(
-                      <tr key={nom} style={{background:idx%2===0?"#1E293B":"#182030"}}>
-                        <td style={{padding:"9px 12px",borderBottom:"1px solid #1E293B44",fontWeight:700}}>{nom}</td>
+                      <tr key={nom} style={{background:idx%2===0?"#052020":"#182030"}}>
+                        <td style={{padding:"9px 12px",borderBottom:"1px solid #05202044",fontWeight:700}}>{nom}</td>
                         {BRANDS.map(brand=>{
                           const nb=ventes.filter(v=>(v.par||"Inconnu")===nom&&(v.materiels||[]).some(m=>m.cat===brand)).length;
                           const nbB=ventes.filter(v=>(v.par||"Inconnu")===nom).reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
                           const col=BC[brand]||"#94A3B8";
-                          return <td key={brand} style={{padding:"9px 12px",borderBottom:"1px solid #1E293B44",textAlign:"center"}}>
-                            {nb>0?<div><div style={{fontWeight:800,color:col,fontSize:14}}>{nb}</div><div style={{fontSize:10,color:"#64748B"}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#334155"}}>—</span>}
+                          return <td key={brand} style={{padding:"9px 12px",borderBottom:"1px solid #05202044",textAlign:"center"}}>
+                            {nb>0?<div><div style={{fontWeight:800,color:col,fontSize:14}}>{nb}</div><div style={{fontSize:10,color:"#64748B"}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#0A3838"}}>—</span>}
                           </td>;
                         })}
                       </tr>
                     ))}
-                    <tr style={{background:"#0F172A",borderTop:"2px solid #334155"}}>
+                    <tr style={{background:"#010E0E",borderTop:"2px solid #0A3838"}}>
                       <td style={{padding:"9px 12px",fontWeight:800,color:"#F1F5F9"}}>TOTAL</td>
                       {BRANDS.map(brand=>{
                         const nb=ventes.filter(v=>(v.materiels||[]).some(m=>m.cat===brand)).length;
                         const nbB=ventes.reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
                         const col=BC[brand]||"#94A3B8";
                         return <td key={brand} style={{padding:"9px 12px",textAlign:"center",fontWeight:800,color:col}}>
-                          {nb>0?<div><div>{nb}</div><div style={{fontSize:10}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#334155"}}>—</span>}
+                          {nb>0?<div><div>{nb}</div><div style={{fontSize:10}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#0A3838"}}>—</span>}
                         </td>;
                       })}
                     </tr>
@@ -1569,7 +1569,7 @@
 
       const STATUTS_CH = {
         a_planifier: {label:"À planifier", color:"#F59E0B", bg:"#2D2008", icon:"📋", next:"planifie"},
-        planifie:    {label:"Planifié",    color:"#3B82F6", bg:"#0F1F3D", icon:"📅", next:"en_cours"},
+        planifie:    {label:"Planifié",    color:"#0EA5A8", bg:"#0F1F3D", icon:"📅", next:"en_cours"},
         en_cours:    {label:"En cours",    color:"#A855F7", bg:"#1E0A2D", icon:"🔧", next:"termine"},
         termine:     {label:"Terminé",     color:"#10B981", bg:"#0A2218", icon:"✅", next:null},
       };
@@ -1623,8 +1623,8 @@
 
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:4,letterSpacing:"0.05em"}}>{c}</label>;
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#1E293B",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #334155",maxHeight:"94vh",overflowY:"auto"}:{background:"#1E293B",borderRadius:16,padding:24,width:560,maxWidth:"96vw",border:"1px solid #334155",maxHeight:"92vh",overflowY:"auto"};
-      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>:null;
+      const MBX=isMobile?{background:"#052020",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #0A3838",maxHeight:"94vh",overflowY:"auto"}:{background:"#052020",borderRadius:16,padding:24,width:560,maxWidth:"96vw",border:"1px solid #0A3838",maxHeight:"92vh",overflowY:"auto"};
+      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>:null;
       const CABLES=stock.filter(s=>s.unite==="ml");
       const BORNES=stock.filter(s=>s.unite!=="ml");
       const emptyNew={client:"",notes:"",date_installation:"",technicien:"",materiels:[],cables:[]};
@@ -1703,32 +1703,32 @@
               <div style={{display:"flex",gap:6,marginBottom:6}}>
                 <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}><option value="">Choisir…</option>{BORNES.map(s=><option key={s.id} value={s.id}>{s.cat} — {s.article}</option>)}</select>
                 <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:62,textAlign:"center"}}/>
-                <button onClick={()=>addMat(editModal,setEditModal)} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:16})}>+</button>
+                <button onClick={()=>addMat(editModal,setEditModal)} style={BTN("#0EA5A8",{padding:"10px 14px",fontSize:16})}>+</button>
               </div>
-              {(editModal.materiels||[]).map(m=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0F172A",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12,color:ins?"#EF4444":"#E2E8F0"}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,fontWeight:700,color:ins?"#EF4444":"#10B981"}}>{m.qty}×</span>{ins&&<span style={{fontSize:10,color:"#EF4444"}}>⚠️{stockDispo(Number(m.id))}</span>}<button onClick={()=>setEditModal(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>;})}
+              {(editModal.materiels||[]).map(m=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#010E0E",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12,color:ins?"#EF4444":"#E2E8F0"}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,fontWeight:700,color:ins?"#EF4444":"#10B981"}}>{m.qty}×</span>{ins&&<span style={{fontSize:10,color:"#EF4444"}}>⚠️{stockDispo(Number(m.id))}</span>}<button onClick={()=>setEditModal(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>;})}
             </div>
             <div style={{marginBottom:10}}>
               <L c="CÂBLES (ML)"/>
               <div style={{display:"flex",gap:6,marginBottom:6}}>
                 <select value={cItem.id} onChange={e=>setCItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}><option value="">Choisir…</option>{CABLES.map(s=><option key={s.id} value={s.id}>{s.article}</option>)}</select>
                 <input type="number" min="1" value={cItem.qty} onChange={e=>setCItem(p=>({...p,qty:e.target.value}))} placeholder="ml" style={{...INP(),width:62,textAlign:"center"}}/>
-                <button onClick={()=>addCab(editModal,setEditModal)} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:16})}>+</button>
+                <button onClick={()=>addCab(editModal,setEditModal)} style={BTN("#0EA5A8",{padding:"10px 14px",fontSize:16})}>+</button>
               </div>
-              {(editModal.cables||[]).map(m=><div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0F172A",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{m.qty}ml</span><button onClick={()=>setEditModal(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>)}
+              {(editModal.cables||[]).map(m=><div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#010E0E",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{m.qty}ml</span><button onClick={()=>setEditModal(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>)}
             </div>
-            <div style={{background:"#0F172A",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+            <div style={{background:"#010E0E",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
               <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase"}}>Checklist</div>
               {CHECKLIST_ITEMS.map(item=>(
-                <div key={item.key} onClick={()=>setEditModal(p=>({...p,checklist:{...p.checklist,[item.key]:!p.checklist?.[item.key]}}))} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",cursor:"pointer",borderBottom:"1px solid #1E293B"}}>
-                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${editModal.checklist?.[item.key]?"#10B981":"#334155"}`,background:editModal.checklist?.[item.key]?"#10B981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{editModal.checklist?.[item.key]&&<span style={{fontSize:10,color:"#FFF",fontWeight:800}}>✓</span>}</div>
+                <div key={item.key} onClick={()=>setEditModal(p=>({...p,checklist:{...p.checklist,[item.key]:!p.checklist?.[item.key]}}))} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",cursor:"pointer",borderBottom:"1px solid #052020"}}>
+                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${editModal.checklist?.[item.key]?"#10B981":"#0A3838"}`,background:editModal.checklist?.[item.key]?"#10B981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{editModal.checklist?.[item.key]&&<span style={{fontSize:10,color:"#FFF",fontWeight:800}}>✓</span>}</div>
                   <span style={{fontSize:13,color:editModal.checklist?.[item.key]?"#10B981":"#94A3B8"}}>{item.label}</span>
                 </div>
               ))}
             </div>
             <div style={{marginBottom:14}}><L c="NOTES"/><textarea value={editModal.notes||""} onChange={e=>setEditModal(p=>({...p,notes:e.target.value}))} style={{...INP(),height:70,resize:"none"}}/></div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setEditModal(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={()=>{updateChantier(editModal.id,editModal);setEditModal(null);}} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px"})}>💾 Enregistrer</button>
+              <button onClick={()=>setEditModal(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={()=>{updateChantier(editModal.id,editModal);setEditModal(null);}} style={BTN("linear-gradient(135deg,#0EA5A8,#045254)",{flex:2,padding:"12px"})}>💾 Enregistrer</button>
             </div>
           </div></div>}
 
@@ -1738,7 +1738,7 @@
             <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer ce chantier ?</h3>
             <p style={{color:"#64748B",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E2E8F0"}}>{delConf.client}</strong></p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
+              <button onClick={()=>setDelConf(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
               <button onClick={()=>{setChantiers(p=>p.filter(ch=>ch.id!==delConf.id));setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
@@ -1746,7 +1746,7 @@
           {/* LIGHTBOX PLEIN ÉCRAN */}
           {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
             <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain",boxShadow:"0 0 60px #000"}} onClick={e=>e.stopPropagation()}/>
-            <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#1E293B",border:"1px solid #334155",borderRadius:8,color:"#E2E8F0",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:2001}}>✕</button>
+            <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#052020",border:"1px solid #0A3838",borderRadius:8,color:"#E2E8F0",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:2001}}>✕</button>
           </div>}
 
           {/* MODAL PHOTOS */}
@@ -1757,7 +1757,7 @@
                 <h3 style={{margin:0,fontWeight:800,fontSize:17}}>📸 Photos — {photosModal.client}</h3>
                 <p style={{margin:"3px 0 0",fontSize:11,color:"#64748B"}}>{(photosModal.photos||[]).length} photo(s)</p>
               </div>
-              <label style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,border:"none",display:"flex",alignItems:"center",gap:6}}>
+              <label style={{background:"linear-gradient(135deg,#0EA5A8,#045254)",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,border:"none",display:"flex",alignItems:"center",gap:6}}>
                 {uploading?"⏳ Envoi…":"📷 Ajouter des photos"}
                 <input type="file" accept="image/*" multiple onChange={e=>uploadPhotos(photosModal,e.target.files)} style={{display:"none"}} disabled={uploading}/>
               </label>
@@ -1771,14 +1771,14 @@
               </div>
               :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
                 {(photosModal.photos||[]).map((url,i)=>(
-                  <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",aspectRatio:"1",background:"#0F172A"}}>
+                  <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",aspectRatio:"1",background:"#010E0E"}}>
                     <img src={url} onClick={()=>setLightbox(url)} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                     <button onClick={()=>deletePhoto(photosModal,url)} style={{position:"absolute",top:5,right:5,background:"#EF4444CC",border:"none",borderRadius:6,color:"#FFF",width:24,height:24,cursor:"pointer",fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>✕</button>
                   </div>
                 ))}
               </div>
             }
-            <button onClick={()=>setPhotosModal(null)} style={{...BTN("#334155"),width:"100%",marginTop:16}}>Fermer</button>
+            <button onClick={()=>setPhotosModal(null)} style={{...BTN("#0A3838"),width:"100%",marginTop:16}}>Fermer</button>
           </div></div>}
 
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -1787,12 +1787,12 @@
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{chantiers.filter(c=>c.statut!=="termine").length} actif(s) · {chantiers.filter(c=>c.statut==="termine").length} terminé(s)</p>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <div style={{display:"flex",background:"#1E293B",borderRadius:10,border:"1px solid #334155",overflow:"hidden"}}>
+              <div style={{display:"flex",background:"#052020",borderRadius:10,border:"1px solid #0A3838",overflow:"hidden"}}>
                 {[["pipeline","🗂️ Pipeline"],["calendrier","📅 Calendrier"],["historique","📋 Historique"]].map(([v,l])=>(
-                  <button key={v} onClick={()=>setTabView(v)} style={{padding:"7px 12px",background:tabView===v?"#3B82F6":"transparent",border:"none",color:tabView===v?"#FFF":"#64748B",cursor:"pointer",fontSize:12,fontWeight:700}}>{l}</button>
+                  <button key={v} onClick={()=>setTabView(v)} style={{padding:"7px 12px",background:tabView===v?"#0EA5A8":"transparent",border:"none",color:tabView===v?"#FFF":"#64748B",cursor:"pointer",fontSize:12,fontWeight:700}}>{l}</button>
                 ))}
               </div>
-              {canEdit(role)&&<button onClick={()=>setNewForm({...emptyNew})} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"9px 14px",fontSize:12})}>➕ Chantier manuel</button>}
+              {canEdit(role)&&<button onClick={()=>setNewForm({...emptyNew})} style={BTN("linear-gradient(135deg,#0EA5A8,#045254)",{padding:"9px 14px",fontSize:12})}>➕ Chantier manuel</button>}
             </div>
           </div>
 
@@ -1802,7 +1802,7 @@
           </div>}
 
           {tabView==="pipeline"&&<>
-            {newForm&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #3B82F640",padding:"14px 16px",marginBottom:16}}>
+            {newForm&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #0EA5A840",padding:"14px 16px",marginBottom:16}}>
               <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:15}}>➕ Nouveau chantier</h3>
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
                 <div><L c="CLIENT"/><input value={newForm.client} onChange={e=>setNewForm(p=>({...p,client:e.target.value}))} placeholder="Nom client" style={INP()}/></div>
@@ -1811,12 +1811,12 @@
               <div style={{display:"flex",gap:6,marginBottom:8}}>
                 <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}><option value="">Matériel…</option>{BORNES.map(s=><option key={s.id} value={s.id}>{s.cat} — {s.article}</option>)}</select>
                 <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:62,textAlign:"center"}}/>
-                <button onClick={()=>addMat(newForm,setNewForm)} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:16})}>+</button>
+                <button onClick={()=>addMat(newForm,setNewForm)} style={BTN("#0EA5A8",{padding:"10px 14px",fontSize:16})}>+</button>
               </div>
-              {(newForm.materiels||[]).map(m=><div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0F172A",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,fontWeight:700,color:"#10B981"}}>{m.qty}×</span><button onClick={()=>setNewForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>)}
+              {(newForm.materiels||[]).map(m=><div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#010E0E",borderRadius:8,padding:"7px 10px",marginBottom:4}}><span style={{fontSize:12}}>{m.article}</span><div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{fontSize:12,fontWeight:700,color:"#10B981"}}>{m.qty}×</span><button onClick={()=>setNewForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button></div></div>)}
               <div style={{display:"flex",gap:8,marginTop:8}}>
-                <button onClick={()=>setNewForm(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-                <button onClick={()=>{if(!newForm.client)return;setChantiers(p=>[{...newForm,id:Date.now(),date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",checklist:{client_contacte:false,materiel_prepare:false,acces_confirme:false}},...p]);setNewForm(null);}} style={BTN(!newForm.client?"#334155":"linear-gradient(135deg,#10B981,#059669)",{flex:2})}>✅ Créer</button>
+                <button onClick={()=>setNewForm(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+                <button onClick={()=>{if(!newForm.client)return;setChantiers(p=>[{...newForm,id:Date.now(),date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",checklist:{client_contacte:false,materiel_prepare:false,acces_confirme:false}},...p]);setNewForm(null);}} style={BTN(!newForm.client?"#0A3838":"linear-gradient(135deg,#10B981,#059669)",{flex:2})}>✅ Créer</button>
               </div>
             </div>}
             {statOrder.map(statut=>{
@@ -1827,48 +1827,48 @@
                   <span style={{fontWeight:800,fontSize:14,color:S.color}}>{S.label}</span>
                   <span style={{background:S.bg,color:S.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:700}}>{list.length}</span>
                 </div>
-                {list.length===0?<div style={{background:"#1E293B",borderRadius:10,border:"1px dashed #334155",padding:"16px",textAlign:"center",color:"#475569",fontSize:12}}>Aucun chantier</div>
+                {list.length===0?<div style={{background:"#052020",borderRadius:10,border:"1px dashed #0A3838",padding:"16px",textAlign:"center",color:"#475569",fontSize:12}}>Aucun chantier</div>
                   :<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
                     {list.map(ch=>{
                       const checkDone=Object.values(ch.checklist||{}).filter(Boolean).length;
                       const hasInsuff=(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty));
-                      return<div key={ch.id} style={{background:"#1E293B",borderRadius:12,border:`1px solid ${hasInsuff?"#EF444440":S.color+"30"}`,padding:"14px 16px"}}>
+                      return<div key={ch.id} style={{background:"#052020",borderRadius:12,border:`1px solid ${hasInsuff?"#EF444440":S.color+"30"}`,padding:"14px 16px"}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                           <div style={{flex:1}}>
                             <div style={{fontWeight:800,fontSize:15,color:"#F1F5F9",marginBottom:2}}>{ch.client}</div>
                             {ch.vente_id&&<div style={{fontSize:10,color:"#64748B"}}>🔗 Depuis vente</div>}
                             <div style={{fontSize:11,color:"#64748B",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2}}>📅 {ch.date_installation}</div>}
+                            {ch.date_installation&&<div style={{fontSize:11,color:"#0EA5A8",fontWeight:700,marginTop:2}}>📅 {ch.date_installation}</div>}
                           </div>
                           <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
                         </div>
-                        {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{background:"#0F172A",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
+                        {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{background:"#010E0E",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
                           {(ch.materiels||[]).map((m,i)=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:ins?"#EF4444":"#94A3B8"}}><span>{m.article}</span><span style={{fontWeight:600}}>{m.qty}×{ins&&<span style={{fontSize:10}}> ⚠️{stockDispo(Number(m.id))}</span>}</span></div>;})}
                           {(ch.cables||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:"#94A3B8"}}><span>{m.article}</span><span>{m.qty}ml</span></div>)}
                         </div>}
                         <div style={{display:"flex",gap:5,marginBottom:6,flexWrap:"wrap"}}>
                           {CHECKLIST_ITEMS.map(item=>(
-                            <div key={item.key} onClick={()=>updateChantier(ch.id,{checklist:{...ch.checklist,[item.key]:!ch.checklist?.[item.key]}})} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",background:ch.checklist?.[item.key]?"#10B98115":"#0F172A",border:`1px solid ${ch.checklist?.[item.key]?"#10B98140":"#334155"}`,borderRadius:6,padding:"3px 7px"}}>
+                            <div key={item.key} onClick={()=>updateChantier(ch.id,{checklist:{...ch.checklist,[item.key]:!ch.checklist?.[item.key]}})} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",background:ch.checklist?.[item.key]?"#10B98115":"#010E0E",border:`1px solid ${ch.checklist?.[item.key]?"#10B98140":"#0A3838"}`,borderRadius:6,padding:"3px 7px"}}>
                               <span style={{fontSize:10,color:ch.checklist?.[item.key]?"#10B981":"#475569"}}>{ch.checklist?.[item.key]?"✓ ":""}{item.label}</span>
                             </div>
                           ))}
                         </div>
                         <div style={{fontSize:10,color:"#64748B",marginBottom:8}}>{checkDone}/{CHECKLIST_ITEMS.length} vérifiés</div>
-                        {ch.notes&&<div style={{fontSize:11,color:"#64748B",fontStyle:"italic",marginBottom:8,padding:"6px 8px",background:"#0F172A",borderRadius:6}}>"{ch.notes}"</div>}
+                        {ch.notes&&<div style={{fontSize:11,color:"#64748B",fontStyle:"italic",marginBottom:8,padding:"6px 8px",background:"#010E0E",borderRadius:6}}>"{ch.notes}"</div>}
                         {/* Miniatures photos */}
                         {(ch.photos||[]).length>0&&<div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
                           {(ch.photos||[]).slice(0,4).map((url,i)=>(
-                            <img key={i} src={url} onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"2px solid #334155"}}/>
+                            <img key={i} src={url} onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"2px solid #0A3838"}}/>
                           ))}
-                          {(ch.photos||[]).length>4&&<div onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,borderRadius:7,background:"#0F172A",border:"2px solid #334155",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#64748B",fontWeight:700}}>+{(ch.photos||[]).length-4}</div>}
+                          {(ch.photos||[]).length>4&&<div onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,borderRadius:7,background:"#010E0E",border:"2px solid #0A3838",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#64748B",fontWeight:700}}>+{(ch.photos||[]).length-4}</div>}
                         </div>}
                         <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#334155",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
-                          {S.next&&<button onClick={()=>nextStatut(ch)} style={BTN(S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11})}>
+                          <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#0A3838",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
+                          {S.next&&<button onClick={()=>nextStatut(ch)} style={BTN(S.next==="termine"?"#10B981":"#0EA5A8",{flex:2,padding:"7px",fontSize:11})}>
                             {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
                           </button>}
-                          <label style={{background:"#33415580",border:"1px solid #334155",borderRadius:8,color:"#94A3B8",padding:"7px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                            📷{(ch.photos||[]).length>0&&<span style={{fontSize:10,color:"#3B82F6"}}>{(ch.photos||[]).length}</span>}
+                          <label style={{background:"#0A383880",border:"1px solid #0A3838",borderRadius:8,color:"#94A3B8",padding:"7px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                            📷{(ch.photos||[]).length>0&&<span style={{fontSize:10,color:"#0EA5A8"}}>{(ch.photos||[]).length}</span>}
                             <input type="file" accept="image/*" multiple onChange={e=>uploadPhotos(ch,e.target.files)} style={{display:"none"}}/>
                           </label>
                           <button onClick={()=>setDelConf(ch)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>
@@ -1881,11 +1881,11 @@
             })}
           </>}
 
-          {tabView==="calendrier"&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:16}}>
+          {tabView==="calendrier"&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:16}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <button onClick={()=>{let m=calMonth-1,y=calYear;if(m<0){m=11;y--;}setCalMonth(m);setCalYear(y);}} style={BTN("#334155",{padding:"6px 12px"})}>‹</button>
+              <button onClick={()=>{let m=calMonth-1,y=calYear;if(m<0){m=11;y--;}setCalMonth(m);setCalYear(y);}} style={BTN("#0A3838",{padding:"6px 12px"})}>‹</button>
               <span style={{fontWeight:800,fontSize:15}}>{new Date(calYear,calMonth).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</span>
-              <button onClick={()=>{let m=calMonth+1,y=calYear;if(m>11){m=0;y++;}setCalMonth(m);setCalYear(y);}} style={BTN("#334155",{padding:"6px 12px"})}>›</button>
+              <button onClick={()=>{let m=calMonth+1,y=calYear;if(m>11){m=0;y++;}setCalMonth(m);setCalYear(y);}} style={BTN("#0A3838",{padding:"6px 12px"})}>›</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
               {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=><div key={d} style={{textAlign:"center",fontSize:10,fontWeight:700,color:"#64748B",padding:"4px 0"}}>{d}</div>)}
@@ -1897,16 +1897,16 @@
                 const dayStr=`${String(day).padStart(2,"0")}/${String(calMonth+1).padStart(2,"0")}/${calYear}`;
                 const dayC=chantiers.filter(ch=>ch.date_installation===dayStr);
                 const isToday=new Date().toLocaleDateString("fr-FR")===dayStr;
-                return<div key={day} style={{background:isToday?"#1D4ED820":dayC.length>0?"#3B82F615":"#0F172A",borderRadius:6,minHeight:50,padding:"4px 5px",border:`1px solid ${isToday?"#3B82F6":dayC.length>0?"#3B82F630":"#1E293B"}`}}>
-                  <div style={{fontSize:11,fontWeight:isToday?800:400,color:isToday?"#3B82F6":"#94A3B8",marginBottom:3}}>{day}</div>
+                return<div key={day} style={{background:isToday?"#04525420":dayC.length>0?"#0EA5A815":"#010E0E",borderRadius:6,minHeight:50,padding:"4px 5px",border:`1px solid ${isToday?"#0EA5A8":dayC.length>0?"#0EA5A830":"#052020"}`}}>
+                  <div style={{fontSize:11,fontWeight:isToday?800:400,color:isToday?"#0EA5A8":"#94A3B8",marginBottom:3}}>{day}</div>
                   {dayC.map(ch=>{const S=STATUTS_CH[ch.statut];return<div key={ch.id} style={{background:S?.bg,borderRadius:4,padding:"2px 4px",marginBottom:2}}><div style={{fontSize:9,color:S?.color,fontWeight:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ch.client}</div></div>;})}
                 </div>;
               })}
             </div>
-            {chantiersInMonth.length>0&&<div style={{marginTop:14,borderTop:"1px solid #334155",paddingTop:12}}>
-              {chantiersInMonth.map(ch=>{const S=STATUTS_CH[ch.statut];return<div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1E293B88"}}>
+            {chantiersInMonth.length>0&&<div style={{marginTop:14,borderTop:"1px solid #0A3838",paddingTop:12}}>
+              {chantiersInMonth.map(ch=>{const S=STATUTS_CH[ch.statut];return<div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #05202088"}}>
                 <div><span style={{fontWeight:700,fontSize:13}}>{ch.client}</span>{ch.technicien&&<span style={{fontSize:11,color:"#64748B",marginLeft:8}}>· {ch.technicien}</span>}</div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:"#3B82F6",fontWeight:700}}>{ch.date_installation}</span><span style={{background:S?.bg,color:S?.color,padding:"2px 7px",borderRadius:6,fontSize:9,fontWeight:700}}>{S?.icon} {S?.label}</span></div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,color:"#0EA5A8",fontWeight:700}}>{ch.date_installation}</span><span style={{background:S?.bg,color:S?.color,padding:"2px 7px",borderRadius:6,fontSize:9,fontWeight:700}}>{S?.icon} {S?.label}</span></div>
               </div>;})}
             </div>}
           </div>}
@@ -1917,14 +1917,14 @@
               :<>
                 <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:16}}>
                   {chantiers.filter(c=>c.statut==="termine").map(ch=>(
-                    <div key={ch.id} style={{background:"#1E293B",borderRadius:12,border:"1px solid #10B98130",padding:"13px 15px"}}>
+                    <div key={ch.id} style={{background:"#052020",borderRadius:12,border:"1px solid #10B98130",padding:"13px 15px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                         <div><div style={{fontWeight:800,fontSize:14}}>{ch.client}</div>{ch.technicien&&<div style={{fontSize:11,color:"#64748B",marginTop:2}}>👤 {ch.technicien}</div>}</div>
                         <div style={{textAlign:"right"}}>{ch.date_fin&&<div style={{fontSize:11,color:"#10B981",fontWeight:700}}>✅ {ch.date_fin}</div>}{ch.date_installation&&<div style={{fontSize:10,color:"#64748B"}}>Prévu: {ch.date_installation}</div>}</div>
                       </div>
                       {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6,marginBottom:10}}>
-                        {(ch.materiels||[]).map((m,i)=><span key={i} style={{background:"#0F172A",borderRadius:5,padding:"2px 7px",fontSize:10,color:"#94A3B8"}}>{m.qty}× {m.article}</span>)}
-                        {(ch.cables||[]).map((m,i)=><span key={i} style={{background:"#0F172A",borderRadius:5,padding:"2px 7px",fontSize:10,color:"#A3C45A"}}>{m.qty}ml {m.article}</span>)}
+                        {(ch.materiels||[]).map((m,i)=><span key={i} style={{background:"#010E0E",borderRadius:5,padding:"2px 7px",fontSize:10,color:"#94A3B8"}}>{m.qty}× {m.article}</span>)}
+                        {(ch.cables||[]).map((m,i)=><span key={i} style={{background:"#010E0E",borderRadius:5,padding:"2px 7px",fontSize:10,color:"#A3C45A"}}>{m.qty}ml {m.article}</span>)}
                       </div>}
                       {/* Photos section */}
                       {(ch.photos||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:10}}>
@@ -1933,19 +1933,19 @@
                             <img src={url} onClick={()=>setLightbox(url)} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                           </div>
                         ))}
-                        {(ch.photos||[]).length>6&&<div onClick={()=>setPhotosModal(ch)} style={{borderRadius:8,background:"#0F172A",border:"1px solid #334155",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",aspectRatio:"1"}}>
+                        {(ch.photos||[]).length>6&&<div onClick={()=>setPhotosModal(ch)} style={{borderRadius:8,background:"#010E0E",border:"1px solid #0A3838",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",aspectRatio:"1"}}>
                           <span style={{fontSize:12,color:"#64748B",fontWeight:700}}>+{(ch.photos||[]).length-6}</span>
                         </div>}
                       </div>}
                       <div style={{display:"flex",gap:6}}>
-                        <button onClick={()=>setPhotosModal(ch)} style={{flex:1,background:"#33415540",border:"1px solid #334155",borderRadius:8,color:"#94A3B8",padding:"7px",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                        <button onClick={()=>setPhotosModal(ch)} style={{flex:1,background:"#0A383840",border:"1px solid #0A3838",borderRadius:8,color:"#94A3B8",padding:"7px",cursor:"pointer",fontSize:12,fontWeight:700}}>
                           📸 {(ch.photos||[]).length>0?`${(ch.photos||[]).length} photo(s)`:"Ajouter photos"}
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
-                {hist.length>0&&<>{[...new Set(hist.map(h=>h.chantier))].slice(0,10).map(ch=>{const items=hist.filter(h=>h.chantier===ch);return<div key={ch} style={{background:"#1E293B",borderRadius:10,padding:"11px 14px",marginBottom:6,border:"1px solid #334155"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,fontSize:12}}>🔧 {ch}</span><span style={{fontSize:11,color:"#64748B"}}>{items[0].date}</span></div>{items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748B"}}><span>{it.article}</span><span style={{color:"#F59E0B"}}>-{it.qty} {it.unite}</span></div>)}</div>;})} </>}
+                {hist.length>0&&<>{[...new Set(hist.map(h=>h.chantier))].slice(0,10).map(ch=>{const items=hist.filter(h=>h.chantier===ch);return<div key={ch} style={{background:"#052020",borderRadius:10,padding:"11px 14px",marginBottom:6,border:"1px solid #0A3838"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontWeight:700,fontSize:12}}>🔧 {ch}</span><span style={{fontSize:11,color:"#64748B"}}>{items[0].date}</span></div>{items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748B"}}><span>{it.article}</span><span style={{color:"#F59E0B"}}>-{it.qty} {it.unite}</span></div>)}</div>;})} </>}
               </>
             }
           </div>}
@@ -2105,13 +2105,13 @@
       const totalCmd=alerts.reduce((a,s)=>a+(s.seuil-s.stock)*(s.prix||0),0);
       const pFil=useMemo(()=>stock.filter(s=>(pCat==="Toutes"||s.cat===pCat)&&(!pSearch||s.article.toLowerCase().includes(pSearch.toLowerCase())||s.cat.toLowerCase().includes(pSearch.toLowerCase()))),[stock,pCat,pSearch]);
 
-      const INP=(e={})=>({background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"11px 13px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
-      const BTN=(bg="#3B82F6",e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",fontWeight:700,fontSize:13,...e});
+      const INP=(e={})=>({background:"#010E0E",border:"1px solid #0A3838",borderRadius:10,color:"#E2E8F0",padding:"11px 13px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
+      const BTN=(bg="#0EA5A8",e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",fontWeight:700,fontSize:13,...e});
       const BDG=cat=>{const c=CC[cat]||"#94A3B8";return{background:c+"25",color:c,padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,display:"inline-block",whiteSpace:"nowrap"};};
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#1E293B",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #334155",maxHeight:"92vh",overflowY:"auto"}:{background:"#1E293B",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #334155",maxHeight:"90vh",overflowY:"auto"};
+      const MBX=isMobile?{background:"#052020",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #0A3838",maxHeight:"92vh",overflowY:"auto"}:{background:"#052020",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #0A3838",maxHeight:"90vh",overflowY:"auto"};
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:5,letterSpacing:"0.05em"}}>{c}</label>;
-      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#334155",borderRadius:2,margin:"8px auto 16px"}}/>:null;
+      const Handle=()=>isMobile?<div style={{width:36,height:4,background:"#0A3838",borderRadius:2,margin:"8px auto 16px"}}/>:null;
 
       const upd=(id,f,v)=>SS(p=>p.map(s=>s.id===id?{...s,[f]:v}:s));
       const addCI=()=>{if(!aItem.id||!aItem.qty)return;setCItems(p=>[...p.filter(i=>i.id!==aItem.id),{...aItem}]);setAItem({id:"",qty:""});};
@@ -2176,9 +2176,9 @@
       const TABS=ALL_TABS.filter(([v])=>allowedTabs.includes(v));
       const rCfg=ROLES[role]||ROLES.installateur;
 
-      if(authLoading) return <div style={{background:"#0F172A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><div style={{fontSize:48}}>⚡</div><div style={{color:"#64748B",fontSize:14}}>Chargement…</div></div>;
+      if(authLoading) return <div style={{background:"#010E0E",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:80,height:80,borderRadius:12}}/><div style={{color:"#64748B",fontSize:14}}>Chargement…</div></div>;
       if(!authUser) return <LoginScreen/>;
-      if(!profile) return <div style={{background:"#0F172A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:20,textAlign:"center"}}><div style={{fontSize:48}}>⚠️</div><h2 style={{fontWeight:800}}>Accès non configuré</h2><p style={{color:"#64748B",maxWidth:360}}>Votre compte n'a pas encore de profil. Contactez votre administrateur.</p><button onClick={logout} style={BTN("#334155",{marginTop:8})}>Se déconnecter</button></div>;
+      if(!profile) return <div style={{background:"#010E0E",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:20,textAlign:"center"}}><div style={{fontSize:48}}>⚠️</div><h2 style={{fontWeight:800}}>Accès non configuré</h2><p style={{color:"#64748B",maxWidth:360}}>Votre compte n'a pas encore de profil. Contactez votre administrateur.</p><button onClick={logout} style={BTN("#0A3838",{marginTop:8})}>Se déconnecter</button></div>;
 
       // ── Article card mobile ──
       const ArtCard=({item})=>{
@@ -2187,18 +2187,18 @@
         const s=SC[st];
         const aCmd=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:0;
         return(
-          <div style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#1E293B",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#1D4ED860":"#334155"}`,padding:"14px",marginBottom:10}}>
+          <div style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#052020",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#04525460":"#0A3838"}`,padding:"14px",marginBottom:10}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
               <div style={{flex:1,paddingRight:8}}>
                 <span style={BDG(item.cat)}>{item.cat}</span>
                 <div style={{fontWeight:800,fontSize:16,color:"#F1F5F9",marginTop:5}}>{item.article}</div>
-                {hasO&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
+                {hasO&&<div style={{fontSize:11,color:"#0EA5A8",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
               </div>
               <span style={{background:s.bg,color:s.color,padding:"4px 9px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{s.icon} {s.label}</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-              {[["STOCK",`${item.stock}`,st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E2E8F0"],["SEUIL",`${item.seuil}`,"#94A3B8"],["PRIX",fmt(item.prix),"#10B981"],["À CMD",aCmd>0?"+"+aCmd:"—",aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#475569"]].map(([l,v,c])=>(
-                <div key={l} style={{background:"#0F172A",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
+              {[["STOCK",`${item.stock}`,st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E2E8F0"],["SEUIL",`${item.seuil}`,"#94A3B8"],["PRIX",fmt(item.prix),"#10B981"],["À CMD",aCmd>0?"+"+aCmd:"—",aCmd>0?(hasO?"#0EA5A8":"#EF4444"):"#475569"]].map(([l,v,c])=>(
+                <div key={l} style={{background:"#010E0E",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
                   <div style={{fontSize:13,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
                   <div style={{fontSize:9,color:"#64748B",fontWeight:600,marginTop:3}}>{l}</div>
                 </div>
@@ -2208,29 +2208,29 @@
               <div style={{display:"flex",gap:6,marginBottom:8}}>
                 <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={INP({flex:1})} autoFocus/>
                 <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={BTN("#10B981",{padding:"11px 18px"})}>✓</button>
-                <button onClick={()=>setESId(null)} style={BTN("#334155",{padding:"11px 14px"})}>✕</button>
+                <button onClick={()=>setESId(null)} style={BTN("#0A3838",{padding:"11px 14px"})}>✕</button>
               </div>
             )}
             <div style={{display:"flex",gap:6}}>
-              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{flex:1,background:item.rupture?"#A855F720":"#1E293B",border:`1px solid ${item.rupture?"#A855F7":"#334155"}`,borderRadius:10,color:item.rupture?"#A855F7":"#64748B",padding:"10px 4px",cursor:"pointer",fontSize:11,fontWeight:700}}>{item.rupture?"⛔":"Rupture"}</button>}
-              {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={BTN("#334155",{flex:1,padding:"10px 4px",fontSize:12})}>✏️ Stock</button>}
-              {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{flex:1,padding:"10px 4px",fontSize:12})}>📦 Cmd</button>}
+              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{flex:1,background:item.rupture?"#A855F720":"#052020",border:`1px solid ${item.rupture?"#A855F7":"#0A3838"}`,borderRadius:10,color:item.rupture?"#A855F7":"#64748B",padding:"10px 4px",cursor:"pointer",fontSize:11,fontWeight:700}}>{item.rupture?"⛔":"Rupture"}</button>}
+              {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={BTN("#0A3838",{flex:1,padding:"10px 4px",fontSize:12})}>✏️ Stock</button>}
+              {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#045254",{flex:1,padding:"10px 4px",fontSize:12})}>📦 Cmd</button>}
             </div>
           </div>
         );
       };
 
       return(
-        <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:"#0F172A",minHeight:"100vh",color:"#E2E8F0",fontSize:14,paddingBottom:isMobile?72:0}}>
+        <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:"#010E0E",minHeight:"100vh",color:"#E2E8F0",fontSize:14,paddingBottom:isMobile?72:0}}>
 
           {/* MODAL ÉDITION COMMANDE */}
           {oEditModal&&<div style={OVL} onClick={()=>setOEditModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
             <Handle/>
             <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>✏️ Modifier la commande</h3>
-            <div style={{background:"#0F172A",borderRadius:10,padding:"11px 14px",marginBottom:14}}>
+            <div style={{background:"#010E0E",borderRadius:10,padding:"11px 14px",marginBottom:14}}>
               <span style={BDG(oEditModal.cat)}>{oEditModal.cat}</span>
               <div style={{fontWeight:800,fontSize:15,marginTop:4}}>{oEditModal.article}</div>
-              <div style={{fontSize:12,color:"#64748B",marginTop:3}}>Prix unit. : <strong style={{color:"#3B82F6"}}>{fmt(oEditModal.prix_unit)}</strong> / {oEditModal.unite}</div>
+              <div style={{fontSize:12,color:"#64748B",marginTop:3}}>Prix unit. : <strong style={{color:"#0EA5A8"}}>{fmt(oEditModal.prix_unit)}</strong> / {oEditModal.unite}</div>
             </div>
             <L c="QUANTITÉ"/>
             <input type="number" min="1" value={oEditForm.qty} onChange={e=>setOEditForm(p=>({...p,qty:e.target.value}))} style={{...INP(),marginBottom:8}}/>
@@ -2238,8 +2238,8 @@
             <L c="NOTE"/>
             <textarea value={oEditForm.desc} onChange={e=>setOEditForm(p=>({...p,desc:e.target.value}))} style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
             <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button onClick={()=>setOEditModal(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={saveOEdit} style={BTN("#3B82F6",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
+              <button onClick={()=>setOEditModal(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={saveOEdit} style={BTN("#0EA5A8",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
             </div>
           </div></div>}
 
@@ -2252,7 +2252,7 @@
             <p style={{color:"#64748B",fontSize:12,margin:"0 0 20px"}}>{oDelConf.qty} {oDelConf.unite} · {fmt(oDelConf.total)}</p>
             {oDelConf.statut==="livré"&&<div style={{background:"#F59E0B18",border:"1px solid #F59E0B40",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:11,color:"#F59E0B"}}>⚠️ Cette commande est déjà livrée. Le stock ne sera pas recalculé.</div>}
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setODelConf(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
+              <button onClick={()=>setODelConf(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
               <button onClick={()=>deleteOrder(oDelConf.id)} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
@@ -2261,19 +2261,19 @@
           {oModal&&oArt&&<div style={OVL} onClick={()=>setOModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
             <Handle/>
             <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>📦 Passer une commande</h3>
-            <div style={{background:"#0F172A",borderRadius:12,padding:"13px 14px",marginBottom:14}}>
+            <div style={{background:"#010E0E",borderRadius:12,padding:"13px 14px",marginBottom:14}}>
               <span style={BDG(oArt.cat)}>{oArt.cat}</span>
               <div style={{fontWeight:800,fontSize:16,marginTop:5}}>{oArt.article}</div>
-              <div style={{fontSize:12,color:"#64748B",marginTop:4}}>Prix : <strong style={{color:"#3B82F6"}}>{fmt(oArt.prix)}</strong> / {oArt.unite} · Stock : <strong style={{color:"#EF4444"}}>{oArt.stock}</strong> · Seuil : {oArt.seuil}</div>
-              {aOByA[oModal]&&<div style={{marginTop:8,padding:"6px 10px",background:"#0F1F3D",borderRadius:8,fontSize:12,color:"#3B82F6",fontWeight:600}}>🚚 Déjà en cours : {aOByA[oModal].reduce((x,o)=>x+o.qty,0)} {oArt.unite} en transit</div>}
+              <div style={{fontSize:12,color:"#64748B",marginTop:4}}>Prix : <strong style={{color:"#0EA5A8"}}>{fmt(oArt.prix)}</strong> / {oArt.unite} · Stock : <strong style={{color:"#EF4444"}}>{oArt.stock}</strong> · Seuil : {oArt.seuil}</div>
+              {aOByA[oModal]&&<div style={{marginTop:8,padding:"6px 10px",background:"#0F1F3D",borderRadius:8,fontSize:12,color:"#0EA5A8",fontWeight:600}}>🚚 Déjà en cours : {aOByA[oModal].reduce((x,o)=>x+o.qty,0)} {oArt.unite} en transit</div>}
             </div>
             <L c="QUANTITÉ"/><input type="number" min="1" value={oForm.qty} onChange={e=>setOForm(p=>({...p,qty:e.target.value}))} style={{...INP(),marginBottom:8}}/>
             {Number(oForm.qty)>0&&<div style={{background:"#10B98118",border:"1px solid #10B98140",borderRadius:10,padding:"11px 14px",marginBottom:12,fontWeight:700,color:"#10B981",fontSize:16}}>💶 Total : {fmt(Number(oForm.qty)*oArt.prix)}</div>}
             <L c="NOTE"/>
             <textarea value={oForm.desc} onChange={e=>setOForm(p=>({...p,desc:e.target.value}))} placeholder="Ex: Fournisseur XYZ, commande urgente…" style={{...INP(),height:80,resize:"none",lineHeight:1.6}}/>
             <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button onClick={()=>setOModal(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={subO} style={BTN("#3B82F6",{flex:2,padding:"13px"})}>✅ Valider</button>
+              <button onClick={()=>setOModal(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={subO} style={BTN("#0EA5A8",{flex:2,padding:"13px"})}>✅ Valider</button>
             </div>
           </div></div>}
 
@@ -2295,13 +2295,13 @@
               <div><L c="SEUIL"/><input type="number" value={cForm.seuil} onChange={e=>setCForm(p=>({...p,seuil:e.target.value}))} style={INP()}/></div>
               <div><L c="PRIX €"/><input type="number" step="0.01" value={cForm.prix} onChange={e=>setCForm(p=>({...p,prix:e.target.value}))} style={INP()}/></div>
             </div>
-            <div style={{background:"#0F172A",borderRadius:12,padding:"13px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{background:"#010E0E",borderRadius:12,padding:"13px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div><div style={{fontWeight:700,fontSize:13}}>⛔ Rupture centrale</div><div style={{fontSize:11,color:"#64748B",marginTop:2}}>Indisponible fournisseur</div></div>
-              <button onClick={()=>setCForm(p=>({...p,rupture:!p.rupture}))} style={{background:cForm.rupture?"#A855F7":"#334155",border:"none",borderRadius:20,color:"#FFF",padding:"8px 18px",cursor:"pointer",fontWeight:700,fontSize:13}}>{cForm.rupture?"⛔ Oui":"Non"}</button>
+              <button onClick={()=>setCForm(p=>({...p,rupture:!p.rupture}))} style={{background:cForm.rupture?"#A855F7":"#0A3838",border:"none",borderRadius:20,color:"#FFF",padding:"8px 18px",cursor:"pointer",fontWeight:700,fontSize:13}}>{cForm.rupture?"⛔ Oui":"Non"}</button>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setEComp(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
-              <button onClick={saveC} disabled={!cForm.article||!cForm.cat} style={BTN(!cForm.article||!cForm.cat?"#1E293B":"#3B82F6",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
+              <button onClick={()=>setEComp(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
+              <button onClick={saveC} disabled={!cForm.article||!cForm.cat} style={BTN(!cForm.article||!cForm.cat?"#052020":"#0EA5A8",{flex:2,padding:"13px"})}>💾 Enregistrer</button>
             </div>
           </div></div>}
 
@@ -2312,24 +2312,24 @@
             <h3 style={{margin:"0 0 8px",fontWeight:800,fontSize:17}}>Supprimer ?</h3>
             <p style={{margin:"0 0 22px",color:"#64748B",fontSize:13}}><strong style={{color:"#E2E8F0"}}>{delConf.cat} — {delConf.article}</strong><br/>Action irréversible.</p>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(null)} style={BTN("#334155",{flex:1})}>Annuler</button>
+              <button onClick={()=>setDelConf(null)} style={BTN("#0A3838",{flex:1})}>Annuler</button>
               <button onClick={()=>{SS(p=>p.filter(s=>s.id!==delConf.id));setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
 
           {/* HEADER */}
-          <div style={{background:"linear-gradient(135deg,#1E3A5F,#0F172A)",borderBottom:"1px solid #1E293B",padding:"0 16px",position:"sticky",top:0,zIndex:100}}>
+          <div style={{background:"linear-gradient(135deg,#1E3A5F,#011515)",borderBottom:"1px solid #052020",padding:"0 16px",position:"sticky",top:0,zIndex:100}}>
             <div style={{maxWidth:1200,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:54}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:22}}>⚡</span>
                 <div>
-                  <div style={{fontWeight:800,fontSize:isMobile?14:16,color:"#F1F5F9"}}>Suivi Stock</div>
+                  <div style={{fontWeight:800,fontSize:isMobile?14:16,color:"#F1F5F9"}}>Ma Borne LR Colmar</div>
                   {!isMobile&&<div style={{fontSize:10,color:"#64748B",fontWeight:600,letterSpacing:"0.05em"}}>BORNES DE RECHARGE</div>}
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {/* Sync */}
-                <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 9px",background:"#1E293B",borderRadius:8,border:`1px solid ${sc2.c}40`}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 9px",background:"#052020",borderRadius:8,border:`1px solid ${sc2.c}40`}}>
                   {sc2.spin&&<div style={{width:6,height:6,borderRadius:"50%",border:`2px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
                   <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
                 </div>
@@ -2341,11 +2341,11 @@
                 {/* Desktop nav */}
                 {!isMobile&&<nav style={{display:"flex",gap:2}}>
                   {TABS.map(([v,icon,label])=>(
-                    <button key={v} onClick={()=>goTo(v)} style={{padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:view===v?"#3B82F6":"transparent",color:view===v?"#FFF":"#94A3B8"}}>{icon} {label}</button>
+                    <button key={v} onClick={()=>goTo(v)} style={{padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:view===v?"#0EA5A8":"transparent",color:view===v?"#FFF":"#94A3B8"}}>{icon} {label}</button>
                   ))}
                 </nav>}
                 {/* Logout */}
-                <button onClick={logout} title="Déconnexion" style={{background:"transparent",border:"1px solid #334155",borderRadius:8,color:"#64748B",padding:"5px 8px",cursor:"pointer",fontSize:12}} >🚪</button>
+                <button onClick={logout} title="Déconnexion" style={{background:"transparent",border:"1px solid #0A3838",borderRadius:8,color:"#64748B",padding:"5px 8px",cursor:"pointer",fontSize:12}} >🚪</button>
               </div>
             </div>
           </div>
@@ -2392,16 +2392,16 @@
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
                 {[
                   {l:"À commander",v:alerts.length,c:"#EF4444",i:"🔴",sub:"articles urgents",action:()=>goTo("stock")},
-                  {l:"En transit",  v:ordered.length,c:"#3B82F6",i:"🚚",sub:"commandes en cours",action:()=>goTo("commandes")},
+                  {l:"En transit",  v:ordered.length,c:"#0EA5A8",i:"🚚",sub:"commandes en cours",action:()=>goTo("commandes")},
                   {l:"Surveiller",  v:warns.length,  c:"#F59E0B",i:"🟡",sub:"proches du seuil",action:()=>goTo("stock")},
                   {l:"Ruptures",    v:rupts.length,  c:"#A855F7",i:"⛔",sub:"fournisseur",action:()=>goTo("stock")},
                 ].map(({l,v,c,i,sub,action})=>(
-                  <div key={l} onClick={action} style={{background:"#1E293B",borderRadius:12,padding:isMobile?"12px 10px":"14px 16px",border:`1px solid ${c}30`,cursor:"pointer",transition:"border-color 0.15s"}}
+                  <div key={l} onClick={action} style={{background:"#052020",borderRadius:12,padding:isMobile?"12px 10px":"14px 16px",border:`1px solid ${c}30`,cursor:"pointer",transition:"border-color 0.15s"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor=c}
                     onMouseLeave={e=>e.currentTarget.style.borderColor=c+"30"}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                       <div>
-                        <div style={{fontSize:isMobile?22:28,fontWeight:800,color:v>0?c:"#334155",lineHeight:1}}>{v}</div>
+                        <div style={{fontSize:isMobile?22:28,fontWeight:800,color:v>0?c:"#0A3838",lineHeight:1}}>{v}</div>
                         <div style={{fontSize:11,fontWeight:700,color:"#94A3B8",marginTop:4}}>{l}</div>
                         <div style={{fontSize:10,color:"#475569",marginTop:2}}>{sub}</div>
                       </div>
@@ -2412,10 +2412,10 @@
               </div>
 
               {/* Météo stock par catégorie */}
-              <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"14px 16px",marginBottom:14}}>
+              <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"14px 16px",marginBottom:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                   <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.05em"}}>Météo stock par catégorie</h3>
-                  <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir tout →</button>
+                  <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir tout →</button>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {uCats.map(cat=>{
@@ -2440,7 +2440,7 @@
                               <span style={{fontSize:11}}>{statusIcon}</span>
                             </div>
                           </div>
-                          <div style={{background:"#0F172A",borderRadius:4,height:5,width:"100%",overflow:"hidden"}}>
+                          <div style={{background:"#010E0E",borderRadius:4,height:5,width:"100%",overflow:"hidden"}}>
                             <div style={{height:5,borderRadius:4,width:`${pctOk}%`,background:nbAlert>0?"#EF4444":nbWarn>0?"#F59E0B":"#10B981",transition:"width 0.3s"}}/>
                           </div>
                         </div>
@@ -2454,20 +2454,20 @@
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
 
                 {/* Alertes stock */}
-                {alerts.length>0&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #EF444430",padding:"14px 16px"}}>
+                {alerts.length>0&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #EF444430",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#EF4444"}}>🔴 Articles à commander</h3>
-                    {canOrder(role)&&<button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>}
+                    {canOrder(role)&&<button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>}
                   </div>
                   {alerts.slice(0,5).map(item=>(
-                    <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1E293B88"}}>
+                    <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #05202088"}}>
                       <div>
                         <span style={{fontSize:10,...BDG(item.cat)}}>{item.cat}</span>
                         <span style={{fontSize:13,fontWeight:700,color:"#F1F5F9",marginLeft:7}}>{item.article}</span>
                       </div>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
                         <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>+{item.seuil-item.stock}</span>
-                        {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#1D4ED8"),padding:"4px 10px",fontSize:11}}>📦</button>}
+                        {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#045254"),padding:"4px 10px",fontSize:11}}>📦</button>}
                       </div>
                     </div>
                   ))}
@@ -2475,10 +2475,10 @@
                 </div>}
 
                 {/* CA résumé — visible si rôle y a accès */}
-                {allowedTabs.includes("ventes")&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #10B98130",padding:"14px 16px"}}>
+                {allowedTabs.includes("ventes")&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #10B98130",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#10B981"}}>💰 Chiffre d'affaires</h3>
-                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
                   </div>
                   {(()=>{
                     const mM2=String(new Date().getMonth()+1).padStart(2,"0");
@@ -2489,8 +2489,8 @@
                     const caJ=ventes.filter(v=>v.date===today).reduce((s,v)=>s+Number(v.prix_ht||0),0);
                     return <>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                        {[{l:"Aujourd'hui",v:fmt(caJ),c:"#F59E0B"},{l:"Ce mois",v:fmt(caM),c:"#10B981"},{l:"Total",v:fmt(caT),c:"#3B82F6"},{l:"Ventes",v:ventes.length,c:"#94A3B8"}].map(({l,v,c})=>(
-                          <div key={l} style={{background:"#0F172A",borderRadius:8,padding:"8px 10px"}}>
+                        {[{l:"Aujourd'hui",v:fmt(caJ),c:"#F59E0B"},{l:"Ce mois",v:fmt(caM),c:"#10B981"},{l:"Total",v:fmt(caT),c:"#0EA5A8"},{l:"Ventes",v:ventes.length,c:"#94A3B8"}].map(({l,v,c})=>(
+                          <div key={l} style={{background:"#010E0E",borderRadius:8,padding:"8px 10px"}}>
                             <div style={{fontSize:14,fontWeight:800,color:c}}>{v}</div>
                             <div style={{fontSize:10,color:"#475569",marginTop:2}}>{l}</div>
                           </div>
@@ -2501,33 +2501,33 @@
                 </div>}
 
                 {/* Dernières commandes */}
-                <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"14px 16px"}}>
+                <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#3B82F6"}}>🚚 Dernières commandes</h3>
-                    <button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                    <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#0EA5A8"}}>🚚 Dernières commandes</h3>
+                    <button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
                   </div>
                   {orders.length===0?<p style={{color:"#475569",fontSize:12,margin:0}}>Aucune commande.</p>
                     :orders.slice(0,4).map(o=>(
-                      <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1E293B88"}}>
+                      <div key={o.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #05202088"}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{o.article}</div>
                           <div style={{fontSize:10,color:"#64748B",marginTop:1}}>{o.date} · {o.qty} {o.unite}</div>
                         </div>
-                        <span style={{background:o.statut==="livré"?"#0A2218":"#0F1F3D",color:o.statut==="livré"?"#10B981":"#3B82F6",padding:"2px 7px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0,marginLeft:8}}>{o.statut==="livré"?"✅ LIVRÉ":"🚚 EN COURS"}</span>
+                        <span style={{background:o.statut==="livré"?"#0A2218":"#0F1F3D",color:o.statut==="livré"?"#10B981":"#0EA5A8",padding:"2px 7px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0,marginLeft:8}}>{o.statut==="livré"?"✅ LIVRÉ":"🚚 EN COURS"}</span>
                       </div>
                     ))
                   }
                 </div>
 
                 {/* Dernières ventes */}
-                {allowedTabs.includes("ventes")&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"14px 16px"}}>
+                {allowedTabs.includes("ventes")&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#10B981"}}>💰 Dernières ventes</h3>
-                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                    <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
                   </div>
                   {ventes.length===0?<p style={{color:"#475569",fontSize:12,margin:0}}>Aucune vente.</p>
                     :ventes.slice(0,4).map(v=>(
-                      <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1E293B88"}}>
+                      <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #05202088"}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#F1F5F9",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.client}</div>
                           <div style={{fontSize:10,color:"#64748B",marginTop:1}}>{v.date} · {v.par||""}</div>
@@ -2539,16 +2539,16 @@
                 </div>}
 
                 {/* Activité chantiers */}
-                {allowedTabs.includes("chantier")&&<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"14px 16px"}}>
+                {allowedTabs.includes("chantier")&&<div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"14px 16px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <h3 style={{margin:0,fontSize:13,fontWeight:800,color:"#F59E0B"}}>🔧 Derniers chantiers</h3>
-                    <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #334155",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
+                    <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #0A3838",borderRadius:7,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600}}>Voir →</button>
                   </div>
                   {hist.length===0?<p style={{color:"#475569",fontSize:12,margin:0}}>Aucun chantier.</p>
                     :[...new Set(hist.map(h=>h.chantier))].slice(0,3).map(ch=>{
                       const items=hist.filter(h=>h.chantier===ch);
                       return(
-                        <div key={ch} style={{padding:"7px 0",borderBottom:"1px solid #1E293B88"}}>
+                        <div key={ch} style={{padding:"7px 0",borderBottom:"1px solid #05202088"}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                             <span style={{fontSize:12,fontWeight:700,color:"#F1F5F9"}}>{ch}</span>
                             <span style={{fontSize:10,color:"#64748B"}}>{items[0]?.date}</span>
@@ -2566,15 +2566,15 @@
             {/* ── STOCK ── */}
             {view==="stock"&&<>
               <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch"}}>
-                {cats.map(cat=><button key={cat} onClick={()=>setFCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===cat?(CC[cat]||"#3B82F6"):"#334155"}`,background:fCat===cat?(CC[cat]||"#3B82F6")+"25":"transparent",color:fCat===cat?(CC[cat]||"#93C5FD"):"#94A3B8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
+                {cats.map(cat=><button key={cat} onClick={()=>setFCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===cat?(CC[cat]||"#0EA5A8"):"#0A3838"}`,background:fCat===cat?(CC[cat]||"#0EA5A8")+"25":"transparent",color:fCat===cat?(CC[cat]||"#93C5FD"):"#94A3B8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
               </div>
               {isMobile
                 ?<div>{fil.map(item=><ArtCard key={item.id} item={item}/>)}</div>
-                :<div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",overflow:"hidden"}}>
+                :<div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",overflow:"hidden"}}>
                   <div style={{overflowX:"auto"}}>
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
                       <thead><tr>{["Catégorie","Article","Stock","Seuil","Prix","Statut","À cmd","Valeur","Rupture","Actions"].map((h,i)=>{
-                        const TH={padding:"10px 12px",textAlign:i>=2&&i<=7?"center":"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #334155",background:"#0F172A",whiteSpace:"nowrap"};
+                        const TH={padding:"10px 12px",textAlign:i>=2&&i<=7?"center":"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #0A3838",background:"#010E0E",whiteSpace:"nowrap"};
                         return <th key={h} style={TH}>{h}</th>;
                       })}</tr></thead>
                       <tbody>{fil.map((item,idx)=>{
@@ -2582,14 +2582,14 @@
                         const st=gS(item.stock,item.seuil,item.rupture,hasO);
                         const s=SC[st];
                         const aCmd=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:0;
-                        const TD={padding:"9px 12px",borderBottom:"1px solid #1E293B44",verticalAlign:"middle"};
+                        const TD={padding:"9px 12px",borderBottom:"1px solid #05202044",verticalAlign:"middle"};
                         return(
-                          <tr key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":idx%2===0?"#1E293B":"#182030"}}>
+                          <tr key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":idx%2===0?"#052020":"#182030"}}>
                             <td style={TD}><span style={BDG(item.cat)}>{item.cat}</span></td>
                             <td style={{...TD,fontWeight:600}}>{item.article}</td>
                             <td style={{...TD,textAlign:"center"}}>
                               {eSId===item.id&&canEditStock(role)
-                                ?<input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} onBlur={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} onKeyDown={e=>e.key==="Enter"&&(upd(item.id,"stock",Math.max(0,Number(eSVal))),setESId(null))} style={{width:55,background:"#0F172A",border:"1px solid #3B82F6",borderRadius:6,color:"#E2E8F0",textAlign:"center",padding:"3px",fontSize:13,fontWeight:700}} autoFocus/>
+                                ?<input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} onBlur={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} onKeyDown={e=>e.key==="Enter"&&(upd(item.id,"stock",Math.max(0,Number(eSVal))),setESId(null))} style={{width:55,background:"#010E0E",border:"1px solid #0EA5A8",borderRadius:6,color:"#E2E8F0",textAlign:"center",padding:"3px",fontSize:13,fontWeight:700}} autoFocus/>
                                 :<span onClick={()=>canEditStock(role)&&(setESId(item.id),setESVal(String(item.stock)))} style={{fontWeight:800,cursor:canEditStock(role)?"pointer":"default",color:st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E2E8F0"}}>{item.stock} <span style={{fontSize:9,color:"#475569"}}>{item.unite}</span></span>
                               }
                             </td>
@@ -2597,17 +2597,17 @@
                             <td style={{...TD,textAlign:"center",color:"#94A3B8",fontSize:12}}>{fmt(item.prix)}</td>
                             <td style={{...TD,textAlign:"center"}}>
                               <span style={{background:s.bg,color:s.color,padding:"3px 7px",borderRadius:7,fontSize:10,fontWeight:700}}>{s.icon} {s.label}</span>
-                              {hasO&&aOByA[item.id]&&<div style={{marginTop:3}}><span style={{background:"#0F1F3D",color:"#3B82F6",padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:700}}>🚚 {aOByA[item.id].reduce((x,o)=>x+o.qty,0)} en transit</span></div>}
+                              {hasO&&aOByA[item.id]&&<div style={{marginTop:3}}><span style={{background:"#0F1F3D",color:"#0EA5A8",padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:700}}>🚚 {aOByA[item.id].reduce((x,o)=>x+o.qty,0)} en transit</span></div>}
                             </td>
-                            <td style={{...TD,textAlign:"center",fontWeight:700,color:aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#334155"}}>{aCmd>0?"+"+aCmd:"—"}</td>
-                            <td style={{...TD,textAlign:"center",fontSize:12,color:aCmd>0?(hasO?"#3B82F6":"#EF4444"):"#334155"}}>{aCmd>0?fmt(aCmd*item.prix):"—"}</td>
+                            <td style={{...TD,textAlign:"center",fontWeight:700,color:aCmd>0?(hasO?"#0EA5A8":"#EF4444"):"#0A3838"}}>{aCmd>0?"+"+aCmd:"—"}</td>
+                            <td style={{...TD,textAlign:"center",fontSize:12,color:aCmd>0?(hasO?"#0EA5A8":"#EF4444"):"#0A3838"}}>{aCmd>0?fmt(aCmd*item.prix):"—"}</td>
                             <td style={{...TD,textAlign:"center"}}>
-                              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F720":"transparent",border:`1px solid ${item.rupture?"#A855F7":"#334155"}`,borderRadius:6,color:item.rupture?"#A855F7":"#475569",padding:"3px 8px",cursor:"pointer",fontSize:10,fontWeight:700}}>{item.rupture?"⛔":"Signaler"}</button>}
+                              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F720":"transparent",border:`1px solid ${item.rupture?"#A855F7":"#0A3838"}`,borderRadius:6,color:item.rupture?"#A855F7":"#475569",padding:"3px 8px",cursor:"pointer",fontSize:10,fontWeight:700}}>{item.rupture?"⛔":"Signaler"}</button>}
                             </td>
                             <td style={{...TD,textAlign:"center"}}>
                               <div style={{display:"flex",gap:4,justifyContent:"center"}}>
-                                {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{...BTN("#334155"),padding:"4px 8px",fontSize:12}}>✏️</button>}
-                                {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#1D4ED8"),padding:"4px 8px",fontSize:12}}>📦</button>}
+                                {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{...BTN("#0A3838"),padding:"4px 8px",fontSize:12}}>✏️</button>}
+                                {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{...BTN("#045254"),padding:"4px 8px",fontSize:12}}>📦</button>}
                               </div>
                             </td>
                           </tr>
@@ -2638,26 +2638,26 @@
             {/* ── COMMANDES ── */}
             {view==="commandes"&&<>
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:14,marginBottom:14}}>
-                <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:16}}>
+                <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:16}}>
                   <h2 style={{margin:"0 0 12px",fontSize:15,fontWeight:800,color:"#EF4444"}}>🔴 Articles à commander</h2>
                   {alerts.length===0?<p style={{color:"#475569",fontSize:13}}>✅ Tous commandés ou en ordre.</p>
                     :<>{alerts.map(item=>(
-                      <div key={item.id} style={{background:"#0F172A",borderRadius:10,padding:"11px 13px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div key={item.id} style={{background:"#010E0E",borderRadius:10,padding:"11px 13px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <div><span style={BDG(item.cat)}>{item.cat}</span><div style={{fontWeight:700,fontSize:14,marginTop:4}}>{item.article}</div><div style={{fontSize:11,color:"#64748B",marginTop:2}}>{item.stock} stock · seuil {item.seuil}</div></div>
                         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                           <span style={{fontWeight:800,color:"#EF4444",fontSize:17}}>+{item.seuil-item.stock}</span>
                           <span style={{fontSize:11,color:"#64748B"}}>{fmt((item.seuil-item.stock)*item.prix)}</span>
-                          {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{padding:"6px 12px",fontSize:12})}>📦 Commander</button>}
+                          {canOrder(role)&&<button onClick={()=>openO(item.id)} style={BTN("#045254",{padding:"6px 12px",fontSize:12})}>📦 Commander</button>}
                         </div>
                       </div>
                     ))}
-                    <div style={{background:"#0F172A",borderRadius:10,padding:"11px 13px",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{background:"#010E0E",borderRadius:10,padding:"11px 13px",marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <span style={{fontWeight:700,color:"#94A3B8"}}>Total estimé</span>
                       <span style={{fontWeight:800,color:"#10B981",fontSize:17}}>{fmt(totalCmd)}</span>
                     </div></>
                   }
                 </div>
-                <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"12px 14px"}}>
+                <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",padding:"12px 14px"}}>
                   <h2 style={{margin:"0 0 8px",fontSize:12,fontWeight:800,color:"#A855F7",textTransform:"uppercase",letterSpacing:"0.05em"}}>⛔ Ruptures centrale</h2>
                   {rupts.length===0
                     ?<p style={{color:"#475569",fontSize:11,fontStyle:"italic"}}>Aucune rupture signalée.</p>
@@ -2672,13 +2672,13 @@
                   }
                 </div>
               </div>
-              <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",overflow:"hidden"}}>
-                <div style={{padding:"14px 16px",borderBottom:"1px solid #334155"}}><h2 style={{margin:0,fontSize:15,fontWeight:800}}>📋 Historique des commandes</h2></div>
+              <div style={{background:"#052020",borderRadius:14,border:"1px solid #0A3838",overflow:"hidden"}}>
+                <div style={{padding:"14px 16px",borderBottom:"1px solid #0A3838"}}><h2 style={{margin:0,fontSize:15,fontWeight:800}}>📋 Historique des commandes</h2></div>
                 {orders.length===0?<p style={{color:"#475569",fontSize:13,textAlign:"center",padding:24}}>Aucune commande passée.</p>
                   :isMobile
                     ?<div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
                       {orders.map(o=>(
-                        <div key={o.id} style={{background:"#0F172A",borderRadius:12,padding:"13px 14px",border:`1px solid ${o.statut==="livré"?"#10B98130":"#1D4ED840"}`}}>
+                        <div key={o.id} style={{background:"#010E0E",borderRadius:12,padding:"13px 14px",border:`1px solid ${o.statut==="livré"?"#10B98130":"#04525440"}`}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                             <div>
                               <span style={BDG(o.cat)}>{o.cat}</span>
@@ -2688,13 +2688,13 @@
                             </div>
                             {o.statut==="livré"
                               ?<div style={{textAlign:"right",flexShrink:0,marginLeft:8}}><span style={{background:"#0A2218",color:"#10B981",padding:"3px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>✅ LIVRÉ</span><div style={{fontSize:10,color:"#64748B",marginTop:3}}>{o.livraison_date}</div></div>
-                              :<span style={{background:"#0F1F3D",color:"#3B82F6",padding:"3px 9px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0,marginLeft:8}}>🚚 EN COURS</span>
+                              :<span style={{background:"#0F1F3D",color:"#0EA5A8",padding:"3px 9px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0,marginLeft:8}}>🚚 EN COURS</span>
                             }
                           </div>
                           <input value={o.description} onChange={e=>SO(p=>p.map(x=>x.id===o.id?{...x,description:e.target.value}:x))} placeholder="Ajouter une note…" style={{...INP(),marginBottom:o.statut!=="livré"&&canDeliver(role)?8:0,fontSize:13}}/>
                           {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>markD(o.id)} style={BTN("#10B981",{width:"100%",padding:"11px",marginBottom:6})}>✅ Marquer comme livré</button>}
                           {canOrder(role)&&<div style={{display:"flex",gap:6}}>
-                            <button onClick={()=>openOEdit(o)} style={BTN("#334155",{flex:1,padding:"8px",fontSize:12})}>✏️ Modifier</button>
+                            <button onClick={()=>openOEdit(o)} style={BTN("#0A3838",{flex:1,padding:"8px",fontSize:12})}>✏️ Modifier</button>
                             <button onClick={()=>setODelConf(o)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"8px 12px",cursor:"pointer",fontSize:12,fontWeight:700,flex:1}}>🗑️ Supprimer</button>
                           </div>}
                         </div>
@@ -2702,24 +2702,24 @@
                     </div>
                     :<div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse"}}>
-                        <thead><tr>{["Date","Par","Article","Qté","Total","Description","Statut",""].map((h,i)=><th key={i} style={{padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #334155",background:"#0F172A",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                        <thead><tr>{["Date","Par","Article","Qté","Total","Description","Statut",""].map((h,i)=><th key={i} style={{padding:"10px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #0A3838",background:"#010E0E",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                         <tbody>{orders.map((o,idx)=>{
-                          const TD={padding:"9px 12px",borderBottom:"1px solid #1E293B44",verticalAlign:"middle"};
+                          const TD={padding:"9px 12px",borderBottom:"1px solid #05202044",verticalAlign:"middle"};
                           return(
-                            <tr key={o.id} style={{background:idx%2===0?"#1E293B":"#182030"}}>
+                            <tr key={o.id} style={{background:idx%2===0?"#052020":"#182030"}}>
                               <td style={{...TD,fontSize:11,color:"#64748B",whiteSpace:"nowrap"}}>{o.date}</td>
                               <td style={{...TD,fontSize:11,color:"#94A3B8"}}>{o.par||"—"}</td>
                               <td style={TD}><span style={BDG(o.cat)}>{o.cat}</span><span style={{marginLeft:7,fontWeight:600}}>{o.article}</span></td>
                               <td style={{...TD,fontWeight:700}}>{o.qty} {o.unite}</td>
                               <td style={{...TD,fontWeight:700,color:"#10B981"}}>{fmt(o.total)}</td>
-                              <td style={{...TD,minWidth:150}}><input value={o.description} onChange={e=>SO(p=>p.map(x=>x.id===o.id?{...x,description:e.target.value}:x))} placeholder="Note…" style={{background:"transparent",border:"1px solid #334155",borderRadius:6,color:"#94A3B8",padding:"4px 8px",fontSize:12,width:"100%"}}/></td>
+                              <td style={{...TD,minWidth:150}}><input value={o.description} onChange={e=>SO(p=>p.map(x=>x.id===o.id?{...x,description:e.target.value}:x))} placeholder="Note…" style={{background:"transparent",border:"1px solid #0A3838",borderRadius:6,color:"#94A3B8",padding:"4px 8px",fontSize:12,width:"100%"}}/></td>
                               <td style={{...TD,textAlign:"center",whiteSpace:"nowrap"}}>
-                                {o.statut==="livré"?<div><span style={{background:"#0A2218",color:"#10B981",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>✅ LIVRÉ</span><div style={{fontSize:10,color:"#64748B",marginTop:2}}>{o.livraison_date}</div></div>:<span style={{background:"#0F1F3D",color:"#3B82F6",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>🚚 EN COURS</span>}
+                                {o.statut==="livré"?<div><span style={{background:"#0A2218",color:"#10B981",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>✅ LIVRÉ</span><div style={{fontSize:10,color:"#64748B",marginTop:2}}>{o.livraison_date}</div></div>:<span style={{background:"#0F1F3D",color:"#0EA5A8",padding:"2px 8px",borderRadius:7,fontSize:10,fontWeight:700}}>🚚 EN COURS</span>}
                               </td>
                               <td style={{...TD,textAlign:"center"}}>
                                 <div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap"}}>
                                   {o.statut!=="livré"&&canDeliver(role)&&<button onClick={()=>markD(o.id)} style={BTN("#10B981",{padding:"4px 8px",fontSize:11})}>✅ Livré</button>}
-                                  {canOrder(role)&&<button onClick={()=>openOEdit(o)} style={BTN("#334155",{padding:"4px 8px",fontSize:11})}>✏️</button>}
+                                  {canOrder(role)&&<button onClick={()=>openOEdit(o)} style={BTN("#0A3838",{padding:"4px 8px",fontSize:11})}>✏️</button>}
                                   {canOrder(role)&&<button onClick={()=>setODelConf(o)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:7,color:"#EF4444",padding:"4px 8px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>}
                                 </div>
                               </td>
@@ -2740,7 +2740,7 @@
               </div>
               <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{...INP(),marginBottom:10}}/>
               <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch"}}>
-                {cats.map(cat=><button key={cat} onClick={()=>setPCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${pCat===cat?(CC[cat]||"#3B82F6"):"#334155"}`,background:pCat===cat?(CC[cat]||"#3B82F6")+"25":"transparent",color:pCat===cat?(CC[cat]||"#93C5FD"):"#94A3B8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
+                {cats.map(cat=><button key={cat} onClick={()=>setPCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${pCat===cat?(CC[cat]||"#0EA5A8"):"#0A3838"}`,background:pCat===cat?(CC[cat]||"#0EA5A8")+"25":"transparent",color:pCat===cat?(CC[cat]||"#93C5FD"):"#94A3B8",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{cat}</button>)}
               </div>
               {uCats.filter(cat=>pCat==="Toutes"||cat===pCat).map(cat=>{
                 const ci=pFil.filter(s=>s.cat===cat);
@@ -2757,25 +2757,25 @@
                       const hasO=aOIds.has(item.id);
                       const st=gS(item.stock,item.seuil,item.rupture,hasO);
                       const s=SC[st];
-                      return(<div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&item.stock<item.seuil?"#0A1628":"#1E293B",borderRadius:12,border:`1px solid ${item.rupture?"#A855F740":hasO&&item.stock<item.seuil?"#1D4ED840":st==="alert"?"#EF444430":"#334155"}`,padding:"13px 14px",position:"relative"}}>
+                      return(<div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&item.stock<item.seuil?"#0A1628":"#052020",borderRadius:12,border:`1px solid ${item.rupture?"#A855F740":hasO&&item.stock<item.seuil?"#04525440":st==="alert"?"#EF444430":"#0A3838"}`,padding:"13px 14px",position:"relative"}}>
                         <div style={{position:"absolute",top:12,right:12}}><span style={{background:s.bg,color:s.color,padding:"2px 8px",borderRadius:20,fontSize:9,fontWeight:700}}>{s.icon} {s.label}</span></div>
                         <div style={{fontWeight:800,fontSize:14,color:"#F1F5F9",marginBottom:4,paddingRight:80}}>{item.article}</div>
-                        {hasO&&<div style={{fontSize:10,color:"#3B82F6",marginBottom:6,fontWeight:600}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
+                        {hasO&&<div style={{fontSize:10,color:"#0EA5A8",marginBottom:6,fontWeight:600}}>🚚 {aOByA[item.id]?.reduce((x,o)=>x+o.qty,0)} {item.unite} en transit</div>}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
                           {[["STOCK",item.stock,st==="alert"?"#EF4444":st==="warn"?"#F59E0B":"#E2E8F0"],["SEUIL",item.seuil,"#94A3B8"],["PRIX",fmt(item.prix),"#10B981"]].map(([l,v,c])=>(
-                            <div key={l} style={{background:"#0F172A",borderRadius:8,padding:"7px 4px",textAlign:"center"}}>
+                            <div key={l} style={{background:"#010E0E",borderRadius:8,padding:"7px 4px",textAlign:"center"}}>
                               <div style={{fontSize:12,fontWeight:800,color:c}}>{v}</div>
                               <div style={{fontSize:9,color:"#64748B",fontWeight:600,marginTop:1}}>{l}</div>
                             </div>
                           ))}
                         </div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,background:"#0F172A",borderRadius:8,padding:"9px 12px"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,background:"#010E0E",borderRadius:8,padding:"9px 12px"}}>
                           <span style={{fontSize:12,color:"#94A3B8",fontWeight:600}}>⛔ Rupture centrale</span>
-                          <button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F7":"#334155",border:"none",borderRadius:14,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>{item.rupture?"Oui ✓":"Non"}</button>
+                          <button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F7":"#0A3838",border:"none",borderRadius:14,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>{item.rupture?"Oui ✓":"Non"}</button>
                         </div>
                         <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{...BTN("#334155"),flex:1,fontSize:12,padding:"9px 0"}}>✏️ Modifier</button>
-                          <button onClick={()=>openO(item.id)} style={BTN("#1D4ED8",{fontSize:12,padding:"9px 12px"})}>📦</button>
+                          <button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{...BTN("#0A3838"),flex:1,fontSize:12,padding:"9px 0"}}>✏️ Modifier</button>
+                          <button onClick={()=>openO(item.id)} style={BTN("#045254",{fontSize:12,padding:"9px 12px"})}>📦</button>
                           <button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"9px 12px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
                         </div>
                       </div>);
@@ -2789,12 +2789,12 @@
 
           {/* NAVIGATION BAS (mobile) */}
           {isMobile&&(
-            <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#1E293B",borderTop:"1px solid #334155",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
+            <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#052020",borderTop:"1px solid #0A3838",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom,8px)"}}>
               {TABS.map(([v,icon,label])=>(
                 <button key={v} onClick={()=>goTo(v)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 4px 6px",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
                   <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
-                  <span style={{fontSize:9,fontWeight:700,color:view===v?"#3B82F6":"#64748B",lineHeight:1}}>{label}</span>
-                  {view===v&&<div style={{width:22,height:2,background:"#3B82F6",borderRadius:1,marginTop:2}}/>}
+                  <span style={{fontSize:9,fontWeight:700,color:view===v?"#0EA5A8":"#64748B",lineHeight:1}}>{label}</span>
+                  {view===v&&<div style={{width:22,height:2,background:"#0EA5A8",borderRadius:1,marginTop:2}}/>}
                 </button>
               ))}
             </div>
