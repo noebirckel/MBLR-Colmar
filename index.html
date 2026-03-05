@@ -119,16 +119,16 @@
       };
       return(
         <div style={{
-          minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
-          background:"#080C0C",position:"relative",overflow:"hidden",
-          fontFamily:'"Outfit",sans-serif'
+          minHeight:"100vh",overflowY:"auto",display:"flex",alignItems:"center",justifyContent:"center",
+          background:"#080C0C",position:"relative",
+          fontFamily:'"Outfit",sans-serif',padding:"24px 0"
         }}>
           {/* Cercles décoratifs */}
-          <div style={{position:"absolute",top:"-20%",right:"-10%",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(4,82,84,0.15) 0%,transparent 70%)",pointerEvents:"none"}}/>
-          <div style={{position:"absolute",bottom:"-20%",left:"-10%",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(6,182,184,0.08) 0%,transparent 70%)",pointerEvents:"none"}}/>
+          <div style={{position:"fixed",top:"-20%",right:"-10%",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(4,82,84,0.15) 0%,transparent 70%)",pointerEvents:"none",zIndex:0}}/>
+          <div style={{position:"fixed",bottom:"-20%",left:"-10%",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(6,182,184,0.08) 0%,transparent 70%)",pointerEvents:"none",zIndex:0}}/>
 
           <div style={{
-            width:"100%",maxWidth:400,padding:"0 20px",position:"relative",zIndex:1
+            width:"100%",maxWidth:420,padding:"0 20px",position:"relative",zIndex:1
           }}>
             {/* Logo + titre */}
             <div style={{textAlign:"center",marginBottom:40}}>
