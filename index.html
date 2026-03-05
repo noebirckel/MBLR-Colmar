@@ -77,10 +77,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","parametres","equipe"],
-      commercial:["accueil","commandes","ventes","administratif","cartes"],
-      installateur:["accueil","stock","chantier","cartes"],
-      secretaire:["accueil","commandes","ventes","administratif","cartes"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","parametres","equipe"],
+      commercial:["accueil","commandes","ventes","administratif","cartes","messagerie"],
+      installateur:["accueil","stock","chantier","cartes","messagerie"],
+      secretaire:["accueil","commandes","ventes","administratif","cartes","messagerie"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -145,6 +145,397 @@
       );
     }
 
+
+    // ══════════════════════════════════════
+    // ONGLET MESSAGERIE
+    // ══════════════════════════════════════
+    function MessagerieTab({isMobile, profile, authUser}) {
+      const[channel,setChannel]=useState("general"); // "general" | userId (privé)
+      const[messages,setMessages]=useState([]);
+      const[users,setUsers]=useState([]);
+      const[text,setText]=useState("");
+      const[sending,setSending]=useState(false);
+      const[unread,setUnread]=useState({});
+      const[mention,setMention]=useState(null); // {type:"chantier"|"vente", label}
+      const[showMention,setShowMention]=useState(false);
+      const bottomRef=useRef(null);
+      const inputRef=useRef(null);
+
+      // Load users list
+      useEffect(()=>{
+        sb.from("profiles").select("id,nom,role,actif").then(({data})=>{
+          if(data)setUsers(data.filter(u=>u.id!==authUser?.id&&u.actif!==false));
+        });
+      },[]);
+
+      // Subscribe to messages realtime
+      useEffect(()=>{
+        setMessages([]);
+        // Load existing messages
+        const query=channel==="general"
+          ?sb.from("messages").select("*").eq("channel","general").order("created_at",{ascending:true}).limit(100)
+          :sb.from("messages").select("*").or(`and(channel.eq.${channel},sender_id.eq.${authUser?.id}),and(channel.eq.${authUser?.id},sender_id.eq.${channel})`).order("created_at",{ascending:true}).limit(100);
+        query.then(({data})=>{ if(data)setMessages(data); });
+
+        // Realtime subscription
+        const sub=sb.channel("messages-"+channel)
+          .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
+            const m=payload.new;
+            const isForMe=(m.channel==="general")||(m.channel===authUser?.id&&m.sender_id===channel)||(m.sender_id===authUser?.id&&m.channel===channel);
+            if(isForMe)setMessages(p=>[...p,m]);
+          }).subscribe();
+        return()=>sub.unsubscribe();
+      },[channel,authUser?.id]);
+
+      // Auto scroll to bottom
+      useEffect(()=>{
+        bottomRef.current?.scrollIntoView({behavior:"smooth"});
+      },[messages]);
+
+      const sendMessage=async()=>{
+        if(!text.trim()&&!mention)return;
+        setSending(true);
+        const content=mention?`[${mention.type.toUpperCase()}] ${mention.label}${text?" — "+text:""}`:text;
+        await sb.from("messages").insert({
+          channel: channel,
+          sender_id: authUser?.id,
+          sender_nom: profile?.nom||"Inconnu",
+          sender_role: profile?.role||"",
+          content,
+          mention_type: mention?.type||null,
+          mention_label: mention?.label||null,
+          created_at: new Date().toISOString(),
+        });
+        setText("");setMention(null);setShowMention(false);setSending(false);
+        inputRef.current?.focus();
+      };
+
+      const ROLE_COLORS={administrateur:"#A855F7",commercial:"#3B82F6",installateur:"#10B981",secretaire:"#F59E0B"};
+      const ROLE_ICONS={administrateur:"👑",commercial:"💼",installateur:"🔧",secretaire:"📋"};
+
+      const fmt_time=iso=>{
+        const d=new Date(iso);
+        const now=new Date();
+        const isToday=d.toDateString()===now.toDateString();
+        return isToday?d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+      };
+
+      const currentUserName=channel==="general"?"Canal général":users.find(u=>u.id===channel)?.nom||"Inconnu";
+
+      return(
+        <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"240px 1fr",gap:12,height:isMobile?"auto":"78vh"}}>
+
+          {/* SIDEBAR CANAUX */}
+          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"12px 10px",display:"flex",flexDirection:"column",gap:4,overflowY:"auto"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#64748B",padding:"4px 8px",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.05em"}}>Canaux</div>
+            <button onClick={()=>setChannel("general")} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel==="general"?"#3B82F625":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
+              <span style={{fontSize:16}}>💬</span>
+              <span style={{fontSize:13,fontWeight:700,color:channel==="general"?"#3B82F6":"#94A3B8"}}>Général</span>
+            </button>
+
+            <div style={{fontSize:10,fontWeight:700,color:"#64748B",padding:"12px 8px 4px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Messages privés</div>
+            {users.map(u=>(
+              <button key={u.id} onClick={()=>setChannel(u.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 10px",borderRadius:9,border:"none",background:channel===u.id?"#3B82F625":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:ROLE_COLORS[u.role]||"#334155",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{ROLE_ICONS[u.role]||"👤"}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:channel===u.id?"#3B82F6":"#E2E8F0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.nom}</div>
+                  <div style={{fontSize:10,color:ROLE_COLORS[u.role]||"#64748B"}}>{ROLE_ICONS[u.role]} {u.role}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* ZONE MESSAGES */}
+          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",display:"flex",flexDirection:"column",overflow:"hidden",minHeight:isMobile?"60vh":"auto"}}>
+            {/* Header canal */}
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #334155",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:18}}>{channel==="general"?"💬":"💌"}</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:14,color:"#F1F5F9"}}>{currentUserName}</div>
+                {channel!=="general"&&<div style={{fontSize:10,color:"#64748B"}}>Conversation privée</div>}
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+              {messages.length===0&&<div style={{textAlign:"center",color:"#475569",padding:"40px 0"}}>
+                <div style={{fontSize:40,marginBottom:8}}>💬</div>
+                <div style={{fontWeight:700}}>Aucun message</div>
+                <div style={{fontSize:12,marginTop:4}}>Soyez le premier à écrire !</div>
+              </div>}
+              {messages.map((m,i)=>{
+                const isMe=m.sender_id===authUser?.id;
+                const prevSame=i>0&&messages[i-1].sender_id===m.sender_id;
+                return(
+                  <div key={m.id||i} style={{display:"flex",flexDirection:isMe?"row-reverse":"row",gap:8,alignItems:"flex-end"}}>
+                    {!isMe&&!prevSame&&<div style={{width:28,height:28,borderRadius:"50%",background:ROLE_COLORS[m.sender_role]||"#334155",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{ROLE_ICONS[m.sender_role]||"👤"}</div>}
+                    {!isMe&&prevSame&&<div style={{width:28,flexShrink:0}}/>}
+                    <div style={{maxWidth:"70%"}}>
+                      {!isMe&&!prevSame&&<div style={{fontSize:10,color:ROLE_COLORS[m.sender_role]||"#64748B",fontWeight:700,marginBottom:3,marginLeft:4}}>{m.sender_nom}</div>}
+                      <div style={{background:isMe?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0F172A",borderRadius:isMe?"14px 14px 4px 14px":"14px 14px 14px 4px",padding:"9px 12px",position:"relative"}}>
+                        {m.mention_type&&<div style={{fontSize:10,fontWeight:700,color:"#F59E0B",marginBottom:4,background:"#F59E0B15",borderRadius:5,padding:"2px 6px",display:"inline-block"}}>
+                          {m.mention_type==="chantier"?"🔧":"💰"} {m.mention_label}
+                        </div>}
+                        <div style={{fontSize:13,color:"#E2E8F0",lineHeight:1.4,whiteSpace:"pre-wrap"}}>{m.mention_type?m.content.replace(`[${m.mention_type.toUpperCase()}] ${m.mention_label}${m.content.includes(" — ")?" — ":""}`,""): m.content}</div>
+                        <div style={{fontSize:9,color:isMe?"#93C5FD":"#475569",marginTop:4,textAlign:isMe?"left":"right"}}>{fmt_time(m.created_at)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={bottomRef}/>
+            </div>
+
+            {/* Zone saisie */}
+            <div style={{padding:"12px 14px",borderTop:"1px solid #334155",flexShrink:0}}>
+              {/* Mention sélectionnée */}
+              {mention&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,background:"#F59E0B15",borderRadius:8,padding:"6px 10px"}}>
+                <span style={{fontSize:12,color:"#F59E0B",fontWeight:700}}>{mention.type==="chantier"?"🔧":"💰"} {mention.label}</span>
+                <button onClick={()=>setMention(null)} style={{marginLeft:"auto",background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:14}}>✕</button>
+              </div>}
+
+              <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+                <textarea
+                  ref={inputRef}
+                  value={text}
+                  onChange={e=>setText(e.target.value)}
+                  onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}}}
+                  placeholder="Écrire un message… (Entrée pour envoyer)"
+                  rows={1}
+                  style={{flex:1,background:"#0F172A",border:"1px solid #334155",borderRadius:10,color:"#E2E8F0",padding:"10px 12px",fontSize:13,outline:"none",resize:"none",lineHeight:1.4,maxHeight:100,overflow:"auto",fontFamily:"inherit"}}
+                />
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  <button title="Mentionner un chantier ou une vente" onClick={()=>setShowMention(p=>!p)} style={{background:"#334155",border:"none",borderRadius:8,color:"#94A3B8",width:36,height:36,cursor:"pointer",fontSize:16}}>@</button>
+                  <button onClick={sendMessage} disabled={(!text.trim()&&!mention)||sending} style={{background:(!text.trim()&&!mention)||sending?"#334155":"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:8,color:"#FFF",width:36,height:36,cursor:"pointer",fontSize:16,fontWeight:700}}>↑</button>
+                </div>
+              </div>
+
+              {/* Popup mention */}
+              {showMention&&<div style={{marginTop:8,background:"#0F172A",borderRadius:10,border:"1px solid #334155",padding:10,maxHeight:160,overflowY:"auto"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase"}}>Mentionner…</div>
+                {window._appState?.getChantiers?.()?.filter(ch=>ch.statut!=="termine").slice(0,5).map(ch=>(
+                  <div key={ch.id} onClick={()=>{setMention({type:"chantier",label:ch.client});setShowMention(false);}} style={{padding:"6px 8px",borderRadius:7,cursor:"pointer",fontSize:12,color:"#E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
+                    <span>🔧</span>{ch.client}
+                  </div>
+                ))}
+                {window._appState?.getVentes?.()?.slice(0,5).map(v=>(
+                  <div key={v.id} onClick={()=>{setMention({type:"vente",label:v.client});setShowMention(false);}} style={{padding:"6px 8px",borderRadius:7,cursor:"pointer",fontSize:12,color:"#E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
+                    <span>💰</span>{v.client}
+                  </div>
+                ))}
+              </div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ══════════════════════════════════════
+    // ONGLET STATS (admin)
+    // ══════════════════════════════════════
+    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt}) {
+      const[period,setPeriod]=useState(6); // nb de mois à afficher
+
+      // Calculs CA par mois
+      const caParMois=useMemo(()=>{
+        const months=[];
+        for(let i=period-1;i>=0;i--){
+          const d=new Date();d.setMonth(d.getMonth()-i);
+          const m=String(d.getMonth()+1).padStart(2,"0");
+          const y=String(d.getFullYear());
+          const label=d.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"});
+          const ca=ventes.filter(v=>v.date&&v.date.split("/")[1]===m&&v.date.split("/")[2]===y).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+          const nb=ventes.filter(v=>v.date&&v.date.split("/")[1]===m&&v.date.split("/")[2]===y).length;
+          months.push({label,ca,nb,m,y});
+        }
+        return months;
+      },[ventes,period]);
+
+      const maxCA=Math.max(...caParMois.map(m=>m.ca),1);
+
+      // CA par commercial
+      const caParVendeur=useMemo(()=>{
+        const map={};
+        ventes.forEach(v=>{const k=v.par||"Inconnu";if(!map[k])map[k]={nom:k,ca:0,nb:0};map[k].ca+=Number(v.prix_ht||0);map[k].nb++;});
+        return Object.values(map).sort((a,b)=>b.ca-a.ca);
+      },[ventes]);
+      const maxVendeur=Math.max(...caParVendeur.map(v=>v.ca),1);
+
+      // Chantiers par statut
+      const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#A855F7"},termine:{label:"Terminé",color:"#10B981"}};
+      const chantiersParStatut=Object.entries(STATUTS_CH).map(([k,s])=>({...s,key:k,nb:chantiers.filter(c=>c.statut===k).length}));
+      const totalChantiers=chantiers.length||1;
+
+      // Acomptes
+      const totalAcomptes=acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const totalPaye=acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const totalEnvoy=acomptes.filter(a=>a.statut==="envoye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const totalAttente=acomptes.filter(a=>a.statut==="a_envoyer").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+
+      // Stock valeur
+      const valeurStock=stock.reduce((s,a)=>s+Number(a.stock||0)*Number(a.prix||0),0);
+      const nbAlerts=stock.filter(s=>s.stock<=s.seuil).length;
+
+      // KPIs globaux
+      const caTotal=ventes.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const mM=String(new Date().getMonth()+1).padStart(2,"0");
+      const mY=String(new Date().getFullYear());
+      const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+
+      const Card=({icon,label,value,sub,color})=>(
+        <div style={{background:"#1E293B",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
+          <div style={{fontSize:22,marginBottom:6}}>{icon}</div>
+          <div style={{fontSize:isMobile?16:20,fontWeight:800,color}}>{value}</div>
+          <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>{label}</div>
+          {sub&&<div style={{fontSize:10,color:"#64748B",marginTop:2}}>{sub}</div>}
+        </div>
+      );
+
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📊 Tableau de bord</h2>
+              <p style={{margin:0,fontSize:12,color:"#64748B"}}>Vue globale de l'activité</p>
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              {[3,6,12].map(p=>(
+                <button key={p} onClick={()=>setPeriod(p)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${period===p?"#3B82F6":"#334155"}`,background:period===p?"#3B82F625":"transparent",color:period===p?"#3B82F6":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer"}}>{p} mois</button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+            <Card icon="💶" label="CA total" value={fmt(caTotal)} sub={`${ventes.length} ventes`} color="#10B981"/>
+            <Card icon="📅" label="CA ce mois" value={fmt(caMois)} sub={`${ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).length} ventes`} color="#3B82F6"/>
+            <Card icon="🔧" label="Chantiers actifs" value={chantiers.filter(c=>c.statut!=="termine").length} sub={`${chantiers.filter(c=>c.statut==="termine").length} terminés`} color="#A855F7"/>
+            <Card icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${Math.round(totalAcomptes>0?(totalPaye/totalAcomptes)*100:0)}% du total`} color="#F59E0B"/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
+
+            {/* GRAPHIQUE CA PAR MOIS */}
+            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 CA mensuel</h3>
+              <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,paddingBottom:24,position:"relative"}}>
+                {caParMois.map((m,i)=>{
+                  const h=maxCA>0?Math.round((m.ca/maxCA)*120):0;
+                  const isCurrent=m.m===mM&&m.y===mY;
+                  return(
+                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,height:"100%",justifyContent:"flex-end"}}>
+                      <div title={`${fmt(m.ca)} — ${m.nb} vente(s)`} style={{width:"100%",height:h||2,background:isCurrent?"linear-gradient(180deg,#3B82F6,#1D4ED8)":"#334155",borderRadius:"4px 4px 0 0",minHeight:2,cursor:"default",transition:"height 0.3s"}}/>
+                      <div style={{fontSize:9,color:isCurrent?"#3B82F6":"#475569",fontWeight:isCurrent?700:400,textAlign:"center",lineHeight:1.2,position:"absolute",bottom:0}}>{m.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Légende valeurs */}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+                {caParMois.filter(m=>m.ca>0).slice(-3).map((m,i)=>(
+                  <span key={i} style={{fontSize:10,color:"#64748B"}}>{m.label}: <strong style={{color:"#10B981"}}>{fmt(m.ca)}</strong></span>
+                ))}
+              </div>
+            </div>
+
+            {/* CA PAR COMMERCIAL */}
+            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>👤 CA par commercial</h3>
+              {caParVendeur.length===0?<div style={{textAlign:"center",color:"#475569",padding:"30px 0",fontSize:12}}>Aucune vente enregistrée</div>
+                :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {caParVendeur.map((v,i)=>{
+                    const pct=maxVendeur>0?Math.round((v.ca/maxVendeur)*100):0;
+                    const colors=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444"];
+                    const col=colors[i%colors.length];
+                    return(
+                      <div key={v.nom}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#E2E8F0"}}>{v.nom}</span>
+                          <span style={{fontSize:12,color:col,fontWeight:800}}>{fmt(v.ca)}</span>
+                        </div>
+                        <div style={{background:"#0F172A",borderRadius:6,height:8,overflow:"hidden"}}>
+                          <div style={{height:8,borderRadius:6,width:pct+"%",background:col,transition:"width 0.4s"}}/>
+                        </div>
+                        <div style={{fontSize:10,color:"#475569",marginTop:2}}>{v.nb} vente{v.nb>1?"s":""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              }
+            </div>
+
+            {/* CHANTIERS PAR STATUT */}
+            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>🔧 Chantiers par statut</h3>
+              {chantiers.length===0?<div style={{textAlign:"center",color:"#475569",padding:"30px 0",fontSize:12}}>Aucun chantier</div>
+                :<>
+                  {/* Barre segmentée */}
+                  <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:20,marginBottom:16}}>
+                    {chantiersParStatut.filter(s=>s.nb>0).map(s=>(
+                      <div key={s.key} title={`${s.label}: ${s.nb}`} style={{width:`${(s.nb/totalChantiers)*100}%`,background:s.color,minWidth:s.nb>0?4:0}}/>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {chantiersParStatut.map(s=>(
+                      <div key={s.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+                          <span style={{fontSize:12,color:"#94A3B8"}}>{s.label}</span>
+                        </div>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <span style={{fontSize:13,fontWeight:800,color:s.color}}>{s.nb}</span>
+                          <span style={{fontSize:10,color:"#475569"}}>{Math.round((s.nb/totalChantiers)*100)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              }
+            </div>
+
+            {/* ACOMPTES */}
+            <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 Suivi des acomptes</h3>
+              {/* Barre segmentée */}
+              {totalAcomptes>0&&<>
+                <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:20,marginBottom:12}}>
+                  {[{v:totalPaye,c:"#10B981"},{v:totalEnvoy,c:"#3B82F6"},{v:totalAttente,c:"#F59E0B"}].filter(x=>x.v>0).map((x,i)=>(
+                    <div key={i} style={{width:`${(x.v/totalAcomptes)*100}%`,background:x.c}}/>
+                  ))}
+                </div>
+              </>}
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {[
+                  {label:"✅ Payés",value:totalPaye,color:"#10B981",nb:acomptes.filter(a=>a.statut==="paye").length},
+                  {label:"📨 Envoyés",value:totalEnvoy,color:"#3B82F6",nb:acomptes.filter(a=>a.statut==="envoye").length},
+                  {label:"📤 À envoyer",value:totalAttente,color:"#F59E0B",nb:acomptes.filter(a=>a.statut==="a_envoyer").length},
+                ].map(row=>(
+                  <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:12,color:"#94A3B8"}}>{row.label} <span style={{color:"#475569"}}>({row.nb})</span></span>
+                    <span style={{fontSize:13,fontWeight:800,color:row.color}}>{fmt(row.value)}</span>
+                  </div>
+                ))}
+                <div style={{borderTop:"1px solid #334155",paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#94A3B8"}}>Total</span>
+                  <span style={{fontSize:14,fontWeight:800,color:"#E2E8F0"}}>{fmt(totalAcomptes)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* STOCK */}
+          <div style={{background:"#1E293B",borderRadius:14,border:"1px solid #334155",padding:"16px"}}>
+            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>📦 Stock</h3>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
+              <Card icon="📦" label="Valeur totale stock" value={fmt(valeurStock)} sub={`${stock.length} références`} color="#3B82F6"/>
+              <Card icon="🔴" label="Articles à commander" value={stock.filter(s=>s.stock<=s.seuil&&s.stock>0).length} sub="sous le seuil" color="#EF4444"/>
+              <Card icon="⛔" label="Ruptures" value={stock.filter(s=>s.stock===0).length} sub="stock à zéro" color="#7C3AED"/>
+              <Card icon="✅" label="Articles OK" value={stock.filter(s=>s.stock>s.seuil).length} sub="au-dessus du seuil" color="#10B981"/>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // ══════════════════════════════════════
     // ONGLET CARTES
@@ -1693,7 +2084,9 @@
             const nh=[...newHistItems,...hist];
             setStock(ns);setHist(nh);setChantiersPipeline(updatedChantiers);
             saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes);
-          }
+          },
+          getChantiers:()=>chantiersPipeline,
+          getVentes:()=>ventes
         };
       });
       const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes);};
@@ -1775,6 +2168,8 @@
         ["ventes","💰","Ventes"],
         ["administratif","📄","Administratif"],
         ["cartes","🗺️","Cartes"],
+        ["messagerie","💬","Messagerie"],
+        ["stats","📊","Stats"],
         ["parametres","⚙️","Paramètres"],
         ["equipe","👥","Équipe"],
       ];
@@ -1971,6 +2366,12 @@
 
             {/* ── CARTES ── */}
             {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+
+            {/* ── MESSAGERIE ── */}
+            {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+
+            {/* ── STATS ── */}
+            {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} acomptes={acomptes} stock={stock} fmt={fmt}/>}
 
             {/* ── ÉQUIPE ── */}
             {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
