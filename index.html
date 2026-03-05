@@ -829,33 +829,16 @@
     // ══════════════════════════════════════
     // ONGLET SAV
     // ══════════════════════════════════════
-    function SavTab({isMobile, tickets, setTickets, profile, role}) {
 
-      const STATUTS = {
-        ouvert:           { label:"Ouvert",               color:"#F59E0B", bg:"rgba(245,158,11,0.1)",   icon:"🔴", next:"marque_contactee" },
-        marque_contactee: { label:"Marque contactée",     color:"#3B82F6", bg:"rgba(59,130,246,0.1)",  icon:"📞", next:null },
-        regle_nous:       { label:"Réglé par nous",       color:"#10B981", bg:"rgba(16,185,129,0.1)",  icon:"✅", next:null },
-        regle_marque:     { label:"Réglé par la marque",  color:"#8B5CF6", bg:"rgba(139,92,246,0.1)",  icon:"🏭", next:null },
-        borne_changee:    { label:"Borne changée",        color:"#60A5FA", bg:"rgba(96,165,250,0.1)",  icon:"🔄", next:null },
-      };
+    // Contacts SAV par défaut
+    const DEFAULT_SAV_CONTACTS = [
+      { id:1, marque:"Ohme",    tel:"01.89.71.90.21",       site:"" },
+      { id:2, marque:"Easee",   tel:"00.33.1.87.21.47.05",  site:"" },
+      { id:3, marque:"Smappee", tel:"00.32.56.38.02.56",    site:"" },
+    ];
 
-      const STATUTS_ACTIFS  = ["ouvert","marque_contactee"];
-      const STATUTS_RESOLUS = ["regle_nous","regle_marque","borne_changee"];
-
-      const emptyForm = () => ({
-        client:"", num_serie:"", marque:"", modele:"",
-        description:"", statut:"ouvert", notes:"",
-        date_ouverture: new Date().toLocaleDateString("fr-FR"),
-        date_resolution:"", par: profile?.nom||"",
-      });
-
-      const[filter,setFilter]   = useState("actifs");   // actifs | resolus | tous
-      const[search,setSearch]   = useState("");
-      const[modal,setModal]     = useState(null);        // ticket en édition
-      const[newForm,setNewForm] = useState(null);        // formulaire nouveau ticket
-      const[delConf,setDelConf] = useState(null);
-      const[statutPop,setStatutPop] = useState(null);   // id ticket dont on change le statut
-
+    // TicketForm OUTSIDE SavTab to avoid re-mount on every keystroke
+    function TicketForm({isMobile, form, onChange, onSave, onCancel, title, STATUTS, STATUTS_RESOLUS, stock}) {
       const L = ({c}) => <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",
         marginBottom:7,textTransform:"uppercase",letterSpacing:"0.08em"}}>{c}</label>;
       const INP = (e={}) => ({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,
@@ -864,8 +847,6 @@
       const BTN = (bg,e={}) => ({background:bg,border:"none",borderRadius:10,color:"#FFF",
         padding:"10px 16px",cursor:"pointer",fontWeight:700,fontSize:13,
         fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",...e});
-      const OVL = {position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:999,
-        display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",backdropFilter:"blur(4px)"};
       const MBX = isMobile
         ? {background:"#0D1828",borderRadius:"20px 20px 0 0",padding:"8px 20px 36px",
            width:"100%",border:"1px solid #1B2D4F",maxHeight:"94vh",overflowY:"auto"}
@@ -876,26 +857,144 @@
         ? <div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"10px auto 18px"}}/>
         : null;
 
-      const saveTicket = (form) => {
-        if(!form.client||!form.num_serie||!form.description) return false;
-        const entry = {...form, id: form.id||Date.now()};
-        setTickets(p => form.id ? p.map(t=>t.id===form.id?entry:t) : [{...entry,id:Date.now()},...p]);
-        return true;
-      };
+      const valid = form.client && form.num_serie && form.description;
 
+      return (
+        <div style={MBX} onClick={e=>e.stopPropagation()}>
+          <Handle/>
+          <h3 style={{margin:"0 0 20px",fontWeight:800,fontSize:17,color:"#F0F6FF"}}>{title}</h3>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14}}>
+            <div><L c="Nom du client"/>
+              <input value={form.client} onChange={e=>onChange("client",e.target.value)}
+                placeholder="Société ou particulier" style={INP()}/></div>
+            <div><L c="N° de série"/>
+              <input value={form.num_serie} onChange={e=>onChange("num_serie",e.target.value)}
+                placeholder="Ex: SN-2024-XXXXX" style={INP()}/></div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14}}>
+            <div><L c="Marque de la borne"/>
+              <input value={form.marque} onChange={e=>onChange("marque",e.target.value)}
+                placeholder="Ex: Wallbox, Easee…" style={INP()}/></div>
+            <div><L c="Modèle"/>
+              <input value={form.modele} onChange={e=>onChange("modele",e.target.value)}
+                placeholder="Ex: Copper SB" style={INP()}/></div>
+          </div>
+
+          <div style={{marginBottom:14}}><L c="Descriptif du problème"/>
+            <textarea value={form.description} onChange={e=>onChange("description",e.target.value)}
+              placeholder="Décrivez le problème rencontré par le client…"
+              rows={4} style={{...INP(),resize:"vertical",minHeight:90,lineHeight:1.5}}/></div>
+
+          <div style={{marginBottom:14}}><L c="Statut"/>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {Object.entries(STATUTS).map(([k,s])=>(
+                <button key={k} onClick={()=>onChange("statut",k)} style={{
+                  padding:"7px 12px",borderRadius:20,
+                  border:`1px solid ${form.statut===k?s.color:"#1B2D4F"}`,
+                  background:form.statut===k?s.bg:"transparent",
+                  color:form.statut===k?s.color:"#4A6A9E",
+                  cursor:"pointer",fontSize:12,fontWeight:700,
+                  fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"
+                }}>{s.icon} {s.label}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:14}}><L c="Notes internes (optionnel)"/>
+            <textarea value={form.notes||""} onChange={e=>onChange("notes",e.target.value)}
+              placeholder="Suivi, contacts, références dossier…"
+              rows={2} style={{...INP(),resize:"vertical",lineHeight:1.5}}/></div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
+            <div><L c="Date d'ouverture"/>
+              <input value={form.date_ouverture} onChange={e=>onChange("date_ouverture",e.target.value)}
+                style={INP()}/></div>
+            <div><L c="Ouvert par"/>
+              <input value={form.par} onChange={e=>onChange("par",e.target.value)}
+                style={INP()}/></div>
+          </div>
+
+          {!valid&&<div style={{fontSize:12,color:"#F59E0B",marginBottom:12,padding:"8px 12px",
+            background:"rgba(245,158,11,0.08)",borderRadius:8}}>
+            ⚠️ Client, n° de série et description sont obligatoires
+          </div>}
+
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={onCancel} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+            <button onClick={()=>valid&&onSave()} disabled={!valid} style={BTN(!valid
+              ?"#112038":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px",
+              boxShadow:!valid?"none":"0 4px 16px rgba(59,130,246,0.3)"})}>
+              💾 Enregistrer
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function SavTab({isMobile, tickets, setTickets, profile, role}) {
+
+      const STATUTS = {
+        ouvert:           { label:"Ouvert",               color:"#F59E0B", bg:"rgba(245,158,11,0.1)",   icon:"🔴" },
+        marque_contactee: { label:"Marque contactée",     color:"#3B82F6", bg:"rgba(59,130,246,0.1)",  icon:"📞" },
+        regle_nous:       { label:"Réglé par nous",       color:"#10B981", bg:"rgba(16,185,129,0.1)",  icon:"✅" },
+        regle_marque:     { label:"Réglé par la marque",  color:"#8B5CF6", bg:"rgba(139,92,246,0.1)",  icon:"🏭" },
+        borne_changee:    { label:"Borne changée",        color:"#60A5FA", bg:"rgba(96,165,250,0.1)",  icon:"🔄" },
+      };
+      const STATUTS_ACTIFS  = ["ouvert","marque_contactee"];
+      const STATUTS_RESOLUS = ["regle_nous","regle_marque","borne_changee"];
+
+      const emptyForm = () => ({
+        client:"", num_serie:"", marque:"", modele:"",
+        description:"", statut:"ouvert", notes:"",
+        date_ouverture: new Date().toLocaleDateString("fr-FR"),
+        date_resolution:"", par: profile?.nom||"",
+      });
+
+      const[filter,setFilter]     = useState("actifs");
+      const[search,setSearch]     = useState("");
+      const[newForm,setNewForm]   = useState(null);
+      const[editForm,setEditForm] = useState(null);
+      const[delConf,setDelConf]   = useState(null);
+      const[statutPop,setStatutPop] = useState(null);
+      const[tabView,setTabView]   = useState("tickets"); // tickets | contacts
+      const[contacts,setContacts] = useState(()=>{
+        try{ const s=localStorage.getItem("sav_contacts"); return s?JSON.parse(s):DEFAULT_SAV_CONTACTS; }
+        catch(e){ return DEFAULT_SAV_CONTACTS; }
+      });
+      const[editContact,setEditContact] = useState(null);  // {id,marque,tel,site} en cours d'édition
+      const[newContact,setNewContact]   = useState(null);
+
+      // Persist contacts
+      useEffect(()=>{
+        try{ localStorage.setItem("sav_contacts", JSON.stringify(contacts)); }catch(e){}
+      },[contacts]);
+
+      const saveNewTicket = () => {
+        if(!newForm||!newForm.client||!newForm.num_serie||!newForm.description) return;
+        setTickets(p=>[{...newForm, id:Date.now()},...p]);
+        setNewForm(null);
+      };
+      const saveEditTicket = () => {
+        if(!editForm||!editForm.client||!editForm.num_serie||!editForm.description) return;
+        setTickets(p=>p.map(t=>t.id===editForm.id?editForm:t));
+        setEditForm(null);
+      };
       const changeStatut = (ticket, statut) => {
         const patch = {statut};
         if(STATUTS_RESOLUS.includes(statut)) patch.date_resolution = new Date().toLocaleDateString("fr-FR");
-        setTickets(p => p.map(t => t.id===ticket.id ? {...t,...patch} : t));
+        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,...patch}:t));
         setStatutPop(null);
       };
 
       const filtered = tickets
         .filter(t => filter==="actifs"  ? STATUTS_ACTIFS.includes(t.statut)
                    : filter==="resolus" ? STATUTS_RESOLUS.includes(t.statut) : true)
-        .filter(t => !search || t.client.toLowerCase().includes(search.toLowerCase())
-                  || t.num_serie.toLowerCase().includes(search.toLowerCase())
-                  || t.description.toLowerCase().includes(search.toLowerCase()));
+        .filter(t => !search
+          || (t.client||"").toLowerCase().includes(search.toLowerCase())
+          || (t.num_serie||"").toLowerCase().includes(search.toLowerCase())
+          || (t.description||"").toLowerCase().includes(search.toLowerCase()));
 
       const kpis = {
         total:   tickets.length,
@@ -904,142 +1003,55 @@
         change:  tickets.filter(t=>t.statut==="borne_changee").length,
       };
 
-      const TicketForm = ({form, setForm, onSave, onCancel, title}) => (
-        <div style={MBX} onClick={e=>e.stopPropagation()}>
-          <Handle/>
-          <h3 style={{margin:"0 0 20px",fontWeight:800,fontSize:17,color:"#F0F6FF"}}>{title}</h3>
-
-          {/* Client + N° série */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14}}>
-            <div>
-              <L c="Nom du client"/>
-              <input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))}
-                placeholder="Société ou particulier" style={INP()}/>
-            </div>
-            <div>
-              <L c="N° de série"/>
-              <input value={form.num_serie} onChange={e=>setForm(p=>({...p,num_serie:e.target.value}))}
-                placeholder="Ex: SN-2024-XXXXX" style={INP()}/>
-            </div>
-          </div>
-
-          {/* Marque + modèle */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:14}}>
-            <div>
-              <L c="Marque de la borne"/>
-              <input value={form.marque} onChange={e=>setForm(p=>({...p,marque:e.target.value}))}
-                placeholder="Ex: Wallbox, Legrand…" style={INP()}/>
-            </div>
-            <div>
-              <L c="Modèle"/>
-              <input value={form.modele} onChange={e=>setForm(p=>({...p,modele:e.target.value}))}
-                placeholder="Ex: Copper SB" style={INP()}/>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div style={{marginBottom:14}}>
-            <L c="Descriptif du problème"/>
-            <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))}
-              placeholder="Décrivez le problème rencontré par le client…"
-              rows={4} style={{...INP(),resize:"vertical",minHeight:90,lineHeight:1.5}}/>
-          </div>
-
-          {/* Statut */}
-          <div style={{marginBottom:14}}>
-            <L c="Statut"/>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {Object.entries(STATUTS).map(([k,s])=>(
-                <button key={k} onClick={()=>setForm(p=>({...p,statut:k,
-                  date_resolution: STATUTS_RESOLUS.includes(k)&&!STATUTS_RESOLUS.includes(p.statut)
-                    ? new Date().toLocaleDateString("fr-FR") : p.date_resolution
-                }))} style={{
-                  padding:"7px 12px",borderRadius:20,border:`1px solid ${form.statut===k?s.color:"#1B2D4F"}`,
-                  background:form.statut===k?s.bg:"transparent",color:form.statut===k?s.color:"#4A6A9E",
-                  cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',
-                  transition:"all 0.15s"
-                }}>{s.icon} {s.label}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Notes internes */}
-          <div style={{marginBottom:14}}>
-            <L c="Notes internes (optionnel)"/>
-            <textarea value={form.notes||""} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
-              placeholder="Suivi, contacts, références dossier…"
-              rows={2} style={{...INP(),resize:"vertical",lineHeight:1.5}}/>
-          </div>
-
-          {/* Date + ouvert par */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
-            <div>
-              <L c="Date d'ouverture"/>
-              <input value={form.date_ouverture} onChange={e=>setForm(p=>({...p,date_ouverture:e.target.value}))}
-                style={INP()}/>
-            </div>
-            <div>
-              <L c="Ouvert par"/>
-              <input value={form.par} onChange={e=>setForm(p=>({...p,par:e.target.value}))}
-                style={INP()}/>
-            </div>
-          </div>
-
-          {(!form.client||!form.num_serie||!form.description)&&
-            <div style={{fontSize:12,color:"#F59E0B",marginBottom:12,padding:"8px 12px",
-              background:"rgba(245,158,11,0.08)",borderRadius:8}}>
-              ⚠️ Client, n° de série et description sont obligatoires
-            </div>}
-
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={onCancel} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-            <button onClick={()=>{if(onSave(form))onCancel();}}
-              disabled={!form.client||!form.num_serie||!form.description}
-              style={BTN(!form.client||!form.num_serie||!form.description
-                ?"#112038":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px",
-                boxShadow:!form.client||!form.num_serie||!form.description?"none":"0 4px 16px rgba(59,130,246,0.3)"})}>
-              💾 Enregistrer
-            </button>
-          </div>
-        </div>
-      );
+      const OVL = {position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:999,
+        display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
+        backdropFilter:"blur(4px)"};
+      const BTN_SM = (bg) => ({background:bg,border:"none",borderRadius:8,color:"#FFF",
+        padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"});
+      const INP_SM = {background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,
+        color:"#F0F6FF",padding:"9px 12px",fontSize:13,width:"100%",outline:"none",
+        boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'};
 
       return (
         <div>
-          {/* MODAL NOUVEAU TICKET */}
-          {newForm && (
+          {/* MODAL NOUVEAU */}
+          {newForm&&(
             <div style={OVL} onClick={()=>setNewForm(null)}>
-              <TicketForm form={newForm} setForm={setNewForm}
+              <TicketForm isMobile={isMobile} form={newForm}
+                onChange={(k,v)=>setNewForm(p=>({...p,[k]:v}))}
+                onSave={saveNewTicket} onCancel={()=>setNewForm(null)}
                 title="🛠️ Nouveau ticket SAV"
-                onSave={f=>{const ok=saveTicket(f);return ok;}}
-                onCancel={()=>setNewForm(null)}/>
+                STATUTS={STATUTS} STATUTS_RESOLUS={STATUTS_RESOLUS}/>
             </div>
           )}
 
           {/* MODAL ÉDITION */}
-          {modal && (
-            <div style={OVL} onClick={()=>setModal(null)}>
-              <TicketForm form={modal} setForm={setModal}
+          {editForm&&(
+            <div style={OVL} onClick={()=>setEditForm(null)}>
+              <TicketForm isMobile={isMobile} form={editForm}
+                onChange={(k,v)=>setEditForm(p=>({...p,[k]:v}))}
+                onSave={saveEditTicket} onCancel={()=>setEditForm(null)}
                 title="✏️ Modifier le ticket"
-                onSave={f=>{const ok=saveTicket(f);return ok;}}
-                onCancel={()=>setModal(null)}/>
+                STATUTS={STATUTS} STATUTS_RESOLUS={STATUTS_RESOLUS}/>
             </div>
           )}
 
           {/* MODAL SUPPRESSION */}
-          {delConf && (
+          {delConf&&(
             <div style={OVL} onClick={()=>setDelConf(null)}>
-              <div style={{...MBX,maxWidth:360,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-                <Handle/>
+              <div style={{background:"#0D1828",borderRadius:18,padding:28,width:340,maxWidth:"94vw",
+                border:"1px solid #1B2D4F",textAlign:"center",boxShadow:"0 24px 60px rgba(0,0,0,0.6)"}}
+                onClick={e=>e.stopPropagation()}>
                 <div style={{fontSize:48,marginBottom:12}}>🗑️</div>
                 <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer ce ticket ?</h3>
                 <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 24px"}}>
                   <strong style={{color:"#F0F6FF"}}>{delConf.client}</strong> — {delConf.num_serie}
                 </p>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+                  <button onClick={()=>setDelConf(null)} style={{...BTN_SM("#1B2D4F"),flex:1,padding:"10px"}}>Annuler</button>
                   <button onClick={()=>{setTickets(p=>p.filter(t=>t.id!==delConf.id));setDelConf(null);}}
-                    style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+                    style={{...BTN_SM("#EF4444"),flex:1,padding:"10px"}}>Supprimer</button>
                 </div>
               </div>
             </div>
@@ -1053,95 +1065,221 @@
                 🛠️ Suivi SAV
               </h2>
               <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>
-                {kpis.actifs} ticket(s) en cours · {kpis.resolus} résolus
+                {kpis.actifs} en cours · {kpis.resolus} résolus
               </p>
             </div>
-            <button onClick={()=>setNewForm(emptyForm())}
-              style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{
-                padding:"10px 18px",boxShadow:"0 4px 16px rgba(59,130,246,0.3)"})}>
-              ➕ Nouveau ticket
-            </button>
-          </div>
-
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",
-            gap:10,marginBottom:18}}>
-            {[
-              {icon:"🎫", label:"Total tickets",   val:kpis.total,   color:"#3B82F6"},
-              {icon:"🔴", label:"En cours",         val:kpis.actifs,  color:"#F59E0B"},
-              {icon:"✅", label:"Résolus",          val:kpis.resolus, color:"#10B981"},
-              {icon:"🔄", label:"Bornes changées",  val:kpis.change,  color:"#8B5CF6"},
-            ].map(k=>(
-              <div key={k.label} style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",
-                border:`1px solid ${k.color}20`,borderLeft:`3px solid ${k.color}`}}>
-                <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
-                <div style={{fontSize:22,fontWeight:800,color:k.color}}>{k.val}</div>
-                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.label}</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {/* Onglets tickets / contacts */}
+              <div style={{display:"flex",background:"#0D1828",borderRadius:10,
+                border:"1px solid #1B2D4F",overflow:"hidden"}}>
+                {[["tickets","🎫 Tickets"],["contacts","📞 Contacts SAV"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setTabView(k)} style={{
+                    padding:"8px 14px",background:tabView===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"transparent",
+                    border:"none",color:tabView===k?"#FFF":"#4A6A9E",cursor:"pointer",
+                    fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>{l}</button>
+                ))}
               </div>
-            ))}
+              {tabView==="tickets"&&(
+                <button onClick={()=>setNewForm(emptyForm())}
+                  style={{...BTN_SM("linear-gradient(135deg,#3B82F6,#1D4ED8)"),
+                    padding:"9px 16px",boxShadow:"0 4px 14px rgba(59,130,246,0.3)"}}>
+                  ➕ Nouveau ticket
+                </button>
+              )}
+              {tabView==="contacts"&&role==="administrateur"&&(
+                <button onClick={()=>setNewContact({id:Date.now(),marque:"",tel:"",site:""})}
+                  style={{...BTN_SM("linear-gradient(135deg,#3B82F6,#1D4ED8)"),
+                    padding:"9px 16px",boxShadow:"0 4px 14px rgba(59,130,246,0.3)"}}>
+                  ➕ Ajouter contact
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* FILTRES + RECHERCHE */}
-          <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{display:"flex",background:"#0D1828",borderRadius:10,
-              border:"1px solid #1B2D4F",overflow:"hidden"}}>
-              {[["actifs","🔴 En cours"],["resolus","✅ Résolus"],["tous","Tous"]].map(([k,l])=>(
-                <button key={k} onClick={()=>setFilter(k)} style={{
-                  padding:"8px 14px",background:filter===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"transparent",
-                  border:"none",color:filter===k?"#FFF":"#4A6A9E",cursor:"pointer",
-                  fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>{l}
-                  <span style={{marginLeft:5,background:filter===k?"rgba(255,255,255,0.2)":
-                    "#1B2D4F",borderRadius:10,padding:"1px 6px",fontSize:10}}>
-                    {k==="actifs"?kpis.actifs:k==="resolus"?kpis.resolus:kpis.total}
-                  </span>
-                </button>
+          {/* ── VUE CONTACTS SAV ── */}
+          {tabView==="contacts"&&(
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+                {[...(newContact?[newContact]:[]),...contacts].map((ct,i)=>{
+                  const isNew = newContact&&ct.id===newContact.id;
+                  const isEdit = editContact&&ct.id===editContact.id;
+                  const display = isNew ? newContact : (isEdit ? editContact : ct);
+
+                  return (
+                    <div key={ct.id} style={{background:"#0D1828",borderRadius:14,
+                      border:`1px solid ${isEdit||isNew?"#3B82F6":"#1B2D4F"}`,padding:"18px 20px",
+                      boxShadow:isEdit||isNew?"0 0 0 1px rgba(59,130,246,0.15)":"none"}}>
+
+                      {(isEdit||isNew)?(
+                        <>
+                          <div style={{marginBottom:10}}>
+                            <label style={{...{fontSize:10,fontWeight:700,color:"#4A6A9E",
+                              display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}}>
+                              Marque</label>
+                            <input value={display.marque}
+                              onChange={e=>{const v=e.target.value;isNew?setNewContact(p=>({...p,marque:v})):setEditContact(p=>({...p,marque:v}));}}
+                              placeholder="Ex: Wallbox" style={INP_SM}/>
+                          </div>
+                          <div style={{marginBottom:10}}>
+                            <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",
+                              display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                              Téléphone SAV</label>
+                            <input value={display.tel}
+                              onChange={e=>{const v=e.target.value;isNew?setNewContact(p=>({...p,tel:v})):setEditContact(p=>({...p,tel:v}));}}
+                              placeholder="Ex: 01.23.45.67.89" style={INP_SM}/>
+                          </div>
+                          <div style={{marginBottom:14}}>
+                            <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",
+                              display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                              Site / Email (optionnel)</label>
+                            <input value={display.site||""}
+                              onChange={e=>{const v=e.target.value;isNew?setNewContact(p=>({...p,site:v})):setEditContact(p=>({...p,site:v}));}}
+                              placeholder="Ex: support@marque.com" style={INP_SM}/>
+                          </div>
+                          <div style={{display:"flex",gap:6}}>
+                            <button onClick={()=>{isNew?setNewContact(null):setEditContact(null);}}
+                              style={{...BTN_SM("#1B2D4F"),flex:1}}>Annuler</button>
+                            <button onClick={()=>{
+                              if(!display.marque||!display.tel)return;
+                              if(isNew){setContacts(p=>[...p,{...newContact}]);setNewContact(null);}
+                              else{setContacts(p=>p.map(c=>c.id===editContact.id?editContact:c));setEditContact(null);}
+                            }} style={{...BTN_SM("linear-gradient(135deg,#3B82F6,#1D4ED8)"),flex:2}}>
+                              💾 Sauvegarder
+                            </button>
+                          </div>
+                        </>
+                      ):(
+                        <>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10}}>
+                              <div style={{width:42,height:42,borderRadius:10,
+                                background:"linear-gradient(135deg,#1B2D4F,#112038)",
+                                border:"1px solid #1B2D4F",display:"flex",alignItems:"center",
+                                justifyContent:"center",fontSize:20}}>⚡</div>
+                              <div>
+                                <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{ct.marque}</div>
+                                <div style={{fontSize:11,color:"#4A6A9E"}}>Service après-vente</div>
+                              </div>
+                            </div>
+                            {role==="administrateur"&&(
+                              <div style={{display:"flex",gap:5}}>
+                                <button onClick={()=>setEditContact({...ct})}
+                                  style={{...BTN_SM("#112038"),border:"1px solid #1B2D4F",color:"#7B96C8"}}>✏️</button>
+                                <button onClick={()=>setContacts(p=>p.filter(c=>c.id!==ct.id))}
+                                  style={{...BTN_SM("rgba(239,68,68,0.08)"),border:"1px solid rgba(239,68,68,0.2)",color:"#EF4444"}}>🗑️</button>
+                              </div>
+                            )}
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            <a href={`tel:${ct.tel.replace(/\./g,"")}`} style={{
+                              display:"flex",alignItems:"center",gap:10,
+                              background:"rgba(59,130,246,0.08)",borderRadius:10,
+                              padding:"10px 14px",textDecoration:"none",
+                              border:"1px solid rgba(59,130,246,0.15)"}}>
+                              <span style={{fontSize:18}}>📞</span>
+                              <div>
+                                <div style={{fontSize:10,color:"#4A6A9E",fontWeight:600,
+                                  textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Téléphone</div>
+                                <div style={{fontSize:15,fontWeight:800,color:"#3B82F6",
+                                  fontFamily:"JetBrains Mono,monospace",letterSpacing:"0.05em"}}>{ct.tel}</div>
+                              </div>
+                            </a>
+                            {ct.site&&(
+                              <div style={{display:"flex",alignItems:"center",gap:10,
+                                background:"#070D1A",borderRadius:10,padding:"10px 14px",
+                                border:"1px solid #1B2D4F"}}>
+                                <span style={{fontSize:18}}>🌐</span>
+                                <div>
+                                  <div style={{fontSize:10,color:"#4A6A9E",fontWeight:600,
+                                    textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Contact</div>
+                                  <div style={{fontSize:13,color:"#7B96C8"}}>{ct.site}</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── VUE TICKETS ── */}
+          {tabView==="tickets"&&(<>
+            {/* KPIs */}
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",
+              gap:10,marginBottom:18}}>
+              {[
+                {icon:"🎫",label:"Total",      val:kpis.total,   color:"#3B82F6"},
+                {icon:"🔴",label:"En cours",   val:kpis.actifs,  color:"#F59E0B"},
+                {icon:"✅",label:"Résolus",    val:kpis.resolus, color:"#10B981"},
+                {icon:"🔄",label:"Borne changée",val:kpis.change,color:"#8B5CF6"},
+              ].map(k=>(
+                <div key={k.label} style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",
+                  border:`1px solid ${k.color}20`,borderLeft:`3px solid ${k.color}`}}>
+                  <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
+                  <div style={{fontSize:22,fontWeight:800,color:k.color}}>{k.val}</div>
+                  <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.label}</div>
+                </div>
               ))}
             </div>
-            <input value={search} onChange={e=>setSearch(e.target.value)}
-              placeholder="🔍 Rechercher client, n° série…"
-              style={{...INP(),flex:1,minWidth:180}}/>
-          </div>
 
-          {/* LISTE TICKETS */}
-          {filtered.length===0
-            ? <div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
+            {/* Filtres + recherche */}
+            <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{display:"flex",background:"#0D1828",borderRadius:10,
+                border:"1px solid #1B2D4F",overflow:"hidden"}}>
+                {[["actifs","🔴 En cours"],["resolus","✅ Résolus"],["tous","Tous"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setFilter(k)} style={{
+                    padding:"8px 14px",
+                    background:filter===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"transparent",
+                    border:"none",color:filter===k?"#FFF":"#4A6A9E",cursor:"pointer",
+                    fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                    {l} <span style={{marginLeft:4,background:filter===k?"rgba(255,255,255,0.2)":"#1B2D4F",
+                      borderRadius:10,padding:"1px 6px",fontSize:10}}>
+                      {k==="actifs"?kpis.actifs:k==="resolus"?kpis.resolus:kpis.total}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="🔍 Client, n° série…"
+                style={{flex:1,minWidth:180,background:"#0D1828",border:"1px solid #1B2D4F",
+                  borderRadius:10,color:"#F0F6FF",padding:"9px 14px",fontSize:13,outline:"none",
+                  boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+            </div>
+
+            {/* Liste tickets */}
+            {filtered.length===0
+              ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
                 <div style={{fontSize:52,marginBottom:12}}>🛠️</div>
                 <div style={{fontWeight:800,fontSize:16,color:"#4A6A9E",marginBottom:6}}>
-                  {search?"Aucun résultat":"Aucun ticket"}
-                </div>
+                  {search?"Aucun résultat":"Aucun ticket"}</div>
                 <div style={{fontSize:13}}>
-                  {search?"Modifiez votre recherche":"Créez votre premier ticket SAV"}
-                </div>
+                  {search?"Modifiez votre recherche":"Créez votre premier ticket SAV"}</div>
               </div>
-            : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {filtered.map(t => {
-                  const S = STATUTS[t.statut]||STATUTS.ouvert;
-                  const isResolu = STATUTS_RESOLUS.includes(t.statut);
-                  return (
-                    <div key={t.id} style={{
-                      background:"#0D1828",borderRadius:14,
-                      border:`1px solid ${isResolu?"#1B2D4F":S.color+"40"}`,
-                      padding:"16px 18px",
-                      boxShadow:isResolu?"none":`0 0 0 1px ${S.color}10`
-                    }}>
+              :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {filtered.map(t=>{
+                  const S=STATUTS[t.statut]||STATUTS.ouvert;
+                  const isResolu=STATUTS_RESOLUS.includes(t.statut);
+                  return(
+                    <div key={t.id} style={{background:"#0D1828",borderRadius:14,
+                      border:`1px solid ${isResolu?"#1B2D4F":S.color+"40"}`,padding:"16px 18px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",
                         alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
-
-                        {/* Infos principales */}
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
                             <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{t.client}</span>
-                            {/* Badge statut cliquable */}
                             <div style={{position:"relative"}}>
                               <button onClick={()=>setStatutPop(statutPop===t.id?null:t.id)} style={{
                                 background:S.bg,color:S.color,border:`1px solid ${S.color}50`,
                                 borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,
-                                fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",
-                                alignItems:"center",gap:4}}>
+                                fontWeight:700,fontFamily:'"Outfit",sans-serif',
+                                display:"flex",alignItems:"center",gap:4}}>
                                 {S.icon} {S.label} ▾
                               </button>
-                              {/* Dropdown changement statut */}
-                              {statutPop===t.id && (
+                              {statutPop===t.id&&(
                                 <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,
                                   background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:12,
                                   padding:8,zIndex:100,minWidth:220,
@@ -1150,61 +1288,45 @@
                                     <button key={k} onClick={()=>changeStatut(t,k)} style={{
                                       display:"flex",alignItems:"center",gap:8,width:"100%",
                                       padding:"9px 12px",background:t.statut===k?s.bg:"transparent",
-                                      border:"none",borderRadius:8,cursor:"pointer",textAlign:"left",
+                                      border:"none",borderRadius:8,cursor:"pointer",
                                       fontFamily:'"Outfit",sans-serif'}}>
                                       <span style={{fontSize:15}}>{s.icon}</span>
                                       <span style={{fontSize:12,fontWeight:700,
                                         color:t.statut===k?s.color:"#7B96C8"}}>{s.label}</span>
-                                      {t.statut===k&&<span style={{marginLeft:"auto",
-                                        fontSize:10,color:s.color}}>✓</span>}
+                                      {t.statut===k&&<span style={{marginLeft:"auto",fontSize:10,color:s.color}}>✓</span>}
                                     </button>
                                   ))}
                                 </div>
                               )}
                             </div>
                           </div>
-
-                          {/* N° série + marque */}
                           <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:8}}>
-                            <span style={{fontSize:12,color:"#4A6A9E",display:"flex",
-                              alignItems:"center",gap:4}}>
-                              <span style={{color:"#2E4D82"}}>🔖</span>
-                              <span style={{fontWeight:600,color:"#7B96C8",
+                            <span style={{fontSize:12,color:"#4A6A9E",display:"flex",alignItems:"center",gap:4}}>
+                              🔖 <span style={{fontWeight:600,color:"#7B96C8",
                                 fontFamily:"JetBrains Mono,monospace"}}>{t.num_serie}</span>
                             </span>
                             {t.marque&&<span style={{fontSize:12,color:"#4A6A9E"}}>
                               ⚡ {t.marque}{t.modele?" — "+t.modele:""}
                             </span>}
                           </div>
-
-                          {/* Description */}
                           <div style={{fontSize:13,color:"#A8C4E8",lineHeight:1.5,
-                            marginBottom:t.notes?8:0,
-                            padding:"10px 12px",background:"#070D1A",borderRadius:8}}>
+                            padding:"10px 12px",background:"#070D1A",borderRadius:8,marginBottom:t.notes?8:0}}>
                             {t.description}
                           </div>
-
-                          {/* Notes */}
                           {t.notes&&<div style={{fontSize:12,color:"#4A6A9E",fontStyle:"italic",
                             marginTop:6,padding:"7px 10px",background:"rgba(59,130,246,0.05)",
                             borderRadius:7,borderLeft:"2px solid #1B2D4F"}}>
                             📝 {t.notes}
                           </div>}
                         </div>
-
-                        {/* Actions */}
-                        <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,
-                          alignItems:"flex-end"}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0,alignItems:"flex-end"}}>
                           <div style={{fontSize:10,color:"#2E4D82",textAlign:"right"}}>
-                            📅 {t.date_ouverture}
-                            {t.par&&<span> · {t.par}</span>}
+                            📅 {t.date_ouverture}{t.par&&<span> · {t.par}</span>}
                           </div>
                           {isResolu&&t.date_resolution&&
-                            <div style={{fontSize:10,color:"#10B981"}}>
-                              ✅ Résolu le {t.date_resolution}
-                            </div>}
+                            <div style={{fontSize:10,color:"#10B981"}}>✅ Résolu le {t.date_resolution}</div>}
                           <div style={{display:"flex",gap:6,marginTop:4}}>
-                            <button onClick={()=>setModal({...t})} style={{
+                            <button onClick={()=>setEditForm({...t})} style={{
                               background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,
                               color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,
                               fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✏️</button>
@@ -1219,7 +1341,8 @@
                   );
                 })}
               </div>
-          }
+            }
+          </>)}
         </div>
       );
     }
