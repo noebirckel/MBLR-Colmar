@@ -4074,7 +4074,7 @@
               {/* Contenu */}
               <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 12px 90px":"16px 20px"}}>
 
-                {!profile&&authUser&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#4A6A9E",fontSize:13,gap:8}}><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Chargement…</div>}
+
 
                 {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toISOString(),statut:"prospect",adresse:"",notes:""},...p]);
