@@ -3738,40 +3738,28 @@
 
       // Auth
       React.useEffect(()=>{
-        // Timeout de sécurité : jamais bloquer plus de 8s
-        const safetyTimer=setTimeout(()=>setAuthLoading(false),8000);
-        const done=()=>{clearTimeout(safetyTimer);setAuthLoading(false);};
-
-        const applyProfile=async(user)=>{
+        // Charger profil sans bloquer l'UI
+        const loadProfile=async(user)=>{
           try{
             const{data}=await sb.from("profiles").select("*").eq("id",user.id).single();
             if(data){
               setProfile(data);
               try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
             }
-          }catch(e){console.error("profile fetch error",e);}
-          done();
+          }catch(e){console.error("profile:",e);}
         };
 
-        // Vérifier la session immédiatement au chargement
         sb.auth.getSession().then(({data:{session}})=>{
-          if(session?.user){
-            setAuthUser(session.user);
-            applyProfile(session.user);
-          }else{
-            done();
-          }
-        }).catch(()=>done());
+          setAuthUser(session?.user||null);
+          setAuthLoading(false);  // ← débloque IMMÉDIATEMENT
+          if(session?.user) loadProfile(session.user);
+        }).catch(()=>{setAuthLoading(false);});
 
         const{data:{subscription}}=sb.auth.onAuthStateChange((event,session)=>{
-          if(event==="SIGNED_OUT"){
-            setAuthUser(null);setProfile(null);done();
-          }else if(event==="SIGNED_IN"&&session?.user){
-            setAuthUser(session.user);
-            applyProfile(session.user);
-          }
+          if(event==="SIGNED_OUT"){setAuthUser(null);setProfile(null);}
+          else if(event==="SIGNED_IN"&&session?.user){setAuthUser(session.user);loadProfile(session.user);}
         });
-        return()=>{subscription.unsubscribe();clearTimeout(safetyTimer);};
+        return()=>subscription.unsubscribe();
       },[]);
 
       // Load data
@@ -4072,23 +4060,23 @@
               {/* Contenu */}
               <div style={{flex:1,overflowY:"auto",padding:isMobile?"12px 12px 90px":"16px 20px"}}>
 
-                {!profile&&authUser&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#4A6A9E",fontSize:13,gap:8}}><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Chargement du profil…</div>}
+                {!profile&&authUser&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"#4A6A9E",fontSize:13,gap:8}}><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Chargement…</div>}
 
-                {profile&&view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toISOString(),statut:"prospect",adresse:"",notes:""},...p]);
                   SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date:new Date().toISOString()},...p]);
                 }}/>}
 
-                {profile&&view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
-                {profile&&view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
-                {profile&&view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {profile&&view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
-                {profile&&view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
-                {profile&&view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
-                {profile&&view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-                {profile&&view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
+                {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
+                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+                {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
+                {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
+                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
+                {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
+                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
 
-                {profile&&view==="accueil"&&<>
+                {view==="accueil"&&<>
                   <div style={{marginBottom:20}}>
                     <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>Bonjour {profile?.nom?.split(" ")[0]||""} {rCfg.icon}</div>
                     <div style={{fontSize:12,color:"#4A6A9E"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
@@ -4163,7 +4151,7 @@
                   </div>
                 </>}
 
-                {profile&&view==="stock"&&<>
+                {view==="stock"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
                     {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Ajouter</button>}
@@ -4268,7 +4256,7 @@
                   )}
                 </>}
 
-                {profile&&view==="commandes"&&<>
+                {view==="commandes"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>🛒 Commandes</h2>
                   </div>
@@ -4337,7 +4325,7 @@
                   )}
                 </>}
 
-                {profile&&view==="parametres"&&<>
+                {view==="parametres"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                     <div><h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>⚙️ Paramètres</h2><p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Gestion des composants du stock</p></div>
                     <button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>+ Nouveau</button>
