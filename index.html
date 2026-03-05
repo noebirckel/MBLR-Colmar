@@ -79,9 +79,9 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","sav","parametres","equipe"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","sav","rapports","parametres","equipe"],
       commercial:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
-      installateur:["accueil","stock","chantier","cartes","messagerie","sav"],
+      installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
       secretaire:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
     };
     // Permissions
@@ -1343,6 +1343,554 @@
               </div>
             }
           </>)}
+        </div>
+      );
+    }
+
+    // ══════════════════════════════════════
+    // ONGLET RAPPORTS D'INTERVENTION
+    // ══════════════════════════════════════
+    function RapportsTab({isMobile, rapports, setRapports, chantiers, profile, role}) {
+
+      const emptyForm = (ch=null) => ({
+        id: null,
+        chantier_id:   ch?.id||"",
+        chantier_nom:  ch?.client||"",
+        adresse:       ch?.adresse||"",
+        technicien:    profile?.nom||"",
+        date:          new Date().toLocaleDateString("fr-FR"),
+        heure_debut:   "",
+        heure_fin:     "",
+        type_travaux:  [],
+        materiels_poses:[],
+        observations:  "",
+        problemes:     "",
+        etat_final:    "ok",        // ok | a_revoir | urgence
+        photos:        [],
+        created_at:    new Date().toISOString(),
+      });
+
+      const TYPES_TRAVAUX = [
+        "Installation borne","Mise en service","Câblage","Raccordement TGBT",
+        "Pose gaine","Pose pied","Remplacement borne","Diagnostic","Autre"
+      ];
+      const ETAT = {
+        ok:       {label:"Installation OK",   color:"#10B981", bg:"rgba(16,185,129,0.1)",  icon:"✅"},
+        a_revoir: {label:"À revoir",          color:"#F59E0B", bg:"rgba(245,158,11,0.1)",  icon:"⚠️"},
+        urgence:  {label:"Intervention urgente",color:"#EF4444",bg:"rgba(239,68,68,0.1)", icon:"🚨"},
+      };
+
+      const[view,setView]       = useState("liste");   // liste | form | detail
+      const[form,setForm]       = useState(null);
+      const[detailId,setDetailId] = useState(null);
+      const[search,setSearch]   = useState("");
+      const[uploading,setUploading] = useState(false);
+      const[delConf,setDelConf] = useState(null);
+      const fileRef = useRef(null);
+
+      const F = (k,v) => setForm(p=>({...p,[k]:v}));
+
+      const heuresTotal = (debut, fin) => {
+        if(!debut||!fin) return null;
+        const [h1,m1]=debut.split(":").map(Number);
+        const [h2,m2]=fin.split(":").map(Number);
+        const mins=(h2*60+m2)-(h1*60+m1);
+        if(mins<=0) return null;
+        const h=Math.floor(mins/60), m=mins%60;
+        return `${h}h${m>0?m.toString().padStart(2,"0"):""}`;
+      };
+
+      const uploadPhotos = async(files) => {
+        if(!files.length) return;
+        setUploading(true);
+        const urls=[];
+        for(const file of files){
+          const ext=file.name.split(".").pop();
+          const path=`rapport-${form.id||Date.now()}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const{data,error}=await sb.storage.from("chantier-photos").upload(path,file,{cacheControl:"3600",upsert:false});
+          if(!error){
+            const{data:pub}=sb.storage.from("chantier-photos").getPublicUrl(path);
+            if(pub?.publicUrl) urls.push(pub.publicUrl);
+          }
+        }
+        F("photos",[...(form.photos||[]),...urls]);
+        setUploading(false);
+      };
+
+      const saveRapport = () => {
+        if(!form.chantier_nom||!form.technicien||!form.date) return;
+        const entry = {...form, id: form.id||Date.now()};
+        setRapports(p => form.id ? p.map(r=>r.id===form.id?entry:r) : [entry,...p]);
+        setView("liste"); setForm(null);
+      };
+
+      const filtered = rapports.filter(r =>
+        !search ||
+        (r.chantier_nom||"").toLowerCase().includes(search.toLowerCase()) ||
+        (r.technicien||"").toLowerCase().includes(search.toLowerCase())
+      );
+
+      const detail = rapports.find(r=>r.id===detailId);
+
+      const OVL = {position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999,
+        display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
+        backdropFilter:"blur(4px)"};
+      const L = ({c}) => <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",
+        marginBottom:7,textTransform:"uppercase",letterSpacing:"0.08em"}}>{c}</label>;
+      const INP = (e={}) => ({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,
+        color:"#F0F6FF",padding:"11px 14px",fontSize:14,width:"100%",outline:"none",
+        boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',transition:"border-color 0.2s",...e});
+      const BTN = (bg,e={}) => ({background:bg,border:"none",borderRadius:10,color:"#FFF",
+        padding:"10px 16px",cursor:"pointer",fontWeight:700,fontSize:13,
+        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",...e});
+
+      // ── FORMULAIRE ──────────────────────────────────────────
+      if(view==="form"&&form) return (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
+            <button onClick={()=>{setView("liste");setForm(null);}} style={{
+              background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,
+              color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,
+              fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+            <div>
+              <h2 style={{margin:0,fontSize:17,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>
+                {form.id?"✏️ Modifier le rapport":"📋 Nouveau rapport d'intervention"}
+              </h2>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+
+            {/* COL GAUCHE */}
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+              {/* Chantier */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📍 Chantier</h3>
+                <div style={{marginBottom:12}}>
+                  <L c="Chantier"/>
+                  <select value={form.chantier_id}
+                    onChange={e=>{
+                      const ch=chantiers.find(c=>String(c.id)===e.target.value);
+                      setForm(p=>({...p,chantier_id:e.target.value,chantier_nom:ch?.client||"",adresse:ch?.adresse||""}));
+                    }}
+                    style={{...INP(),appearance:"none"}}>
+                    <option value="">— Sélectionner un chantier —</option>
+                    {chantiers.map(ch=>(
+                      <option key={ch.id} value={ch.id}>{ch.client} {ch.date_installation?"("+ch.date_installation+")":""}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <L c="Client / Nom chantier"/>
+                  <input value={form.chantier_nom} onChange={e=>F("chantier_nom",e.target.value)}
+                    placeholder="Nom du client" style={INP()}/>
+                </div>
+                <div>
+                  <L c="Adresse"/>
+                  <input value={form.adresse||""} onChange={e=>F("adresse",e.target.value)}
+                    placeholder="Adresse du chantier" style={INP()}/>
+                </div>
+              </div>
+
+              {/* Intervenant & temps */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>⏱️ Intervenant & durée</h3>
+                <div style={{marginBottom:12}}>
+                  <L c="Technicien"/>
+                  <input value={form.technicien} onChange={e=>F("technicien",e.target.value)}
+                    placeholder="Nom du technicien" style={INP()}/>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                  <div>
+                    <L c="Date"/>
+                    <input value={form.date} onChange={e=>F("date",e.target.value)}
+                      placeholder="jj/mm/aaaa" style={INP()}/>
+                  </div>
+                  <div>
+                    <L c="Heure début"/>
+                    <input type="time" value={form.heure_debut||""}
+                      onChange={e=>F("heure_debut",e.target.value)} style={INP()}/>
+                  </div>
+                  <div>
+                    <L c="Heure fin"/>
+                    <input type="time" value={form.heure_fin||""}
+                      onChange={e=>F("heure_fin",e.target.value)} style={INP()}/>
+                  </div>
+                </div>
+                {form.heure_debut&&form.heure_fin&&heuresTotal(form.heure_debut,form.heure_fin)&&(
+                  <div style={{marginTop:10,padding:"8px 12px",background:"rgba(59,130,246,0.08)",
+                    borderRadius:8,fontSize:13,color:"#60A5FA",fontWeight:700}}>
+                    ⏱️ Durée : {heuresTotal(form.heure_debut,form.heure_fin)}
+                  </div>
+                )}
+              </div>
+
+              {/* Types de travaux */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>🔧 Travaux réalisés</h3>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {TYPES_TRAVAUX.map(t=>{
+                    const sel=(form.type_travaux||[]).includes(t);
+                    return(
+                      <button key={t} onClick={()=>F("type_travaux",
+                        sel?(form.type_travaux||[]).filter(x=>x!==t):[...(form.type_travaux||[]),t])}
+                        style={{padding:"7px 12px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                          fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",
+                          background:sel?"rgba(59,130,246,0.15)":"#070D1A",
+                          border:`1px solid ${sel?"#3B82F6":"#1B2D4F"}`,
+                          color:sel?"#60A5FA":"#4A6A9E"}}>
+                        {sel?"✓ ":""}{t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* COL DROITE */}
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+              {/* Matériels posés */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📦 Matériels posés</h3>
+                {(form.materiels_poses||[]).map((m,i)=>(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto auto",
+                    gap:8,marginBottom:8,alignItems:"center"}}>
+                    <input value={m.nom||""} onChange={e=>{
+                      const arr=[...(form.materiels_poses||[])];
+                      arr[i]={...arr[i],nom:e.target.value};F("materiels_poses",arr);
+                    }} placeholder="Désignation" style={{...INP(),fontSize:13,padding:"9px 12px"}}/>
+                    <input value={m.qty||""} type="number" min="1" onChange={e=>{
+                      const arr=[...(form.materiels_poses||[])];
+                      arr[i]={...arr[i],qty:e.target.value};F("materiels_poses",arr);
+                    }} placeholder="Qté" style={{...INP(),width:60,fontSize:13,padding:"9px 10px"}}/>
+                    <button onClick={()=>F("materiels_poses",(form.materiels_poses||[]).filter((_,j)=>j!==i))}
+                      style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",
+                        borderRadius:8,color:"#EF4444",padding:"9px 10px",cursor:"pointer",
+                        fontSize:14,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                  </div>
+                ))}
+                <button onClick={()=>F("materiels_poses",[...(form.materiels_poses||[]),{nom:"",qty:1}])}
+                  style={{...BTN("rgba(59,130,246,0.08)",{border:"1px solid #1B2D4F",
+                    color:"#3B82F6",padding:"8px 14px",fontSize:12,width:"100%",marginTop:4})}}>
+                  ➕ Ajouter matériel
+                </button>
+              </div>
+
+              {/* Observations */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📝 Observations</h3>
+                <div style={{marginBottom:12}}>
+                  <L c="Compte-rendu de l'intervention"/>
+                  <textarea value={form.observations} onChange={e=>F("observations",e.target.value)}
+                    placeholder="Déroulement de l'intervention, travaux effectués…"
+                    rows={4} style={{...INP(),resize:"vertical",lineHeight:1.5,minHeight:100}}/>
+                </div>
+                <div style={{marginBottom:14}}>
+                  <L c="Problèmes rencontrés (optionnel)"/>
+                  <textarea value={form.problemes||""} onChange={e=>F("problemes",e.target.value)}
+                    placeholder="Difficultés, points à surveiller…"
+                    rows={2} style={{...INP(),resize:"vertical",lineHeight:1.5}}/>
+                </div>
+                <div>
+                  <L c="État final de l'installation"/>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {Object.entries(ETAT).map(([k,v])=>(
+                      <button key={k} onClick={()=>F("etat_final",k)} style={{
+                        padding:"8px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",
+                        background:form.etat_final===k?v.bg:"transparent",
+                        border:`1px solid ${form.etat_final===k?v.color:"#1B2D4F"}`,
+                        color:form.etat_final===k?v.color:"#4A6A9E"}}>
+                        {v.icon} {v.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Photos */}
+              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📸 Photos</h3>
+                <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}}
+                  onChange={e=>uploadPhotos(Array.from(e.target.files))}/>
+                {(form.photos||[]).length>0&&(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+                    {(form.photos||[]).map((url,i)=>(
+                      <div key={i} style={{position:"relative",paddingBottom:"100%",overflow:"hidden",borderRadius:8}}>
+                        <img src={url} style={{position:"absolute",inset:0,width:"100%",
+                          height:"100%",objectFit:"cover"}} alt=""/>
+                        <button onClick={()=>F("photos",(form.photos||[]).filter((_,j)=>j!==i))}
+                          style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.7)",
+                            border:"none",borderRadius:"50%",color:"#FFF",width:22,height:22,
+                            cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",
+                            justifyContent:"center"}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={()=>fileRef.current?.click()} disabled={uploading}
+                  style={{...BTN(uploading?"#112038":"rgba(59,130,246,0.08)",{
+                    border:"1px solid #1B2D4F",color:"#3B82F6",width:"100%",
+                    padding:"11px",fontSize:13})}}>
+                  {uploading?"⏳ Envoi en cours…":"📷 Ajouter des photos"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Bouton sauvegarder */}
+          <div style={{display:"flex",gap:10,marginTop:16}}>
+            <button onClick={()=>{setView("liste");setForm(null);}} style={BTN("#1B2D4F",{flex:1,padding:"13px"})}>
+              Annuler
+            </button>
+            <button onClick={saveRapport}
+              disabled={!form.chantier_nom||!form.technicien||!form.date}
+              style={BTN(!form.chantier_nom||!form.technicien||!form.date
+                ?"#112038":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{
+                flex:3,padding:"13px",fontSize:15,
+                boxShadow:!form.chantier_nom||!form.technicien||!form.date?"none":"0 4px 20px rgba(59,130,246,0.3)"})}>
+              💾 Enregistrer le rapport
+            </button>
+          </div>
+        </div>
+      );
+
+      // ── DÉTAIL RAPPORT ──────────────────────────────────────
+      if(view==="detail"&&detail) {
+        const S=ETAT[detail.etat_final]||ETAT.ok;
+        const duree=heuresTotal(detail.heure_debut,detail.heure_fin);
+        return(
+          <div>
+            {/* MODAL SUPPRESSION */}
+            {delConf&&(
+              <div style={OVL} onClick={()=>setDelConf(null)}>
+                <div style={{background:"#0D1828",borderRadius:18,padding:28,width:340,maxWidth:"94vw",
+                  border:"1px solid #1B2D4F",textAlign:"center",boxShadow:"0 24px 60px rgba(0,0,0,0.6)"}}
+                  onClick={e=>e.stopPropagation()}>
+                  <div style={{fontSize:48,marginBottom:12}}>🗑️</div>
+                  <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer ce rapport ?</h3>
+                  <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 24px"}}>{detail.chantier_nom} — {detail.date}</p>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setDelConf(null)}
+                      style={{...BTN("#1B2D4F"),flex:1,padding:"11px"}}>Annuler</button>
+                    <button onClick={()=>{setRapports(p=>p.filter(r=>r.id!==detail.id));setView("liste");setDelConf(null);}}
+                      style={{...BTN("#EF4444"),flex:1,padding:"11px"}}>Supprimer</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              marginBottom:22,flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <button onClick={()=>setView("liste")} style={{
+                  background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,
+                  color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,
+                  fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+                <div>
+                  <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#F0F6FF"}}>
+                    📋 {detail.chantier_nom}
+                  </h2>
+                  <div style={{fontSize:12,color:"#4A6A9E"}}>
+                    {detail.date} · {detail.technicien}
+                    {duree&&<span style={{marginLeft:8,color:"#60A5FA"}}>· ⏱️ {duree}</span>}
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setForm({...detail});setView("form");}} style={{
+                  background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",borderRadius:8,
+                  color:"#3B82F6",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,
+                  fontFamily:'"Outfit",sans-serif'}}>✏️ Modifier</button>
+                <button onClick={()=>setDelConf(detail)} style={{
+                  background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",
+                  borderRadius:8,color:"#EF4444",padding:"8px 14px",cursor:"pointer",fontSize:13,
+                  fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️</button>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+              {/* Infos */}
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <h3 style={{margin:0,fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📍 Chantier</h3>
+                    <span style={{background:S.bg,color:S.color,border:`1px solid ${S.color}50`,
+                      borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}}>
+                      {S.icon} {S.label}
+                    </span>
+                  </div>
+                  {[
+                    ["Client",detail.chantier_nom],
+                    ["Adresse",detail.adresse||"—"],
+                    ["Technicien",detail.technicien],
+                    ["Date",detail.date],
+                    ["Horaires",detail.heure_debut&&detail.heure_fin?`${detail.heure_debut} → ${detail.heure_fin}${duree?" ("+duree+")":""}` :"—"],
+                  ].map(([k,v])=>(
+                    <div key={k} style={{display:"flex",justifyContent:"space-between",
+                      padding:"8px 0",borderBottom:"1px solid #1B2D4F"}}>
+                      <span style={{fontSize:12,color:"#4A6A9E",fontWeight:600}}>{k}</span>
+                      <span style={{fontSize:13,color:"#F0F6FF",fontWeight:500,textAlign:"right",maxWidth:"60%"}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {detail.type_travaux?.length>0&&(
+                  <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                    <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>🔧 Travaux</h3>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                      {detail.type_travaux.map(t=>(
+                        <span key={t} style={{background:"rgba(59,130,246,0.12)",color:"#60A5FA",
+                          border:"1px solid rgba(59,130,246,0.2)",borderRadius:20,
+                          padding:"5px 11px",fontSize:12,fontWeight:600}}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {detail.materiels_poses?.length>0&&(
+                  <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                    <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📦 Matériels posés</h3>
+                    {detail.materiels_poses.map((m,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",
+                        padding:"7px 0",borderBottom:"1px solid #1B2D4F"}}>
+                        <span style={{fontSize:13,color:"#A8C4E8"}}>{m.nom}</span>
+                        <span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>×{m.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Observations + photos */}
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                {detail.observations&&(
+                  <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                    <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📝 Compte-rendu</h3>
+                    <p style={{margin:0,fontSize:13,color:"#A8C4E8",lineHeight:1.7,
+                      whiteSpace:"pre-wrap"}}>{detail.observations}</p>
+                  </div>
+                )}
+                {detail.problemes&&(
+                  <div style={{background:"rgba(245,158,11,0.06)",borderRadius:14,
+                    border:"1px solid rgba(245,158,11,0.2)",padding:"18px"}}>
+                    <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F59E0B"}}>⚠️ Problèmes</h3>
+                    <p style={{margin:0,fontSize:13,color:"#A8C4E8",lineHeight:1.7,
+                      whiteSpace:"pre-wrap"}}>{detail.problemes}</p>
+                  </div>
+                )}
+                {detail.photos?.length>0&&(
+                  <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                    <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>
+                      📸 Photos ({detail.photos.length})
+                    </h3>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                      {detail.photos.map((url,i)=>(
+                        <a key={i} href={url} target="_blank" rel="noopener"
+                          style={{display:"block",paddingBottom:"100%",position:"relative",
+                            overflow:"hidden",borderRadius:8,cursor:"zoom-in"}}>
+                          <img src={url} style={{position:"absolute",inset:0,width:"100%",
+                            height:"100%",objectFit:"cover",transition:"transform 0.2s"}} alt=""/>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ── LISTE ───────────────────────────────────────────────
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            marginBottom:18,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>
+                📋 Rapports d'intervention
+              </h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>
+                {rapports.length} rapport(s) enregistré(s)
+              </p>
+            </div>
+            <button onClick={()=>{setForm(emptyForm());setView("form");}}
+              style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{
+                padding:"10px 18px",boxShadow:"0 4px 16px rgba(59,130,246,0.3)"})}>
+              ➕ Nouveau rapport
+            </button>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",
+            gap:10,marginBottom:18}}>
+            {[
+              {icon:"📋",label:"Total rapports", val:rapports.length,                                       color:"#3B82F6"},
+              {icon:"✅",label:"Installation OK", val:rapports.filter(r=>r.etat_final==="ok").length,        color:"#10B981"},
+              {icon:"⚠️",label:"À revoir",        val:rapports.filter(r=>r.etat_final==="a_revoir").length, color:"#F59E0B"},
+              {icon:"🚨",label:"Urgences",        val:rapports.filter(r=>r.etat_final==="urgence").length,  color:"#EF4444"},
+            ].map(k=>(
+              <div key={k.label} style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",
+                border:`1px solid ${k.color}20`,borderLeft:`3px solid ${k.color}`}}>
+                <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
+                <div style={{fontSize:22,fontWeight:800,color:k.color}}>{k.val}</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recherche */}
+          <div style={{marginBottom:14}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="🔍 Rechercher par client ou technicien…"
+              style={{...INP(),background:"#0D1828"}}/>
+          </div>
+
+          {/* Liste */}
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
+              <div style={{fontSize:52,marginBottom:12}}>📋</div>
+              <div style={{fontWeight:800,fontSize:16,color:"#4A6A9E",marginBottom:6}}>
+                {search?"Aucun résultat":"Aucun rapport"}</div>
+              <div style={{fontSize:13,color:"#2E4D82"}}>
+                {search?"Modifiez votre recherche":"Créez votre premier rapport d'intervention"}</div>
+            </div>
+            :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {filtered.map(r=>{
+                const S=ETAT[r.etat_final]||ETAT.ok;
+                const duree=heuresTotal(r.heure_debut,r.heure_fin);
+                return(
+                  <div key={r.id} onClick={()=>{setDetailId(r.id);setView("detail");}}
+                    style={{background:"#0D1828",borderRadius:13,
+                      border:`1px solid ${r.etat_final==="ok"?"#1B2D4F":S.color+"40"}`,
+                      padding:"14px 18px",cursor:"pointer",transition:"border-color 0.2s,transform 0.15s",
+                      display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,
+                      flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{r.chantier_nom}</span>
+                        <span style={{background:S.bg,color:S.color,border:`1px solid ${S.color}50`,
+                          borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>
+                          {S.icon} {S.label}
+                        </span>
+                      </div>
+                      <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
+                        <span>🔧 {r.technicien}</span>
+                        <span>📅 {r.date}</span>
+                        {duree&&<span style={{color:"#60A5FA"}}>⏱️ {duree}</span>}
+                        {r.type_travaux?.length>0&&<span>{r.type_travaux.slice(0,2).join(", ")}{r.type_travaux.length>2?" …":""}</span>}
+                        {r.photos?.length>0&&<span>📸 {r.photos.length}</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:18,color:"#2E4D82"}}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          }
         </div>
       );
     }
@@ -3165,6 +3713,7 @@
       const[acomptes,setAcomptes]=useState([]);
       const[savTickets,setSavTickets]=useState([]);
       const[objectifs,setObjectifs]=useState({});
+      const[rapports,setRapports]=useState([]);
       const[sync,setSync]=useState("loading");
       const[ventes,setVentes]=useState([]);
       // UI
@@ -3235,6 +3784,7 @@
               if(data.acomptes)setAcomptes(data.acomptes);
               if(data.savTickets)setSavTickets(data.savTickets);
               if(data.objectifs)setObjectifs(data.objectifs);
+              if(data.rapports)setRapports(data.rapports);
             }
             setSyncState("saved");
           }catch(e){setSyncState("error");}
@@ -3251,6 +3801,7 @@
           if(d.acomptes)setAcomptes(d.acomptes);
           if(d.savTickets)setSavTickets(d.savTickets);
           if(d.objectifs)setObjectifs(d.objectifs);
+          if(d.rapports)setRapports(d.rapports);
           setSyncState("saved");
         }).subscribe();
         return()=>sb.removeChannel(ch);
@@ -3258,12 +3809,13 @@
 
       const setSyncState=v=>setSync(v);
 
-      const SV=v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(stock,orders,hist,n,chantiersPipeline,acomptes,savTickets,objectifs);};
-      const SC2=v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(stock,orders,hist,ventes,n,acomptes,savTickets,objectifs);};
-      const SA=v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,n,savTickets);};
-      const SSAV=v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,n,objectifs);};
-      const SOBJ=v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,n);};
-      const saveDB=useCallback((ns,no,nh,nv,nc,na,nsav,nobj)=>{
+      const SV=v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(stock,orders,hist,n,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
+      const SC2=v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(stock,orders,hist,ventes,n,acomptes,savTickets,objectifs,rapports);};
+      const SA=v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,n,savTickets,objectifs,rapports);};
+      const SSAV=v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,n,objectifs,rapports);};
+      const SOBJ=v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,n,rapports);};
+      const SRAPP=v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(stock,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,n);};
+      const saveDB=useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
         if(firstLoad.current)return;
         if(timer.current)clearTimeout(timer.current);
         setSync("saving");
@@ -3274,27 +3826,28 @@
             const na2=na!==undefined?na:acomptes;
             const nsav2=nsav!==undefined?nsav:savTickets;
             const nobj2=nobj!==undefined?nobj:objectifs;
-            const{error}=await sb.from("app_data").upsert({id:"main",stock:ns,orders:no,hist:nh,ventes:nv2,chantiersPipeline:nc2,acomptes:na2,savTickets:nsav2,objectifs:nobj2,updated_at:new Date().toISOString()});
+            const nrapp2=nrapp!==undefined?nrapp:rapports;
+            const{error}=await sb.from("app_data").upsert({id:"main",stock:ns,orders:no,hist:nh,ventes:nv2,chantiersPipeline:nc2,acomptes:na2,savTickets:nsav2,objectifs:nobj2,rapports:nrapp2,updated_at:new Date().toISOString()});
             if(error)throw error;
             setSync("saved");
           }catch(e){setSync("error");}
         },800);
       },[]);
 
-      const SS=v=>{const n=typeof v==="function"?v(stock):v;setStock(n);saveDB(n,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);};
+      const SS=v=>{const n=typeof v==="function"?v(stock):v;setStock(n);saveDB(n,orders,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
       // expose finishChantier for ChantierTab
       useEffect(()=>{
         window._appState={
           finishChantier:(ns,newHistItems,updatedChantiers)=>{
             const nh=[...newHistItems,...hist];
             setStock(ns);setHist(nh);setChantiersPipeline(updatedChantiers);
-            saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes,savTickets,objectifs);
+            saveDB(ns,orders,nh,ventes,updatedChantiers,acomptes,savTickets,objectifs,rapports);
           },
           getChantiers:()=>chantiersPipeline,
           getVentes:()=>ventes
         };
       });
-      const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);};
+      const SO=v=>{const n=typeof v==="function"?v(orders):v;setOrders(n);saveDB(stock,n,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);};
 
       const role=profile?.role||"installateur";
       const allowedTabs=ROLE_TABS[role]||["dashboard"];
@@ -3325,7 +3878,7 @@
         const d=new Date().toLocaleDateString("fr-FR");
         const nh=[...cItems.map(i=>{const a=stock.find(s=>s.id===Number(i.id));return{date:d,chantier:cNom,article:a?.article,cat:a?.cat,unite:a?.unite,qty:Number(i.qty),par:profile?.nom||""};}), ...hist];
         const ns=stock.map(s=>{const u=cItems.find(i=>Number(i.id)===s.id);return u?{...s,stock:Math.max(0,s.stock-Number(u.qty))}:s;});
-        setStock(ns);setHist(nh);saveDB(ns,orders,nh,ventes,chantiersPipeline,acomptes,savTickets,objectifs);setCNom("");setCItems([]);
+        setStock(ns);setHist(nh);saveDB(ns,orders,nh,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);setCNom("");setCItems([]);
       };
       const openO=id=>{const a=stock.find(s=>s.id===id);setOModal(id);setOForm({qty:String(a.seuil>a.stock?a.seuil-a.stock:1),desc:""});};
       const subO=()=>{
@@ -3338,7 +3891,7 @@
         const o=orders.find(x=>x.id===oid);if(!o)return;
         const no=orders.map(x=>x.id===oid?{...x,statut:"livré",livraison_date:new Date().toLocaleDateString("fr-FR")}:x);
         const ns=stock.map(s=>s.id===o.articleId?{...s,stock:s.stock+o.qty}:s);
-        setOrders(no);setStock(ns);saveDB(ns,no,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs);
+        setOrders(no);setStock(ns);saveDB(ns,no,hist,ventes,chantiersPipeline,acomptes,savTickets,objectifs,rapports);
       };
       const saveC=()=>{
         if(!cForm.article||!cForm.cat)return;
@@ -3376,6 +3929,7 @@
         ["messagerie","💬","Messagerie"],
         ["stats","📊","Stats"],
         ["sav","🛠️","SAV"],
+        ["rapports","📋","Rapports"],
         ["parametres","⚙️","Paramètres"],
         ["equipe","👥","Équipe"],
       ];
@@ -3590,6 +4144,9 @@
 
             {/* ── SAV ── */}
             {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
+
+            {/* ── RAPPORTS ── */}
+            {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SRAPP} chantiers={chantiersPipeline} profile={profile} role={role}/>}
 
             {/* ── ÉQUIPE ── */}
             {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
