@@ -3888,6 +3888,13 @@
       const subTabs=activeGroupObj?.tabs||[];
 
       if(!authUser)return <LoginScreen/>;
+      if(authUser&&!profile)return(
+        <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <div style={{width:32,height:32,borderRadius:"50%",border:"3px solid #1B2D4F",borderTop:"3px solid #3B82F6",animation:"spin 0.8s linear infinite"}}/>
+          <div style={{color:"#4A6A9E",fontSize:13}}>Chargement du profil…</div>
+          <button onClick={()=>sb.auth.signOut()} style={{marginTop:8,background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",padding:"6px 16px",cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>Se déconnecter</button>
+        </div>
+      );
 
       // Modal helpers
       const OVL={position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16};
