@@ -4149,12 +4149,22 @@ L'équipe Ma Borne LR`;
 
       // Auth
       React.useEffect(()=>{
-        // Timeout de sécurité : débloque après 6s quoi qu'il arrive
         const t=setTimeout(()=>setAuthLoading(false),6000);
 
-        const{data:{subscription}}=sb.auth.onAuthStateChange(async(_,session)=>{
-          setAuthUser(session?.user||null);
+        const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,session)=>{
+          if(event==="SIGNED_OUT"){
+            // Déconnexion réelle : vider le cache
+            setAuthUser(null);
+            setProfile(null);
+            try{localStorage.removeItem("app_profile");}catch(e){}
+            clearTimeout(t);
+            setAuthLoading(false);
+            return;
+          }
           if(session?.user){
+            setAuthUser(session.user);
+            // NE PAS effacer le profil en cache pendant le rechargement
+            // → le rôle reste correct pendant la transition
             try{
               const fetchPromise=sb.from("profiles").select("*").eq("id",session.user.id).single();
               const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),5000));
@@ -4166,12 +4176,12 @@ L'équipe Ma Borne LR`;
               }
             }catch(e){
               console.warn("profile fetch:",e.message);
-              // En cas d'échec, utiliser les métadonnées de l'utilisateur
-              const fallback={id:session.user.id,role:session.user.user_metadata?.role||"installateur",nom:session.user.email};
-              setProfile(fallback);
+              // Garder le profil en cache si disponible
+              try{
+                const cached=localStorage.getItem("app_profile");
+                if(cached)setProfile(JSON.parse(cached));
+              }catch(e2){}
             }
-          }else{
-            setProfile(null);
           }
           clearTimeout(t);
           setAuthLoading(false);
