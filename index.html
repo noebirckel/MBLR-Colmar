@@ -4498,7 +4498,11 @@ L'équipe Ma Borne LR`;
             await run("stock",ns);
             await run("orders",no);
             await run("historique",nh);
-            await run("ventes",nv);
+            if(nv){
+              const{data:dvt,error:evt}=await sb.from("ventes").upsert(nv).select();
+              console.log("ventes upsert result:",JSON.stringify({data:dvt,error:evt}));
+              if(evt)throw new Error("ventes: "+evt.message+" | "+evt.details+" | "+evt.hint);
+            }
             await run("chantiers",nc);
             await run("acomptes",na);
             await run("sav_tickets",nsav);
