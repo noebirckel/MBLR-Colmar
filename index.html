@@ -93,7 +93,7 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","sav","rapports","parametres","equipe"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","marges","sav","rapports","parametres","equipe"],
       commercial:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
       installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
       secretaire:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
@@ -413,6 +413,195 @@
     // ══════════════════════════════════════
     // ONGLET STATS (admin)
     // ══════════════════════════════════════
+
+    // ══════════════════════════════════════════
+    // ONGLET MARGES (admin only)
+    // ══════════════════════════════════════════
+    function MargesTab({isMobile, ventes}){
+      const [periode, setPeriode] = useState(3);
+      const [onglet, setOnglet]   = useState("ventes");
+      const fmt  = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+      const pct  = (m,ca) => ca>0 ? Math.round((m/ca)*100) : 0;
+      const coutVente = v =>
+        (v.materiels||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0)
+       +(v.cables||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0);
+      const now = new Date();
+      const ventesFiltered = useMemo(()=>ventes.filter(v=>{
+        if(!v.date) return true;
+        const [d,mo,y]=(v.date||"").split("/");
+        if(!y) return true;
+        const vd=new Date(Number(y),Number(mo)-1,Number(d));
+        return (now-vd)/(1000*60*60*24*30)<=periode;
+      }),[ventes,periode]);
+      const caTotal=ventesFiltered.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const coutTotal=ventesFiltered.reduce((s,v)=>s+coutVente(v),0);
+      const margeTotal=caTotal-coutTotal;
+      const txMarge=pct(margeTotal,caTotal);
+      const ventesAvecMarge=useMemo(()=>[...ventesFiltered].map(v=>{
+        const ca=Number(v.prix_ht||0),cout=coutVente(v),marge=ca-cout;
+        return {...v,_ca:ca,_cout:cout,_marge:marge,_tx:pct(marge,ca)};
+      }).sort((a,b)=>b._marge-a._marge),[ventesFiltered]);
+      const parTech=useMemo(()=>{
+        const map={};
+        ventesFiltered.forEach(v=>{
+          const k=v.par||"Inconnu";
+          if(!map[k])map[k]={nom:k,ca:0,cout:0,nb:0};
+          map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;
+        });
+        return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>b.marge-a.marge);
+      },[ventesFiltered]);
+      const parMois=useMemo(()=>{
+        const map={};
+        ventesFiltered.forEach(v=>{
+          const [,mo,y]=(v.date||"").split("/");
+          if(!mo||!y)return;
+          const k=`${y}-${mo}`;
+          if(!map[k])map[k]={label:`${mo}/${y}`,ca:0,cout:0,nb:0};
+          map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;
+        });
+        return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>a.label<b.label?-1:1);
+      },[ventesFiltered]);
+      const parCat=useMemo(()=>{
+        const map={};
+        ventesFiltered.forEach(v=>{
+          (v.materiels||[]).forEach(m=>{
+            const k=m.cat||"Autre";
+            if(!map[k])map[k]={cat:k,cout:0,nb:0};
+            map[k].cout+=Number(m.qty||0)*Number(m.prix_unit||0);map[k].nb+=Number(m.qty||0);
+          });
+        });
+        return Object.values(map).sort((a,b)=>b.cout-a.cout);
+      },[ventesFiltered]);
+      const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"};
+      const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>💰 Analyse des marges</h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{ventesFiltered.length} vente(s) · {periode===999?"Toutes périodes":periode+" mois"}</p>
+            </div>
+            <select value={periode} onChange={e=>setPeriode(Number(e.target.value))}
+              style={{background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"8px 12px",fontSize:13,fontFamily:'"Outfit",sans-serif',cursor:"pointer"}}>
+              <option value={1}>Ce mois</option><option value={3}>3 mois</option>
+              <option value={6}>6 mois</option><option value={12}>12 mois</option>
+              <option value={999}>Tout</option>
+            </select>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+            {[
+              {icon:"💰",label:"CA total",val:fmt(caTotal),color:"#3B82F6"},
+              {icon:"🏭",label:"Coût matériaux",val:fmt(coutTotal),color:"#F59E0B"},
+              {icon:"📈",label:"Marge brute",val:fmt(margeTotal),color:margeTotal>=0?"#10B981":"#EF4444"},
+              {icon:"🎯",label:"Taux de marge",val:txMarge+"%",color:txColor(txMarge)},
+            ].map(k=>(
+              <div key={k.label} style={{...CARD,borderLeft:`3px solid ${k.color}`}}>
+                <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
+                <div style={{fontSize:isMobile?16:20,fontWeight:800,color:k.color}}>{k.val}</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:3}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+            {[["ventes","🧾 Par vente"],["tech","👤 Par commercial"],["mois","📅 Par mois"],["cat","📦 Par catégorie"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setOnglet(k)} style={{padding:"8px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',border:`1px solid ${onglet===k?"#3B82F6":"#1B2D4F"}`,background:onglet===k?"rgba(59,130,246,0.15)":"transparent",color:onglet===k?"#60A5FA":"#4A6A9E"}}>{l}</button>
+            ))}
+          </div>
+          {onglet==="ventes"&&<div style={CARD}><div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{borderBottom:"1px solid #1B2D4F"}}>
+                {["Client","Commercial","Date","CA","Coût","Marge","Taux"].map(h=>(
+                  <th key={h} style={{padding:"10px 12px",textAlign:"left",color:"#4A6A9E",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {ventesAvecMarge.length===0
+                  ?<tr><td colSpan={7} style={{padding:"40px",textAlign:"center",color:"#2E4D82"}}>Aucune vente sur cette période</td></tr>
+                  :ventesAvecMarge.map(v=>(
+                    <tr key={v.id} style={{borderBottom:"1px solid #0D1828"}}
+                      onMouseOver={e=>e.currentTarget.style.background="rgba(59,130,246,0.04)"}
+                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      <td style={{padding:"10px 12px",color:"#F0F6FF",fontWeight:600}}>{v.client||"—"}</td>
+                      <td style={{padding:"10px 12px",color:"#A8C4E8"}}>{v.par||"—"}</td>
+                      <td style={{padding:"10px 12px",color:"#4A6A9E",whiteSpace:"nowrap"}}>{v.date||"—"}</td>
+                      <td style={{padding:"10px 12px",color:"#60A5FA",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(v._ca)}</td>
+                      <td style={{padding:"10px 12px",color:"#F59E0B",whiteSpace:"nowrap"}}>{fmt(v._cout)}</td>
+                      <td style={{padding:"10px 12px",fontWeight:800,whiteSpace:"nowrap",color:v._marge>=0?"#10B981":"#EF4444"}}>{fmt(v._marge)}</td>
+                      <td style={{padding:"10px 12px"}}><span style={{background:`${txColor(v._tx)}20`,color:txColor(v._tx),border:`1px solid ${txColor(v._tx)}40`,borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:700}}>{v._tx}%</span></td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div></div>}
+          {onglet==="tech"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {parTech.length===0
+              ?<div style={{...CARD,textAlign:"center",padding:"60px",color:"#2E4D82"}}>Aucune donnée</div>
+              :parTech.map(r=>(
+                <div key={r.nom} style={CARD}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+                    <div><div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:4}}>👤 {r.nom}</div><div style={{fontSize:12,color:"#4A6A9E"}}>{r.nb} vente(s)</div></div>
+                    <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>CA</div><div style={{fontSize:15,fontWeight:700,color:"#60A5FA"}}>{fmt(r.ca)}</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>Coût</div><div style={{fontSize:15,fontWeight:700,color:"#F59E0B"}}>{fmt(r.cout)}</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>Marge</div><div style={{fontSize:15,fontWeight:800,color:r.marge>=0?"#10B981":"#EF4444"}}>{fmt(r.marge)}</div></div>
+                      <span style={{background:`${txColor(r.tx)}20`,color:txColor(r.tx),border:`1px solid ${txColor(r.tx)}40`,borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:800}}>{r.tx}%</span>
+                    </div>
+                  </div>
+                  <div style={{marginTop:12,background:"#070D1A",borderRadius:6,height:6,overflow:"hidden"}}>
+                    <div style={{width:`${Math.min(100,Math.max(0,r.tx))}%`,height:"100%",borderRadius:6,background:`linear-gradient(90deg,${txColor(r.tx)},${txColor(r.tx)}88)`,transition:"width 0.6s ease"}}/>
+                  </div>
+                </div>
+              ))
+            }
+          </div>}
+          {onglet==="mois"&&<div style={CARD}>
+            {parMois.length===0
+              ?<div style={{textAlign:"center",padding:"60px",color:"#2E4D82"}}>Aucune donnée</div>
+              :<div style={{display:"flex",flexDirection:"column",gap:14}}>
+                {parMois.map(r=>{
+                  const maxCA=Math.max(...parMois.map(x=>x.ca),1);
+                  return(<div key={r.label}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
+                      <span style={{fontWeight:700,color:"#F0F6FF",fontSize:13}}>📅 {r.label} <span style={{color:"#4A6A9E",fontWeight:400}}>({r.nb} vente{r.nb>1?"s":""})</span></span>
+                      <div style={{display:"flex",gap:12,fontSize:12,flexWrap:"wrap"}}>
+                        <span style={{color:"#60A5FA"}}>CA : {fmt(r.ca)}</span>
+                        <span style={{color:"#F59E0B"}}>Coût : {fmt(r.cout)}</span>
+                        <span style={{color:r.marge>=0?"#10B981":"#EF4444",fontWeight:800}}>Marge : {fmt(r.marge)}</span>
+                        <span style={{color:txColor(r.tx),fontWeight:800}}>{r.tx}%</span>
+                      </div>
+                    </div>
+                    <div style={{background:"#070D1A",borderRadius:6,height:10,overflow:"hidden",position:"relative"}}>
+                      <div style={{position:"absolute",left:0,top:0,height:"100%",borderRadius:6,width:`${(r.ca/maxCA)*100}%`,background:"rgba(59,130,246,0.25)"}}/>
+                      <div style={{position:"absolute",left:0,top:0,height:"100%",borderRadius:6,width:`${(Math.max(0,r.marge)/maxCA)*100}%`,background:`linear-gradient(90deg,${txColor(r.tx)},${txColor(r.tx)}88)`}}/>
+                    </div>
+                  </div>);
+                })}
+              </div>
+            }
+          </div>}
+          {onglet==="cat"&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:10}}>
+            {parCat.length===0
+              ?<div style={{...CARD,textAlign:"center",padding:"60px",color:"#2E4D82",gridColumn:"1/-1"}}>Aucune donnée matériel</div>
+              :parCat.map(r=>{
+                const maxCout=Math.max(...parCat.map(x=>x.cout),1);
+                return(<div key={r.cat} style={CARD}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <span style={{fontWeight:800,color:"#F0F6FF",fontSize:14}}>📦 {r.cat}</span>
+                    <span style={{color:"#4A6A9E",fontSize:12}}>{r.nb} unité(s)</span>
+                  </div>
+                  <div style={{fontSize:18,fontWeight:800,color:"#F59E0B",marginBottom:8}}>{fmt(r.cout)}</div>
+                  <div style={{background:"#070D1A",borderRadius:6,height:6}}>
+                    <div style={{width:`${(r.cout/maxCout)*100}%`,height:"100%",borderRadius:6,background:"linear-gradient(90deg,#F59E0B,#F59E0B88)"}}/>
+                  </div>
+                </div>);
+              })
+            }
+          </div>}
+        </div>
+      );
+    }
+
     function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt, objectifs, setObjectifs, role}) {
       const[period,setPeriod]=useState(6); // nb de mois à afficher
 
@@ -4093,6 +4282,8 @@
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
+
                 {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
                 {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
