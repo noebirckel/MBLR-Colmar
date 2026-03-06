@@ -2805,9 +2805,9 @@ L'équipe Ma Borne LR`;
             </div>
             {editModal.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
               <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
-              <input type="number" min="1" max="100"
+              <input type="number" min="0" max="100"
                 value={editModal.montant_vente>0?Math.round((editModal.montant_acompte/editModal.montant_vente)*100):""}
-                onChange={e=>{const pct=Math.min(100,Math.max(1,Number(e.target.value)));setEditModal(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                onChange={e=>{const raw=e.target.value;if(raw===""||raw==="-")return;const pct=Number(raw);setEditModal(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
                 style={{...INP(),width:70,textAlign:"center"}}/>
               <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
               <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {editModal.montant_acompte>0?Number(editModal.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
@@ -2849,9 +2849,9 @@ L'équipe Ma Borne LR`;
             </div>
             {newForm.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
               <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
-              <input type="number" min="1" max="100"
+              <input type="number" min="0" max="100"
                 value={newForm.montant_vente>0?Math.round((newForm.montant_acompte/newForm.montant_vente)*100):""}
-                onChange={e=>{const pct=Math.min(100,Math.max(1,Number(e.target.value)));setNewForm(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                onChange={e=>{const raw=e.target.value;if(raw===""||raw==="-")return;const pct=Number(raw);setNewForm(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
                 style={{...INP(),width:70,textAlign:"center"}}/>
               <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
               <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {newForm.montant_acompte>0?Number(newForm.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
