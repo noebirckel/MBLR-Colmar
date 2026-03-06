@@ -4428,21 +4428,23 @@ L'équipe Ma Borne LR`;
           const load=async(table,orderCol)=>{
             try{
               const q=sb.from(table).select("*");
-              const{data}=orderCol?await q.order(orderCol,{ascending:false}):await q;
+              const{data,error}=orderCol?await q.order(orderCol,{ascending:false}):await q;
+              if(error){console.warn("load "+table+":",error.message);return[];}
+              console.log("load "+table+":",(data||[]).length+" rows");
               return data||[];
             }catch(e){console.warn("load "+table+":",e.message);return[];}
           };
           try{
             const[rs,ro,rh,rv,rc,ra,rsav,robj,rrapp]=await Promise.all([
-              load("stock","cat"),
-              load("orders","created_at"),
+              load("stock","id"),
+              load("orders","id"),
               load("historique","id"),
-              load("ventes","created_at"),
-              load("chantiers","created_at"),
-              load("acomptes","created_at"),
-              load("sav_tickets","created_at"),
+              load("ventes","id"),
+              load("chantiers","id"),
+              load("acomptes","id"),
+              load("sav_tickets","id"),
               load("objectifs",null),
-              load("rapports","created_at"),
+              load("rapports","id"),
             ]);
             if(rs.length)setStock(rs);
             if(ro.length)setOrders(ro);
