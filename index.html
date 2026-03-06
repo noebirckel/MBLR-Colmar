@@ -93,8 +93,8 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","marges","sav","rapports","parametres","equipe"],
-      commercial:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe"],
+      commercial:["accueil","commandes","ventes","administratif","cartes","messagerie","sav","suivi_comm"],
       installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
       secretaire:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
     };
@@ -413,6 +413,214 @@
     // ══════════════════════════════════════
     // ONGLET STATS (admin)
     // ══════════════════════════════════════
+
+
+    // ══════════════════════════════════════════
+    // ONGLET SUIVI COMMERCIAL
+    // ══════════════════════════════════════════
+    function SuiviCommercialTab({isMobile, chantiers, setChantiers, profile, role}){
+      const GOOGLE_REVIEW = "https://g.page/r/CYKYMv6dsT55EBM/review";
+      const ETATS = {
+        a_appeler:     {label:"À appeler",      color:"#3B82F6", icon:"📞"},
+        pas_reponse:   {label:"Pas de réponse", color:"#F59E0B", icon:"📵"},
+        rappeler:      {label:"À rappeler",     color:"#A855F7", icon:"🔄"},
+        appele:        {label:"Appelé",         color:"#10B981", icon:"✅"},
+        avis_demande:  {label:"Avis demandé",   color:"#06B6D4", icon:"⭐"},
+        termine:       {label:"Terminé",        color:"#4A6A9E", icon:"🏁"},
+      };
+      const MSG_AVIS = (client) =>
+`Bonjour ${client||""},
+
+Merci pour votre confiance lors de l'installation de votre borne de recharge ! 🔌
+
+Votre retour nous aide énormément à nous améliorer et à aider d'autres clients à faire leur choix.
+
+Pourriez-vous nous laisser un avis Google en cliquant sur ce lien ?
+👉 ${GOOGLE_REVIEW}
+
+Cela ne prend que 2 minutes et c'est très important pour nous. Merci d'avance ! 😊
+
+L'équipe Ma Borne LR`;
+
+      const [selected, setSelected] = useState(null);
+      const [copied, setCopied]     = useState(false);
+      const [filtre, setFiltre]     = useState("tous");
+      const [search, setSearch]     = useState("");
+
+      // Chantiers terminés uniquement
+      const termines = chantiers.filter(ch => ch.statut === "termine");
+
+      const updateSuivi = (id, patch) => {
+        setChantiers(p => p.map(ch =>
+          ch.id === id ? {...ch, suivi_comm: {...(ch.suivi_comm||{}), ...patch}} : ch
+        ));
+      };
+
+      const filtered = termines.filter(ch => {
+        const s = ch.suivi_comm?.etat || "a_appeler";
+        if(filtre !== "tous" && s !== filtre) return false;
+        if(search && !(ch.client||"").toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      });
+
+      const kpis = Object.entries(ETATS).map(([k,v]) => ({
+        ...v, key:k, nb: termines.filter(ch=>(ch.suivi_comm?.etat||"a_appeler")===k).length
+      }));
+
+      const CARD = {background:"#0D1828", borderRadius:14, border:"1px solid #1B2D4F", padding:"18px"};
+      const BTN  = (bg,e={}) => ({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",...e});
+
+      const detail = selected ? termines.find(ch=>ch.id===selected) : null;
+
+      // ── DÉTAIL ──
+      if(detail){
+        const suivi = detail.suivi_comm || {};
+        const etat  = suivi.etat || "a_appeler";
+        const E     = ETATS[etat] || ETATS.a_appeler;
+        const msg   = MSG_AVIS(detail.client);
+        return(
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
+              <button onClick={()=>setSelected(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+              <div>
+                <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#F0F6FF"}}>📞 {detail.client}</h2>
+                <div style={{fontSize:12,color:"#4A6A9E"}}>Terminé le {detail.date_fin||"—"}</div>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+
+              {/* Statut + Observation */}
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div style={CARD}>
+                  <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📋 Statut du suivi</h3>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
+                    {Object.entries(ETATS).map(([k,v])=>(
+                      <button key={k} onClick={()=>updateSuivi(detail.id,{etat:k})} style={{
+                        padding:"8px 13px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",
+                        background:etat===k?`${v.color}20`:"transparent",
+                        border:`1px solid ${etat===k?v.color:"#1B2D4F"}`,
+                        color:etat===k?v.color:"#4A6A9E"}}>
+                        {v.icon} {v.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{padding:"10px 14px",background:`${E.color}10`,border:`1px solid ${E.color}30`,borderRadius:10,fontSize:13,color:E.color,fontWeight:700}}>
+                    {E.icon} Statut actuel : {E.label}
+                  </div>
+                </div>
+
+                <div style={CARD}>
+                  <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📝 Observation</h3>
+                  <textarea
+                    value={suivi.observation||""}
+                    onChange={e=>updateSuivi(detail.id,{observation:e.target.value})}
+                    placeholder="Notes sur l'appel, retour client, points à suivre…"
+                    rows={5}
+                    style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#F0F6FF",padding:"11px 14px",fontSize:13,width:"100%",outline:"none",resize:"vertical",lineHeight:1.6,boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}
+                  />
+                  <div style={{marginTop:10,fontSize:11,color:"#2E4D82"}}>
+                    {suivi.observation ? `${suivi.observation.length} caractères` : "Aucune observation"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Message avis Google */}
+              <div style={CARD}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <h3 style={{margin:0,fontWeight:800,fontSize:14,color:"#F0F6FF"}}>⭐ Demande d'avis Google</h3>
+                  <a href={GOOGLE_REVIEW} target="_blank" rel="noopener"
+                    style={{background:"rgba(6,182,212,0.1)",border:"1px solid rgba(6,182,212,0.3)",borderRadius:8,color:"#06B6D4",padding:"6px 12px",fontSize:11,fontWeight:700,textDecoration:"none"}}>
+                    🔗 Voir la page
+                  </a>
+                </div>
+                <div style={{background:"#070D1A",borderRadius:10,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12,maxHeight:280,overflowY:"auto"}}>
+                  <pre style={{margin:0,fontSize:12,color:"#A8C4E8",lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:'"Outfit",sans-serif'}}>{msg}</pre>
+                </div>
+                <button onClick={()=>{navigator.clipboard.writeText(msg).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);});updateSuivi(detail.id,{etat:"avis_demande"});}}
+                  style={{...BTN(copied?"#10B981":"linear-gradient(135deg,#06B6D4,#0891B2)",{width:"100%",padding:"12px",fontSize:13,boxShadow:"0 4px 16px rgba(6,182,212,0.25)"})}}>
+                  {copied ? "✅ Copié ! Statut → Avis demandé" : "📋 Copier le message"}
+                </button>
+                <div style={{marginTop:10,fontSize:11,color:"#2E4D82",textAlign:"center"}}>
+                  Le statut passera automatiquement à "Avis demandé" lors de la copie
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ── LISTE ──
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>📞 Suivi commercial</h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{termines.length} chantier(s) terminé(s) à suivre</p>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8,marginBottom:18}}>
+            {kpis.map(k=>(
+              <div key={k.key} onClick={()=>setFiltre(filtre===k.key?"tous":k.key)}
+                style={{background:"#0D1828",borderRadius:10,padding:"12px 10px",border:`1px solid ${filtre===k.key?k.color:"#1B2D4F"}`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}>
+                <div style={{fontSize:18,marginBottom:4}}>{k.icon}</div>
+                <div style={{fontSize:18,fontWeight:800,color:k.color}}>{k.nb}</div>
+                <div style={{fontSize:10,color:"#4A6A9E",marginTop:2,lineHeight:1.3}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recherche */}
+          <div style={{marginBottom:14}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="🔍 Rechercher un client…"
+              style={{background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,color:"#F0F6FF",padding:"11px 14px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+          </div>
+
+          {/* Liste */}
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
+              <div style={{fontSize:48,marginBottom:12}}>📞</div>
+              <div style={{fontWeight:800,fontSize:16,color:"#4A6A9E",marginBottom:6}}>
+                {termines.length===0?"Aucun chantier terminé":"Aucun résultat"}
+              </div>
+              <div style={{fontSize:13,color:"#2E4D82"}}>
+                {termines.length===0?"Les chantiers terminés apparaîtront ici":"Modifiez votre filtre"}
+              </div>
+            </div>
+            :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {filtered.map(ch=>{
+                const suivi = ch.suivi_comm||{};
+                const etat  = suivi.etat||"a_appeler";
+                const E     = ETATS[etat]||ETATS.a_appeler;
+                return(
+                  <div key={ch.id} onClick={()=>setSelected(ch.id)}
+                    style={{background:"#0D1828",borderRadius:13,border:"1px solid #1B2D4F",padding:"14px 18px",cursor:"pointer",transition:"border-color 0.2s",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}
+                    onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
+                    onMouseOut={e=>e.currentTarget.style.borderColor="#1B2D4F"}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{ch.client||"—"}</span>
+                        <span style={{background:`${E.color}15`,color:E.color,border:`1px solid ${E.color}40`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>{E.icon} {E.label}</span>
+                      </div>
+                      <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
+                        {ch.date_fin&&<span>✅ Terminé le {ch.date_fin}</span>}
+                        {ch.technicien&&<span>🔧 {ch.technicien}</span>}
+                        {suivi.observation&&<span style={{color:"#60A5FA"}}>📝 Observation</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:18,color:"#2E4D82"}}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          }
+        </div>
+      );
+    }
 
     // ══════════════════════════════════════════
     // ONGLET MARGES (admin only)
@@ -4084,14 +4292,14 @@
       const NAV_GROUPS=[
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","messagerie"]},
-        {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
       const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
@@ -4285,6 +4493,8 @@
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
+
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
 
                 {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
