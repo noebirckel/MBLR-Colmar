@@ -2797,7 +2797,7 @@ L'équipe Ma Borne LR`;
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               <div><L c="MONTANT VENTE HT (€)"/>
-                <input type="number" value={editModal.montant_vente||""} onChange={e=>{const mv=Number(e.target.value);setEditModal(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*0.3*100)/100}));}} style={INP()}/>
+                <input type="number" value={editModal.montant_vente||""} onChange={e=>{const mv=Number(e.target.value);setEditModal(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*(acompteDefPct/100)*100)/100}));}} style={INP()}/>
               </div>
               <div><L c="ACOMPTE (€)"/>
                 <input type="number" value={editModal.montant_acompte||""} onChange={e=>setEditModal(p=>({...p,montant_acompte:Number(e.target.value)}))} style={INP()}/>
@@ -2839,11 +2839,11 @@ L'équipe Ma Borne LR`;
 
             <div style={{marginBottom:12}}><L c="CLIENT"/><input value={newForm.client} onChange={e=>setNewForm(p=>({...p,client:e.target.value}))} placeholder="Nom du client" style={INP()}/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              <div><L c="MONTANT VENTE HT (€)"/><input type="number" value={newForm.montant_vente} onChange={e=>{const mv=Number(e.target.value);setNewForm(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*0.3*100)/100}));}} style={INP()}/></div>
+              <div><L c="MONTANT VENTE HT (€)"/><input type="number" value={newForm.montant_vente} onChange={e=>{const mv=Number(e.target.value);setNewForm(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*(acompteDefPct/100)*100)/100}));}} style={INP()}/></div>
               <div><L c="ACOMPTE (€)"/><input type="number" value={newForm.montant_acompte} onChange={e=>setNewForm(p=>({...p,montant_acompte:Number(e.target.value)}))} style={INP()}/></div>
             </div>
             {newForm.montant_vente>0&&<div style={{background:"#3B82F615",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#3B82F6"}}>
-              💡 Acompte = {((newForm.montant_acompte/newForm.montant_vente)*100).toFixed(0)}% — par défaut 30%
+              💡 Acompte = {((newForm.montant_acompte/newForm.montant_vente)*100).toFixed(0)}% du montant HT
             </div>}
             <div style={{marginBottom:12}}><L c="NOTES"/><textarea value={newForm.notes} onChange={e=>setNewForm(p=>({...p,notes:e.target.value}))} placeholder="Informations…" style={{...INP(),height:60,resize:"none"}}/></div>
             <div style={{display:"flex",gap:8}}>
@@ -4324,6 +4324,8 @@ L'équipe Ma Borne LR`;
       const[ventes,setVentes]=React.useState([]);
       const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
       const[acomptes,setAcomptes]=React.useState([]);
+      const[acompteDefPct,setAcompteDefPct]=React.useState(()=>{try{return Number(localStorage.getItem("acompte_pct")||50);}catch(e){return 50;}});
+      const saveAcomptePct=React.useCallback(v=>{setAcompteDefPct(v);try{localStorage.setItem("acompte_pct",String(v));}catch(e){}}, []);
       const[savTickets,setSavTickets]=React.useState([]);
       const[objectifs,setObjectifs]=React.useState({});
       const[rapports,setRapports]=React.useState([]);
@@ -4749,10 +4751,10 @@ L'équipe Ma Borne LR`;
 
                 {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:""},...p]);
-                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
+                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"en_attente",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
                 }}/>}
 
-                {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
+                {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
@@ -5021,7 +5023,17 @@ L'équipe Ma Borne LR`;
                     <div><h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>⚙️ Paramètres</h2><p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Gestion des composants du stock</p></div>
                     <button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>+ Nouveau</button>
                   </div>
-                  <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{width:"100%",boxSizing:"border-box",background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontSize:13,marginBottom:10,fontFamily:'"Outfit",sans-serif'}}/>
+                  <div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={{fontSize:13,color:"#A8C4E8",fontWeight:600}}>💰 Acompte par défaut :</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <input type="number" min="1" max="100" value={acompteDefPct}
+              onChange={e=>{const v=Math.min(100,Math.max(1,Number(e.target.value)));saveAcomptePct(v);}}
+              style={{background:"#070D1A",border:"1px solid #3B82F6",borderRadius:8,color:"#F0F6FF",padding:"7px 10px",width:70,fontSize:14,fontWeight:700,outline:"none",textAlign:"center",fontFamily:'"Outfit",sans-serif'}}/>
+            <span style={{fontSize:14,color:"#F0F6FF",fontWeight:700}}>%</span>
+          </div>
+          <span style={{fontSize:11,color:"#4A6A9E"}}>Appliqué automatiquement à chaque nouvelle vente</span>
+        </div>
+        <input value={pSearch} onChange={e=>setPSearch(e.target.value)} placeholder="🔍 Rechercher…" style={{width:"100%",boxSizing:"border-box",background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontSize:13,marginBottom:10,fontFamily:'"Outfit",sans-serif'}}/>
                   <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
                     {cats.map(cat=><button key={cat} onClick={()=>setPCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${pCat===cat?"#3B82F6":"#1B2D4F"}`,background:pCat===cat?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",color:pCat===cat?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",fontFamily:'"Outfit",sans-serif'}}>{cat}</button>)}
                   </div>
