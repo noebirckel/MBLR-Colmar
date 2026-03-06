@@ -421,12 +421,9 @@
     function SuiviCommercialTab({isMobile, chantiers, setChantiers, profile, role}){
       const GOOGLE_REVIEW = "https://g.page/r/CYKYMv6dsT55EBM/review";
       const ETATS = {
-        a_appeler:     {label:"À appeler",      color:"#3B82F6", icon:"📞"},
-        pas_reponse:   {label:"Pas de réponse", color:"#F59E0B", icon:"📵"},
-        rappeler:      {label:"À rappeler",     color:"#A855F7", icon:"🔄"},
-        appele:        {label:"Appelé",         color:"#10B981", icon:"✅"},
-        avis_demande:  {label:"Avis demandé",   color:"#06B6D4", icon:"⭐"},
-        termine:       {label:"Terminé",        color:"#4A6A9E", icon:"🏁"},
+        a_appeler:   {label:"À appeler",      color:"#3B82F6", icon:"📞"},
+        pas_reponse: {label:"Pas de réponse", color:"#F59E0B", icon:"📵"},
+        termine:     {label:"Terminé",        color:"#10B981", icon:"✅"},
       };
       const MSG_AVIS = (client) =>
 `Bonjour ${client||""},
