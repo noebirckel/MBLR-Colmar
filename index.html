@@ -4082,13 +4082,13 @@
       // Navigation groups
       const NAV_GROUPS=[
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
-        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","messagerie"]},
+        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","messagerie"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","commandes","administratif"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports","cartes"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
       const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
