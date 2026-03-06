@@ -465,6 +465,7 @@
         const etat = fact.statut || "a_facturer";
         const E    = STATUTS_FACT[etat];
         return(
+          <>
           <div>
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
               <button onClick={()=>setDetail(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
@@ -551,6 +552,7 @@
             </div>
           </div>
         </div>}
+          </>
         );
       }
 
@@ -762,41 +764,30 @@ L'équipe Ma Borne LR`;
               </div>
             </div>
           </div>
-        {delConf&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setDelConf(false)}>
-          <div style={{background:"#0D1828",borderRadius:16,border:"1px solid #1B2D4F",padding:"28px",maxWidth:360,width:"90%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:44,marginBottom:12}}>🗑️</div>
-            <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer cette facture ?</h3>
-            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
-              <button onClick={()=>{setChantiers(p=>p.map(x=>x.id===ch.id?{...x,facture:{statut:"supprime"}}:x));setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
-            </div>
-          </div>
-        </div>}
         );
       }
 
       // ── LISTE ──
-      return(
-        <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
-            <div>
-              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>📞 Suivi commercial</h2>
-              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{termines.length} chantier(s) terminé(s) à suivre</p>
-            </div>
-          </div>
+return(
+<div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+<div>
+<h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>📞 Suivi commercial</h2>
+<p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{termines.length} chantier(s) à suivre</p>
+</div>
+</div>
 
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8,marginBottom:18}}>
-            {kpis.map(k=>(
-              <div key={k.key} onClick={()=>setFiltre(filtre===k.key?"tous":k.key)}
-                style={{background:"#0D1828",borderRadius:10,padding:"12px 10px",border:`1px solid ${filtre===k.key?k.color:"#1B2D4F"}`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}>
-                <div style={{fontSize:18,marginBottom:4}}>{k.icon}</div>
-                <div style={{fontSize:18,fontWeight:800,color:k.color}}>{k.nb}</div>
-                <div style={{fontSize:10,color:"#4A6A9E",marginTop:2,lineHeight:1.3}}>{k.label}</div>
-              </div>
-            ))}
-          </div>
+{/* KPIs */}
+<div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+{Object.entries(ETATS).map(([k,v])=>(
+<div key={k} onClick={()=>setFiltre(filtre===k?"tous":k)}
+style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px solid ${filtre===k?v.color:"#1B2D4F"}`,cursor:"pointer",minWidth:90,textAlign:"center"}}>
+<div style={{fontSize:18,marginBottom:2}}>{v.icon}</div>
+<div style={{fontSize:18,fontWeight:800,color:v.color}}>{termines.filter(c=>(c.suivi_comm?.etat||"a_appeler")===k).length}</div>
+<div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{v.label}</div>
+</div>
+))}
+</div>
 
           {/* Recherche */}
           <div style={{marginBottom:14}}>
@@ -2459,18 +2450,7 @@ L'équipe Ma Borne LR`;
               </div>
             </div>
           </div>
-        </div>
-        {delConf&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setDelConf(false)}>
-          <div style={{background:"#0D1828",borderRadius:16,border:"1px solid #1B2D4F",padding:"28px",maxWidth:360,width:"90%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:44,marginBottom:12}}>🗑️</div>
-            <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer cette facture ?</h3>
-            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
-              <button onClick={()=>{setChantiers(p=>p.map(x=>x.id===ch.id?{...x,facture:{statut:"supprime"}}:x));setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
-            </div>
-          </div>
-        </div>}
+
         );
       }
 
