@@ -4434,7 +4434,7 @@ L'équipe Ma Borne LR`;
               sb.from("acomptes").select("*").order("created_at",{ascending:false}),
               sb.from("sav_tickets").select("*").order("created_at",{ascending:false}),
               sb.from("objectifs").select("*"),
-              sb.from("rapports").select("*").order("created_at",{ascending:false}).catch(()=>({data:[]})),
+              sb.from("rapports").select("*").order("created_at",{ascending:false}),
             ]);
             if(rs?.data)setStock(rs.data);
             if(ro?.data)setOrders(ro.data);
@@ -4485,17 +4485,22 @@ L'équipe Ma Borne LR`;
         setSync("saving");
         timer.current=setTimeout(async()=>{
           try{
-            if(ns)await sb.from("stock").upsert(ns);
-            if(no)await sb.from("orders").upsert(no);
-            if(nh)await sb.from("historique").upsert(nh);
-            if(nv)await sb.from("ventes").upsert(nv);
-            if(nc)await sb.from("chantiers").upsert(nc);
-            if(na)await sb.from("acomptes").upsert(na);
-            if(nsav)await sb.from("sav_tickets").upsert(nsav);
-            if(nobj)await sb.from("objectifs").upsert(nobj);
-            if(nrapp)await sb.from("rapports").upsert(nrapp);
+            const run=async(table,data)=>{
+              if(!data)return;
+              const{error}=await sb.from(table).upsert(data);
+              if(error){console.error(table+":",error.message,error.details,error.hint);setSync("error: "+table);throw error;}
+            };
+            await run("stock",ns);
+            await run("orders",no);
+            await run("historique",nh);
+            await run("ventes",nv);
+            await run("chantiers",nc);
+            await run("acomptes",na);
+            await run("sav_tickets",nsav);
+            await run("objectifs",nobj);
+            await run("rapports",nrapp);
             setSync("saved");
-          }catch(e){setSync("error");console.error(e);}
+          }catch(e){setSync("error");console.error("saveDB:",e.message);}
         },800);
       },[]);
 
@@ -4730,7 +4735,7 @@ L'équipe Ma Borne LR`;
 
                 {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toISOString(),statut:"prospect",adresse:"",notes:""},...p]);
-                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date:new Date().toISOString()},...p]);
+                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*0.3),statut:"en_attente",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
                 }}/>}
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
