@@ -3148,6 +3148,32 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, onVenteSaved}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
+
+      // Sous-catégories
+      const SUBCATS = [
+        {id:"tous",  label:"Tous",            icon:"📋"},
+        {id:"borne", label:"Borne",           icon:"⚡"},
+        {id:"energie",label:"Gestion énergie",icon:"🔋"},
+        {id:"pied",  label:"Pied",            icon:"🦾"},
+        {id:"type2", label:"Type 2",          icon:"🔌"},
+        {id:"elec",  label:"Électricité",     icon:"🔧"},
+        {id:"access",label:"Accessoire",      icon:"📦"},
+      ];
+      // Mapping article → sous-catégorie (basé sur le nom/cat)
+      const getSubcat = s => {
+        const n = (s.article+" "+(s.cat||"")).toLowerCase();
+        if(/borne|wallbox|chargeur|station/.test(n))    return "borne";
+        if(/gestionnaire|énergie|energie|dlm|grid|power management/.test(n)) return "energie";
+        if(/pied|socle|support|poteau/.test(n))         return "pied";
+        if(/type.?2|t2|câble charge|charge cable/.test(n)) return "type2";
+        if(/câble|gaine|conduit|disjoncteur|différentiel|protection|tableau|rail|bornier|fil|interrupteur/.test(n)) return "elec";
+        return "access";
+      };
+      const BORNES_FILT = BORNES
+        .filter(s => matCat==="tous" || getSubcat(s)===matCat)
+        .filter(s => !matSearch || (s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()));
+      const CABLES_FILT = CABLES
+        .filter(s => !cabSearch || s.article.toLowerCase().includes(cabSearch.toLowerCase()));
       const canEdit = r => ["administrateur","commercial"].includes(r);
       const BRANDS = ["Easee","Ohme","Zaptec","V2C"];
       const BC = {"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935"};
@@ -3178,6 +3204,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[mItem,setMItem]=useState({id:"",qty:""});
       const[cItem,setCItem]=useState({id:"",qty:""});
       const[search,setSearch]=useState("");
+      const[matSearch,setMatSearch]=useState("");
+      const[matCat,setMatCat]=useState("tous");
+      const[cabSearch,setCabSearch]=useState("");
       const[editId,setEditId]=useState(null);
       const[delConf,setDelConf]=useState(null);
 
@@ -3215,6 +3244,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         clearDraft();
         goToView("list");
         setEditId(null);
+        setMatSearch(""); setMatCat("tous"); setCabSearch("");
       };
       const saveVente = async() => {
         if(!form.client||!form.prix_ht)return;
