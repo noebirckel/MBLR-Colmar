@@ -16,6 +16,8 @@
   <style>
     @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
     @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #070D1A; color: #E2E8F0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -134,6 +136,29 @@
         if(error)setErr("Email ou mot de passe incorrect");
         setLoading(false);
       };
+      // ── ACCUEIL COMPUTED ──────────────────────────────────
+      const _now=new Date();
+      const _hour=_now.getHours();
+      const _greeting=_hour<12?"Bonjour":_hour<18?"Bon après-midi":"Bonsoir";
+      const _dateStr=_now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+      const _prenom=profile?.nom?.split(" ")[0]||profile?.nom||"";
+      const _caMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()===_now.getMonth()&&d.getFullYear()===_now.getFullYear();}).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
+      const _chPlan=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
+      const _chEnCours=chantiersPipeline.filter(ch=>ch.statut==="en_cours").length;
+      const _chTermines=chantiersPipeline.filter(ch=>ch.statut==="termine").length;
+      const _savOuverts=savTickets.filter(s=>s.statut==="ouvert").length;
+      const _factAFaire=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+      const _acomAEnv=acomptes.filter(a=>a.statut==="a_envoyer").length;
+      const _stockCrit=stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length;
+      const _ventesAuj=ventes.filter(v=>new Date(v.id).toDateString()===_now.toDateString()).length;
+      const _aAppeler=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;
+      const _myChPlan=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="planifie").length;
+      const _myChCours=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="en_cours").length;
+      const _acomPaye=acomptes.filter(a=>a.statut==="paye").length;
+      const _STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"},termine:{label:"Terminé",color:"#6B7280"}};
+      const _cardStyle={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
+      const _rowStyle={display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"};
+      // ────────────────────────────────────────────────────────
       return(
         <div style={{
           minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
@@ -1101,7 +1126,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const Card=({icon,label,value,sub,color})=>(
         <div style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
           <div style={{fontSize:22,marginBottom:6}}>{icon}</div>
-          <div style={{fontSize:isMobile?16:20,fontWeight:800,color}}>{value}</div>
+          <div style={{fontSize:isMobile?16:20,fontWeight:800,color:color}}>{value}</div>
           <div style={{fontSize:11,color:"#7B96C8",marginTop:2}}>{label}</div>
           {sub&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{sub}</div>}
         </div>
@@ -2776,7 +2801,36 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       };
 
       const[filter,setFilter]=useState("tous");
-      const[search,setSearch]=useState("");
+const[search,setSearch]=useState("");
+      const[matSearch,setMatSearch]=useState("");
+      const[matCat,setMatCat]=useState("tous");
+      const[cabSearch,setCabSearch]=useState("");
+
+      // Sous-catégories
+      const SUBCATS=[
+        {id:"tous",label:"Tous",icon:"📋"},
+        {id:"borne",label:"Borne",icon:"⚡"},
+        {id:"energie",label:"Gestion énergie",icon:"🔋"},
+        {id:"pied",label:"Pied",icon:"🦾"},
+        {id:"type2",label:"Type 2",icon:"🔌"},
+        {id:"elec",label:"Électricité",icon:"🔧"},
+        {id:"access",label:"Accessoire",icon:"📦"},
+      ];
+      const getSubcat=s=>{
+        const n=(s.article+" "+(s.cat||"")).toLowerCase();
+        const has=(...words)=>words.some(w=>n.includes(w));
+        if(has("borne","wallbox","chargeur","station"))return"borne";
+        if(has("gestionnaire","énergie","energie","dlm","grid","power"))return"energie";
+        if(has("pied","socle","support","poteau"))return"pied";
+        if(has("type 2","type2","t2","charge cable"))return"type2";
+        if(has("cable","gaine","conduit","disjoncteur","differentiel","protection","tableau"))return"elec";
+        return"access";
+      };
+      const BORNES_FILT=BORNES
+        .filter(s=>matCat==="tous"||getSubcat(s)===matCat)
+        .filter(s=>!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()));
+      const CABLES_FILT=CABLES
+        .filter(s=>!cabSearch||s.article.toLowerCase().includes(cabSearch.toLowerCase()));
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newModal,setNewModal]=useState(false);
@@ -3149,31 +3203,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
-      // Sous-catégories
-      const SUBCATS = [
-        {id:"tous",  label:"Tous",            icon:"📋"},
-        {id:"borne", label:"Borne",           icon:"⚡"},
-        {id:"energie",label:"Gestion énergie",icon:"🔋"},
-        {id:"pied",  label:"Pied",            icon:"🦾"},
-        {id:"type2", label:"Type 2",          icon:"🔌"},
-        {id:"elec",  label:"Électricité",     icon:"🔧"},
-        {id:"access",label:"Accessoire",      icon:"📦"},
-      ];
-      // Mapping article → sous-catégorie (basé sur le nom/cat)
-      const getSubcat = s => {
-        const n = (s.article+" "+(s.cat||"")).toLowerCase();
-        if(/borne|wallbox|chargeur|station/.test(n))    return "borne";
-        if(/gestionnaire|énergie|energie|dlm|grid|power management/.test(n)) return "energie";
-        if(/pied|socle|support|poteau/.test(n))         return "pied";
-        if(/type.?2|t2|câble charge|charge cable/.test(n)) return "type2";
-        if(/câble|gaine|conduit|disjoncteur|différentiel|protection|tableau|rail|bornier|fil|interrupteur/.test(n)) return "elec";
-        return "access";
-      };
-      const BORNES_FILT = BORNES
-        .filter(s => matCat==="tous" || getSubcat(s)===matCat)
-        .filter(s => !matSearch || (s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()));
-      const CABLES_FILT = CABLES
-        .filter(s => !cabSearch || s.article.toLowerCase().includes(cabSearch.toLowerCase()));
       const canEdit = r => ["administrateur","commercial"].includes(r);
       const BRANDS = ["Easee","Ohme","Zaptec","V2C"];
       const BC = {"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935"};
@@ -3204,9 +3233,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[mItem,setMItem]=useState({id:"",qty:""});
       const[cItem,setCItem]=useState({id:"",qty:""});
       const[search,setSearch]=useState("");
-      const[matSearch,setMatSearch]=useState("");
-      const[matCat,setMatCat]=useState("tous");
-      const[cabSearch,setCabSearch]=useState("");
       const[editId,setEditId]=useState(null);
       const[delConf,setDelConf]=useState(null);
 
@@ -3244,8 +3270,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         clearDraft();
         goToView("list");
         setEditId(null);
-        setMatSearch(""); setMatCat("tous"); setCabSearch("");
-      };
+              };
       const saveVente = async() => {
         if(!form.client||!form.prix_ht)return;
         let coords=form.coords||null;
@@ -3325,49 +3350,76 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
               {form.adresse&&!form.coords&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>📍 Sera géocodé automatiquement à l'enregistrement</div>}
             </div>
-
-            {/* Matériel */}
-            <div style={{marginBottom:14}}>
-              <L c="MATÉRIEL (BORNES & ACCESSOIRES)"/>
-              <div style={{display:"flex",gap:6,marginBottom:6}}>
-                <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
-                  <option value="">Choisir un article…</option>
-                  {BORNES.map(s=><option key={s.id} value={s.id}>{s.cat} — {s.article} ({fmt(s.prix)})</option>)}
-                </select>
-                <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:65,textAlign:"center"}}/>
-                <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
-              </div>
-              {form.materiels.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
-                  <span style={{fontSize:13}}>{m.article}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
-                    <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"3px 9px",fontSize:13}}>✕</button>
-                  </div>
-                </div>
+        {/* Matériel */}
+          <div style={{marginBottom:14}}>
+            <L c="MATÉRIEL (BORNES & ACCESSOIRES)"/>
+            {/* Pills catégories */}
+            <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+              {SUBCATS.map(sc=>(
+              <button key={sc.id} onClick={()=>setMatCat(sc.id)}
+                style={{padding:"4px 10px",borderRadius:20,border:"none",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',
+                background:matCat===sc.id?"#3B82F6":"#1B2D4F",
+                color:matCat===sc.id?"#FFF":"#7B96C8"}}>
+                {sc.icon} {sc.label}{matCat===sc.id&&matCat!=="tous"?` (${BORNES_FILT.length})`:""}
+              </button>
               ))}
             </div>
-
-            {/* Câbles */}
-            <div style={{marginBottom:14}}>
-              <L c="CÂBLES (ML)"/>
-              <div style={{display:"flex",gap:6,marginBottom:6}}>
-                <select value={cItem.id} onChange={e=>setCItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
-                  <option value="">Choisir un câble…</option>
-                  {CABLES.map(s=><option key={s.id} value={s.id}>{s.article} ({fmt(s.prix)}/ml)</option>)}
-                </select>
-                <input type="number" min="1" value={cItem.qty} onChange={e=>setCItem(p=>({...p,qty:e.target.value}))} placeholder="ml" style={{...INP(),width:65,textAlign:"center"}}/>
-                <button onClick={addCable} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
-              </div>
-              {form.cables.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"8px 12px",marginBottom:5}}>
-                  <span style={{fontSize:13}}>{m.article}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty} ml</span>
-                    <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:5,color:"#EF4444",cursor:"pointer",padding:"3px 9px",fontSize:13}}>✕</button>
-                  </div>
+            {/* Recherche matériel */}
+            <div style={{position:"relative",marginBottom:6}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4A6A9E"}}>🔍</span>
+              <input value={matSearch} onChange={e=>setMatSearch(e.target.value)}
+                placeholder={`Rechercher parmi ${BORNES_FILT.length} article${BORNES_FILT.length>1?"s":""}…`}
+                style={{...INP(),paddingLeft:32,width:"100%",boxSizing:"border-box"}}/>
+              {matSearch&&<button onClick={()=>setMatSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:16}}>×</button>}
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:6}}>
+              <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
+                <option value="">Choisir un article…</option>
+                {BORNES_FILT.map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
+              </select>
+              <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:64,textAlign:"center"}}/>
+              <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
+            </div>
+            {BORNES.length===0&&<div style={{fontSize:12,color:"#EF4444",marginBottom:6,textAlign:"center"}}>Aucun article trouvé — essayez "Tous"</div>}
+            {form.materiels.map(m=>(
+              <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"8px 12px",marginBottom:4}}>
+                <span style={{fontSize:13}}>{m.article}</span>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
+                  <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444422",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Câbles */}
+          <div style={{marginBottom:14}}>
+            <L c="CÂBLES (ML)"/>
+            <div style={{position:"relative",marginBottom:6}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4A6A9E"}}>🔍</span>
+              <input value={cabSearch} onChange={e=>setCabSearch(e.target.value)}
+                placeholder="Rechercher un câble…"
+                style={{...INP(),paddingLeft:32,width:"100%",boxSizing:"border-box"}}/>
+              {cabSearch&&<button onClick={()=>setCabSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:16}}>×</button>}
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:6}}>
+              <select value={cItem.id} onChange={e=>setCItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
+                <option value="">Choisir un câble…</option>
+                {CABLES_FILT.map(s=><option key={s.id} value={s.id}>{s.article} ({fmt(s.prix)}/ml)</option>)}
+              </select>
+              <input type="number" min="1" value={cItem.qty} onChange={e=>setCItem(p=>({...p,qty:e.target.value}))} placeholder="ml" style={{...INP(),width:64,textAlign:"center"}}/>
+              <button onClick={addCable} style={BTN("#3B82F6",{padding:"10px 16px",fontSize:18})}>+</button>
+            </div>
+            {form.cables.map(m=>(
+              <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"8px 12px",marginBottom:4}}>
+                <span style={{fontSize:13}}>{m.article}</span>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:13,color:"#10B981",fontWeight:600}}>{m.qty} ml</span>
+                  <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444422",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
             </div>
 
             {/* Prix HT */}
@@ -4409,6 +4461,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[pSearch,setPSearch]=React.useState("");
       const[pCat,setPCat]=React.useState("Toutes");
       const firstLoad=React.useRef(true);
+      const[rtToast,setRtToast]=React.useState(null);
+      const rtTimer=React.useRef(null);
+      const showToast=React.useCallback((msg)=>{
+        setRtToast(msg);
+        if(rtTimer.current)clearTimeout(rtTimer.current);
+        rtTimer.current=setTimeout(()=>setRtToast(null),3500);
+      },[]);
       const timer=React.useRef(null);
 
       const goTo=v=>{try{localStorage.setItem("app_view",v);}catch(e){}setView(v);};
@@ -4511,13 +4570,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[profile]);
 
       // ── REALTIME ──────────────────────────────────────────────
-      const[rtToast,setRtToast]=React.useState(null);
-      const rtTimer=React.useRef(null);
-      const showToast=React.useCallback((msg)=>{
-        setRtToast(msg);
-        if(rtTimer.current)clearTimeout(rtTimer.current);
-        rtTimer.current=setTimeout(()=>setRtToast(null),3500);
-      },[]);
+
 
       React.useEffect(()=>{
         if(!profile)return;
@@ -4533,7 +4586,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           const ev=payload.eventType;
           const rec=payload.new||payload.old||{};
 
-          // Mise à jour état local directement depuis payload (sans refetch)
           if(t==="ventes"){
             if(ev==="INSERT")setVentes(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
             else if(ev==="UPDATE")setVentes(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
@@ -4551,7 +4603,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           }
           else if(t==="stock"){
             if(ev==="DELETE")setStock(p=>p.filter(x=>x.id!==payload.old.id));
-            else setStock(p=>{const exists=p.find(x=>x.id===payload.new.id);return exists?p.map(x=>x.id===payload.new.id?payload.new:x):[...p,payload.new];});
+            else setStock(p=>{const exists=p.find(x=>x.id===payload.new.id);return exists?p.map(x=>x.id===payload.new.id?payload.new:x):[payload.new,...p];});
           }
           else if(t==="orders"){
             if(ev==="INSERT")setOrders(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
@@ -4569,7 +4621,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             else if(ev==="DELETE")setRapports(p=>p.filter(x=>x.id!==payload.old.id));
           }
 
-          // Toast notification
           const label=LABELS[t]||t;
           const evLabel=EVENTS[ev]||ev;
           const client=rec.client||rec.article||"";
@@ -4670,10 +4721,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const oArt=stock.find(s=>s.id===oModal);
       const aOByAModal=oModal&&oArt?aOByA[oModal]:null;
 
+
       // Toast realtime
-      const RealtimeToast=rtToast?React.createElement("div",{style:{position:"fixed",bottom:24,right:24,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:12,padding:"12px 18px",fontSize:13,color:"#E8F0FF",fontWeight:600,zIndex:9999,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",display:"flex",alignItems:"center",gap:10,maxWidth:320,animation:"fadeIn 0.2s ease"}},
-        React.createElement("span",{style:{fontSize:16}},"🔔"),
-        React.createElement("span",null,rtToast)
+      const RealtimeToast=rtToast?(
+        <div style={{position:"fixed",bottom:24,right:24,background:"#1B2D4F",border:"1px solid #3B82F6",borderRadius:12,padding:"12px 18px",color:"#E8F0FF",fontSize:13,fontWeight:600,zIndex:9999,boxShadow:"0 4px 20px rgba(0,0,0,0.4)",animation:"slideIn 0.3s ease",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:16}}>🔔</span>{rtToast}
+        </div>
       ):null;
 
       const syncCfg={
@@ -4714,6 +4767,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       // Modal helpers
       const OVL={position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16};
       const MBX={background:"#0D1828",borderRadius:16,padding:"20px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"};
+
 
       return(
         <div style={{background:"#070D1A",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif',minHeight:"100vh"}}>
@@ -4820,22 +4874,19 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             </div>
                             {g.tabs.map(t=>{
                               const isAct=view===t;
-                              return(
-                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:7,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.12)":"transparent"}}>
+              let _b=0,_bc="#EF4444";
+                if(t==="factures"){_b=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;}
+                else if(t==="chantier"){_b=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;_bc="#F59E0B";}
+                else if(t==="commandes"){_b=orders.filter(o=>o.statut==="en_attente").length;_bc="#F59E0B";}
+                else if(t==="sav"){_b=savTickets.filter(s=>s.statut==="ouvert").length;}
+                else if(t==="administratif"){_b=acomptes.filter(a=>a.statut==="a_envoyer").length;_bc="#F59E0B";}
+                else if(t==="suivi_comm"){_b=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;_bc="#3B82F6";}
+                else if(t==="ventes"){_b=ventes.filter(v=>(Date.now()-v.id)/3600000<24).length;_bc="#10B981";}
+              return(
+                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:6,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.15)":"transparent"}}>
                                   <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
                                   <span style={{fontSize:12,fontWeight:isAct?700:500,color:isAct?"#60A5FA":"#5A7AAA"}}>{TAB_LABELS[t]}</span>
-                                  {(()=>{
-                                    let badge=0;
-                                    let color="#EF4444";
-                                    if(t==="factures") { badge=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length; color="#EF4444"; }
-                                    else if(t==="chantier") { badge=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length; color="#F59E0B"; }
-                                    else if(t==="commandes") { badge=orders.filter(o=>o.statut==="en_attente").length; color="#F59E0B"; }
-                                    else if(t==="sav") { badge=savTickets.filter(s=>s.statut==="ouvert").length; color="#EF4444"; }
-                                    else if(t==="administratif") { badge=acomptes.filter(a=>a.statut==="a_envoyer").length; color="#F59E0B"; }
-                                    else if(t==="suivi_comm") { badge=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length; color="#3B82F6"; }
-                                    else if(t==="ventes") { badge=ventes.filter(v=>{const age=(Date.now()-v.id)/1000/3600;return age<24;}).length; color="#10B981"; }
-                                    return badge>0?<span style={{marginLeft:"auto",background:color,color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:16,textAlign:"center"}}>{badge>99?"99+":badge}</span>:null;
-                                  })()}
+                                  {_b>0&&<span style={{marginLeft:"auto",background:_bc,color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:16,textAlign:"center"}}>{_b>99?"99+":_b}</span>}
                                   {isAct&&<div style={{marginLeft:"auto",width:3,height:14,borderRadius:2,background:"#3B82F6"}}/>}
                                 </button>
                               );
@@ -4916,308 +4967,153 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
 
-                {view==="accueil"&&<>
-{/* ── ACCUEIL ROLE-BASED ── */}
-{(()=>{
-  const now = new Date();
-  const hour = now.getHours();
-  const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
-  const dateStr = now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  const prenom = profile?.nom?.split(" ")[0]||profile?.nom||"";
-
-  // Calculs communs
-  const caMonth = ventes.filter(v=>{
-    const d=new Date(v.id); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-  }).reduce((s,v)=>s+(v.prix_ht||0),0);
-  const chantiersAPlanifier = chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
-  const chantiersEnCours = chantiersPipeline.filter(ch=>ch.statut==="en_cours").length;
-  const chantiersTermines = chantiersPipeline.filter(ch=>ch.statut==="termine").length;
-  const savOuverts = savTickets.filter(s=>s.statut==="ouvert").length;
-  const facturesAFaire = chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
-  const accomptesAEnvoyer = acomptes.filter(a=>a.statut==="a_envoyer").length;
-  const stockCritique = stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length;
-  const cmdEnAttente = orders.filter(o=>o.statut==="en_attente").length;
-  const ventesAujourdhui = ventes.filter(v=>new Date(v.id).toDateString()===now.toDateString()).length;
-  const aAppeler = chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;
-
-  const CARD = {background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
-  const KPI = (val,label,icon,color,action) => (
-    <div onClick={action} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:`1px solid ${color}30`,cursor:action?"pointer":"default",transition:"border-color 0.15s"}}
-      onMouseOver={e=>{if(action)e.currentTarget.style.borderColor=color;}}
-      onMouseOut={e=>{if(action)e.currentTarget.style.borderColor=color+"30";}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-        <div>
-          <div style={{fontSize:isMobile?24:28,fontWeight:900,color,lineHeight:1}}>{val}</div>
-          <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{label}</div>
-        </div>
-        <span style={{fontSize:22}}>{icon}</span>
-      </div>
-    </div>
-  );
-
-  const Section = ({title,children,action,actionLabel}) => (
-    <div style={CARD}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{title}</span>
-        {action&&<button onClick={action} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>{actionLabel||"Voir →"}</button>}
-      </div>
-      {children}
-    </div>
-  );
-
-  const Empty = ({msg}) => <div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"16px 0"}}>{msg}</div>;
-
-  // ── ADMINISTRATEUR ──
-  if(role==="administrateur") return (
-    <>
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} ⚡</div>
-      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
-    </div>
-
-    {/* Alertes urgentes */}
-    {(facturesAFaire>0||savOuverts>0||stockCritique>0)&&(
-      <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:6}}>
-        {facturesAFaire>0&&<div onClick={()=>goTo("factures")} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#EF4444",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-          🔴 {facturesAFaire} facture{facturesAFaire>1?"s":""} à établir
-        </div>}
-        {savOuverts>0&&<div onClick={()=>goTo("sav")} style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-          🛠️ {savOuverts} ticket{savOuverts>1?"s":""} SAV ouvert{savOuverts>1?"s":""}
-        </div>}
-        {stockCritique>0&&<div onClick={()=>goTo("stock")} style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F59E0B",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-          📦 {stockCritique} article{stockCritique>1?"s":""} en stock critique
-        </div>}
-      </div>
-    )}
-
-    {/* KPIs CA + chantiers */}
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
-      {KPI(fmt(caMonth)+" €","CA ce mois","💰","#10B981",()=>goTo("stats"))}
-      {KPI(chantiersEnCours,"En cours","🔧","#3B82F6",()=>goTo("chantier"))}
-      {KPI(chantiersAPlanifier,"À planifier","📅","#F59E0B",()=>goTo("chantier"))}
-      {KPI(ventesAujourdhui,"Ventes aujourd'hui","💼","#A78BFA",()=>goTo("ventes"))}
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-      {KPI(facturesAFaire,"À facturer","🧾","#EF4444",()=>goTo("factures"))}
-      {KPI(accomptesAEnvoyer,"Acomptes à envoyer","📋","#F59E0B",()=>goTo("administratif"))}
-      {KPI(stockCritique,"Stock critique","📦","#EF4444",()=>goTo("stock"))}
-      {KPI(savOuverts,"SAV ouverts","🛠️","#F87171",()=>goTo("sav"))}
-    </div>
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-      {/* Dernières ventes */}
-      <Section title="💰 Dernières ventes" action={()=>goTo("ventes")}>
-        {ventes.slice(0,5).length===0?<Empty msg="Aucune vente"/>:ventes.slice(0,5).map(v=>(
-          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{v.date||"—"} · {v.par||"—"}</div></div>
-            <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
+{view==="accueil"&&<>
+          {/* Bonjour */}
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{_greeting} {_prenom} {ROLES[role]?.icon||""}</div>
+            <div style={{fontSize:12,color:"#4A6A9E"}}>{_dateStr}</div>
           </div>
-        ))}
-      </Section>
 
-      {/* Chantiers récents */}
-      <Section title="🔧 Chantiers actifs" action={()=>goTo("chantier")}>
-        {chantiersPipeline.filter(ch=>ch.statut!=="termine").slice(0,5).length===0?<Empty msg="Aucun chantier actif"/>:
-        chantiersPipeline.filter(ch=>ch.statut!=="termine").slice(0,5).map(ch=>{
-          const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"},termine:{label:"Terminé",color:"#6B7280"}};
-          const s=STATUTS_CH[ch.statut]||STATUTS_CH.a_planifier;
-          return(
-            <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-              <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{ch.technicien||"Non assigné"}</div></div>
-              <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.color+"15",padding:"2px 8px",borderRadius:20}}>{s.label}</span>
-            </div>
-          );
-        })}
-      </Section>
-
-      {/* Stock critique */}
-      <Section title="📦 Stock critique" action={()=>goTo("stock")}>
-        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).length===0
-          ?<Empty msg="✅ Tout le stock est OK"/>
-          :stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>(
-          <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <span style={{fontSize:13,color:"#E8F0FF",fontWeight:600}}>{item.article}</span>
-            <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>{item.stock}/{item.seuil}</span>
-          </div>
-        ))}
-      </Section>
-
-      {/* Acomptes à envoyer */}
-      <Section title="📋 Acomptes en attente" action={()=>goTo("administratif")}>
-        {acomptes.filter(a=>a.statut==="a_envoyer").slice(0,5).length===0?<Empty msg="✅ Aucun acompte en attente"/>:
-        acomptes.filter(a=>a.statut==="a_envoyer").slice(0,5).map(a=>(
-          <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{a.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{a.date_creation||"—"}</div></div>
-            <span style={{fontSize:13,fontWeight:800,color:"#F59E0B"}}>{fmt(a.montant_acompte)}€</span>
-          </div>
-        ))}
-      </Section>
-    </div>
-    </>
-  );
-
-  // ── COMMERCIAL ──
-  if(role==="commercial") return (
-    <>
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 💼</div>
-      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
-    </div>
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-      {KPI(fmt(caMonth)+" €","CA ce mois","💰","#10B981",()=>goTo("stats"))}
-      {KPI(ventesAujourdhui,"Ventes aujourd'hui","📅","#A78BFA",()=>goTo("ventes"))}
-      {KPI(ventes.length,"Total ventes","📊","#3B82F6",()=>goTo("ventes"))}
-      {KPI(aAppeler,"Clients à appeler","📞","#F59E0B",()=>goTo("suivi_comm"))}
-    </div>
-
-    {aAppeler>0&&(
-      <div onClick={()=>goTo("suivi_comm")} style={{marginBottom:16,background:"rgba(59,130,246,0.08)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#60A5FA",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-        📞 {aAppeler} client{aAppeler>1?"s":""} à appeler pour un avis Google
-      </div>
-    )}
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-      <Section title="💰 Mes dernières ventes" action={()=>goTo("ventes")}>
-        {ventes.slice(0,6).length===0?<Empty msg="Aucune vente"/>:ventes.slice(0,6).map(v=>(
-          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{v.date||"—"}</div></div>
-            <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
-          </div>
-        ))}
-      </Section>
-
-      <Section title="📞 Suivi clients à rappeler" action={()=>goTo("suivi_comm")}>
-        {chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").slice(0,6).length===0
-          ?<Empty msg="✅ Tous les clients ont été contactés"/>
-          :chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").slice(0,6).map(ch=>(
-          <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"}</div></div>
-            <span style={{fontSize:18}}>📞</span>
-          </div>
-        ))}
-      </Section>
-    </div>
-    </>
-  );
-
-  // ── INSTALLATEUR ──
-  if(role==="installateur") return (
-    <>
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 🔧</div>
-      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
-    </div>
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-      {KPI(chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="planifie").length,"Mes chantiers planifiés","📅","#3B82F6",()=>goTo("chantier"))}
-      {KPI(chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="en_cours").length,"Mes chantiers en cours","🔧","#10B981",()=>goTo("chantier"))}
-      {KPI(stockCritique,"Stock critique","📦","#EF4444",()=>goTo("stock"))}
-      {KPI(savOuverts,"SAV ouverts","🛠️","#F87171",()=>goTo("sav"))}
-    </div>
-
-    {savOuverts>0&&(
-      <div onClick={()=>goTo("sav")} style={{marginBottom:16,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-        🛠️ {savOuverts} ticket{savOuverts>1?"s":""} SAV ouvert{savOuverts>1?"s":""} — intervention requise
-      </div>
-    )}
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-      <Section title="📅 Mes prochains chantiers" action={()=>goTo("chantier")}>
-        {chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&["planifie","a_planifier","en_cours"].includes(ch.statut)).slice(0,5).length===0
-          ?<Empty msg="Aucun chantier assigné"/>
-          :chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&["planifie","a_planifier","en_cours"].includes(ch.statut)).slice(0,5).map(ch=>{
-            const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"}};
-            const s=STATUTS_CH[ch.statut]||STATUTS_CH.a_planifier;
-            return(
-              <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0F1E35"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div>
-                  <div style={{fontSize:11,color:"#4A6A9E"}}>{ch.adresse||"Adresse non renseignée"}</div>
-                  {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600}}>📅 {ch.date_installation}</div>}
+          {/* KPIs admin/commercial */}
+          {(role==="administrateur"||role==="commercial")&&(
+          <div style={{marginBottom:20}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
+              {[
+                {v:fmt(_caMonth)+" €",l:"CA ce mois",i:"💰",c:"#10B981",t:"stats"},
+                {v:_chEnCours,l:"En cours",i:"🔧",c:"#3B82F6",t:"chantier"},
+                {v:_chPlan,l:"À planifier",i:"📅",c:"#F59E0B",t:"chantier"},
+                {v:_ventesAuj,l:"Ventes aujourd'hui",i:"💼",c:"#A78BFA",t:"ventes"}
+              ].map(k=>(
+              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div>
+                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.l}</div>
+                  </div>
+                  <span style={{fontSize:20}}>{k.i}</span>
                 </div>
-                <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.color+"15",padding:"2px 8px",borderRadius:20}}>{s.label}</span>
               </div>
-            );
-          })}
-      </Section>
-
-      <Section title="📦 Stock à surveiller" action={()=>goTo("stock")}>
-        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).length===0
-          ?<Empty msg="✅ Tout le stock est OK"/>
-          :stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>(
-          <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <span style={{fontSize:13,color:"#E8F0FF",fontWeight:600}}>{item.article}</span>
-            <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>{item.stock}/{item.seuil}</span>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+              {[
+                {v:_factAFaire,l:"À facturer",i:"🧾",c:"#EF4444",t:"factures"},
+                {v:_acomAEnv,l:"Acomptes à envoyer",i:"📋",c:"#F59E0B",t:"administratif"},
+                {v:_stockCrit,l:"Stock critique",i:"📦",c:"#EF4444",t:"stock"},
+                {v:_savOuverts,l:"SAV ouverts",i:"🛠️",c:"#F87171",t:"sav"}
+              ].map(k=>(
+              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div>
+                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.l}</div>
+                  </div>
+                  <span style={{fontSize:20}}>{k.i}</span>
+                </div>
+              </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </Section>
-    </div>
-    </>
-  );
+          )}
 
-  // ── SECRÉTAIRE ──
-  if(role==="secretaire") return (
-    <>
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 📋</div>
-      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
-    </div>
-
-    {(facturesAFaire>0||accomptesAEnvoyer>0)&&(
-      <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:6}}>
-        {facturesAFaire>0&&<div onClick={()=>goTo("factures")} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#EF4444",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-          🔴 {facturesAFaire} facture{facturesAFaire>1?"s":""} à établir
-        </div>}
-        {accomptesAEnvoyer>0&&<div onClick={()=>goTo("administratif")} style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F59E0B",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-          📤 {accomptesAEnvoyer} acompte{accomptesAEnvoyer>1?"s":""} à envoyer
-        </div>}
-      </div>
-    )}
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-      {KPI(facturesAFaire,"Factures à établir","🧾","#EF4444",()=>goTo("factures"))}
-      {KPI(accomptesAEnvoyer,"Acomptes à envoyer","📤","#F59E0B",()=>goTo("administratif"))}
-      {KPI(chantiersTermines,"Chantiers terminés","✅","#10B981",()=>goTo("factures"))}
-      {KPI(acomptes.filter(a=>a.statut==="paye").length,"Acomptes payés","💰","#10B981",()=>goTo("administratif"))}
-    </div>
-
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-      <Section title="🧾 Factures à établir" action={()=>goTo("factures")}>
-        {chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").slice(0,6).length===0
-          ?<Empty msg="✅ Toutes les factures sont à jour"/>
-          :chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").slice(0,6).map(ch=>(
-          <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"}</div></div>
-            <span style={{fontSize:11,color:"#EF4444",fontWeight:700}}>🔴 À facturer</span>
+          {/* KPIs installateur */}
+          {role==="installateur"&&(
+          <div style={{marginBottom:20}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
+              {[
+                {v:_myChPlan,l:"Mes planifiés",i:"📅",c:"#3B82F6",t:"chantier"},
+                {v:_myChCours,l:"Mes en cours",i:"🔧",c:"#10B981",t:"chantier"},
+                {v:_stockCrit,l:"Stock critique",i:"📦",c:"#EF4444",t:"stock"},
+                {v:_savOuverts,l:"SAV ouverts",i:"🛠️",c:"#F87171",t:"sav"}
+              ].map(k=>(
+              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div>
+                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.l}</div>
+                  </div>
+                  <span style={{fontSize:20}}>{k.i}</span>
+                </div>
+              </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </Section>
+          )}
 
-      <Section title="📋 Acomptes à envoyer" action={()=>goTo("administratif")}>
-        {acomptes.filter(a=>a.statut==="a_envoyer").slice(0,6).length===0?<Empty msg="✅ Aucun acompte en attente"/>:
-        acomptes.filter(a=>a.statut==="a_envoyer").slice(0,6).map(a=>(
-          <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
-            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{a.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{a.date_creation||"—"}</div></div>
-            <span style={{fontSize:13,fontWeight:800,color:"#F59E0B"}}>{fmt(a.montant_acompte)}€</span>
+          {/* KPIs secrétaire */}
+          {role==="secretaire"&&(
+          <div style={{marginBottom:20}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
+              {[
+                {v:_acomAEnv,l:"Acomptes à envoyer",i:"📤",c:"#F59E0B",t:"administratif"},
+                {v:_chTermines,l:"Chantiers terminés",i:"✅",c:"#10B981",t:"factures"},
+                {v:_acomPaye,l:"Acomptes payés",i:"💰",c:"#10B981",t:"administratif"}
+              ].map(k=>(
+              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div>
+                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.l}</div>
+                  </div>
+                  <span style={{fontSize:20}}>{k.i}</span>
+                </div>
+              </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </Section>
-    </div>
-    </>
-  );
+          )}
 
-  // ── FALLBACK ──
-  return (
-    <div style={{marginBottom:20}}>
-      <div style={{fontSize:22,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 👋</div>
-      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
-    </div>
-  );
-})()}
-</>}
+          {/* Stock critique + dernières ventes */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+            <div style={_cardStyle}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontWeight:700,fontSize:14}}>📦 Stock critique</span>
+                <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"3px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>{
+                  const st=gS(item.stock,item.seuil,item.rupture,aOIds.has(item.id));
+                  const sc=SC[st];
+                  return(
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:3,height:28,borderRadius:2,background:sc.color,flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{item.article}</span>
+                          <span style={{fontSize:12,color:sc.color,fontWeight:700}}>{item.stock}/{item.seuil}</span>
+                        </div>
+                        <div style={{background:"#070D1A",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
+                          <div style={{height:4,borderRadius:4,width:`${Math.min(100,Math.round(item.stock/item.seuil*100))}%`,background:sc.color}}/>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {_stockCrit===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"8px 0"}}>✅ Stock OK</div>}
+              </div>
+            </div>
+            {allowedTabs.includes("ventes")&&<div style={_cardStyle}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontWeight:700,fontSize:14}}>💰 Dernières ventes</span>
+                <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"3px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {ventes.slice(0,5).map(v=>(
+                  <div key={v.id} style={_rowStyle}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E"}}>{v.date||"—"}</div>
+                    </div>
+                    <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
+                  </div>
+                ))}
+                {ventes.length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"8px 0"}}>Aucune vente</div>}
+              </div>
+            </div>}
+          </div>
+          </>}
 
-
+          
 {view==="stock"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
@@ -5478,8 +5374,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             </div>
           </div>
-        {RealtimeToast}
         </div>
+        {RealtimeToast}
       );
     }
 
