@@ -523,17 +523,17 @@
                   onChange={e=>updateFacture(ch.id,{notes:e.target.value})}
                   placeholder="Numéro de facture, montant, références, remarques…"
                   rows={8}
-                  style={{...INP,resize:"vertical",lineHeight:1.6}}
+                  style={{...INP(),resize:"vertical",lineHeight:1.6}}
                 />
                 <div style={{marginTop:10}}>
                   <label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:6,fontWeight:700,letterSpacing:"0.5px"}}>NUMÉRO DE FACTURE</label>
                   <input value={fact.numero||""} onChange={e=>updateFacture(ch.id,{numero:e.target.value})}
-                    placeholder="FAC-2026-001" style={INP}/>
+                    placeholder="FAC-2026-001" style={INP()}/>
                 </div>
                 <div style={{marginTop:10}}>
                   <label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:6,fontWeight:700,letterSpacing:"0.5px"}}>MONTANT (€)</label>
                   <input type="number" value={fact.montant||""} onChange={e=>updateFacture(ch.id,{montant:e.target.value})}
-                    placeholder="0.00" style={INP}/>
+                    placeholder="0.00" style={INP()}/>
                 </div>
               </div>
             </div>
