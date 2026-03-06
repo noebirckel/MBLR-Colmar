@@ -4340,6 +4340,7 @@ L'équipe Ma Borne LR`;
       const[authLoading,setAuthLoading]=React.useState(false);
       const[profile,setProfile]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?JSON.parse(p):null;}catch(e){return null;}});
       const[sync,setSync]=React.useState("saved");
+      const[syncErr,setSyncErr]=React.useState("");
       const[stock,setStock]=React.useState([]);
       const[orders,setOrders]=React.useState([]);
       const[hist,setHist]=React.useState([]);
@@ -4490,7 +4491,7 @@ L'équipe Ma Borne LR`;
             const run=async(table,data)=>{
               if(!data)return;
               const{error}=await sb.from(table).upsert(data);
-              if(error){console.error(table+":",error.message,error.details,error.hint);setSync("error: "+table);throw error;}
+              if(error){console.error(table+":",error.message,error.details,error.hint);setSync("error");throw error;}
             };
             await run("stock",ns);
             await run("orders",no);
@@ -4502,7 +4503,7 @@ L'équipe Ma Borne LR`;
             await run("objectifs",nobj);
             await run("rapports",nrapp);
             setSync("saved");
-          }catch(e){setSync("error");console.error("saveDB:",e.message);}
+          }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
         },800);
       },[]);
 
@@ -4691,6 +4692,7 @@ L'équipe Ma Borne LR`;
                     {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
                     <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
                   </div>
+                  {sync==="error"&&syncErr&&<div style={{fontSize:9,color:"#EF4444",padding:"2px 10px 4px",wordBreak:"break-all",lineHeight:1.3}}>{syncErr}</div>}
                   <div style={{display:"flex",alignItems:"center",gap:7,padding:"6px 10px",background:rCfg.bg,borderRadius:8,marginBottom:6}}>
                     <span style={{fontSize:13}}>{rCfg.icon}</span>
                     <span style={{fontSize:11,color:rCfg.color,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.nom||rCfg.label}</span>
