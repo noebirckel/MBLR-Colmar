@@ -501,11 +501,11 @@
                 <div style={CARD}>
                   <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>ℹ️ Infos chantier</h3>
                   {[
-                    {label:"Client",      val:ch.client},
-                    {label:"Adresse",     val:ch.adresse||ch.notes||"—"},
-                    {label:"Technicien",  val:ch.technicien||"—"},
-                    {label:"Date fin",    val:ch.date_fin||"—"},
-                    {label:"Matériels",   val:(ch.materiels||[]).map(m=>`${m.article} ×${m.qty}`).join(", ")||"—"},
+                    {label:"Client",      val:String(ch.client||"—")},
+                    {label:"Adresse",     val:String(ch.adresse||ch.notes||"—")},
+                    {label:"Technicien",  val:String(ch.technicien||"—")},
+                    {label:"Date fin",    val:String(ch.date_fin||"—")},
+                    {label:"Matériels",   val:Array.isArray(ch.materiels)&&ch.materiels.length?ch.materiels.map(m=>typeof m==="object"?`${m.article||"?"} ×${m.qty||1}`:"").join(", "):"—"},
                   ].map(r=>(
                     <div key={r.label} style={{display:"flex",gap:8,marginBottom:8,fontSize:13}}>
                       <span style={{color:"#4A6A9E",minWidth:90,fontWeight:600}}>{r.label}</span>
