@@ -4513,11 +4513,20 @@ L'équipe Ma Borne LR`;
             setSync("saved");
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
               },[]);
+      const pendingSave=React.useRef({});
       const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
-        console.log("saveDB called, firstLoad=",firstLoad.current,nv?"with ventes":"no ventes");
         if(firstLoad.current)return;
+        // Fusionner avec les données en attente au lieu de remplacer
+        const p=pendingSave.current;
+        if(ns)p.ns=ns; if(no)p.no=no; if(nh)p.nh=nh;
+        if(nv)p.nv=nv; if(nc)p.nc=nc; if(na)p.na=na;
+        if(nsav)p.nsav=nsav; if(nobj)p.nobj=nobj; if(nrapp)p.nrapp=nrapp;
         if(timer.current)clearTimeout(timer.current);
-        timer.current=setTimeout(()=>doSave(ns,no,nh,nv,nc,na,nsav,nobj,nrapp),300);
+        timer.current=setTimeout(()=>{
+          const d=pendingSave.current;
+          pendingSave.current={};
+          doSave(d.ns,d.no,d.nh,d.nv,d.nc,d.na,d.nsav,d.nobj,d.nrapp);
+        },300);
       },[doSave]);
 
       const upd=(id,field,val)=>{const n=stock.map(s=>s.id===id?{...s,[field]:val}:s);setStock(n);saveDB(n,null,null,null,null,null,null,null,null);};
