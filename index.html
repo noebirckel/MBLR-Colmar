@@ -4511,6 +4511,7 @@ L'équipe Ma Borne LR`;
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
               },[]);
       const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
+        console.log("saveDB called, firstLoad=",firstLoad.current,nv?"with ventes":"no ventes");
         if(firstLoad.current)return;
         if(timer.current)clearTimeout(timer.current);
         timer.current=setTimeout(()=>doSave(ns,no,nh,nv,nc,na,nsav,nobj,nrapp),300);
