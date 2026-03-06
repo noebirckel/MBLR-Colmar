@@ -4461,6 +4461,7 @@ L'équipe Ma Borne LR`;
             if(rrapp.length)setRapports(rrapp);
           }catch(e){console.error("loadAll:",e);}
           firstLoad.current=false;
+        console.log("firstLoad set to false");
         };
         loadAll();
       },[profile]);
@@ -4485,7 +4486,7 @@ L'équipe Ma Borne LR`;
       },[profile]);
 
       const doSave=React.useCallback(async(ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
-        if(firstLoad.current){console.warn("saveDB blocked: firstLoad still true");return;}
+        console.log("doSave called, firstLoad=",firstLoad.current);if(firstLoad.current){console.warn("saveDB blocked: firstLoad still true");return;}
         setSync("saving");
         try{
             const run=async(table,data)=>{
