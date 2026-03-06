@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #070D1A; color: #E2E8F0; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -4478,24 +4480,87 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         loadAll();
       },[profile]);
 
-      // Realtime
+      // ── REALTIME ──────────────────────────────────────────────
+      const[rtToast,setRtToast]=React.useState(null);
+      const rtTimer=React.useRef(null);
+      const showToast=React.useCallback((msg)=>{
+        setRtToast(msg);
+        if(rtTimer.current)clearTimeout(rtTimer.current);
+        rtTimer.current=setTimeout(()=>setRtToast(null),3500);
+      },[]);
+
       React.useEffect(()=>{
         if(!profile)return;
-        const ch=sb.channel("changes").on("postgres_changes",{event:"*",schema:"public"},(payload)=>{
+
+        const LABELS={
+          ventes:"💰 Ventes",chantiers:"🔧 Chantiers",acomptes:"📋 Acomptes",
+          stock:"📦 Stock",orders:"🛒 Commandes",sav_tickets:"🛠️ SAV",rapports:"📄 Rapports"
+        };
+        const EVENTS={INSERT:"ajouté",UPDATE:"modifié",DELETE:"supprimé"};
+
+        const handle=async(payload)=>{
           const t=payload.table;
-          const refresh=async()=>{
-            if(t==="stock"){const{data}=await sb.from("stock").select("*").order("cat");if(data)setStock(data);}
-            if(t==="orders"){const{data}=await sb.from("orders").select("*").order("created_at",{ascending:false});if(data)setOrders(data);}
-            if(t==="ventes"){const{data}=await sb.from("ventes").select("*").order("created_at",{ascending:false});if(data)setVentes(data);}
-            if(t==="chantiers"){const{data}=await sb.from("chantiers").select("*").order("date_creation",{ascending:false});if(data)setChantiersPipeline(data);}
-            if(t==="acomptes"){const{data}=await sb.from("acomptes").select("*").order("created_at",{ascending:false});if(data)setAcomptes(data);}
-            if(t==="sav_tickets"){const{data}=await sb.from("sav_tickets").select("*").order("created_at",{ascending:false});if(data)setSavTickets(data);}
-            if(t==="rapports"){const{data}=await sb.from("rapports").select("*").order("date",{ascending:false});if(data)setRapports(data);}
-          };
-          refresh();
-        }).subscribe();
-        return()=>sb.removeChannel(ch);
-      },[profile]);
+          const ev=payload.eventType;
+          const rec=payload.new||payload.old||{};
+
+          // Mise à jour état local directement depuis payload (sans refetch)
+          if(t==="ventes"){
+            if(ev==="INSERT")setVentes(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setVentes(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setVentes(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+          else if(t==="chantiers"){
+            if(ev==="INSERT")setChantiersPipeline(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setChantiersPipeline(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setChantiersPipeline(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+          else if(t==="acomptes"){
+            if(ev==="INSERT")setAcomptes(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setAcomptes(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setAcomptes(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+          else if(t==="stock"){
+            if(ev==="DELETE")setStock(p=>p.filter(x=>x.id!==payload.old.id));
+            else setStock(p=>{const exists=p.find(x=>x.id===payload.new.id);return exists?p.map(x=>x.id===payload.new.id?payload.new:x):[...p,payload.new];});
+          }
+          else if(t==="orders"){
+            if(ev==="INSERT")setOrders(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setOrders(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setOrders(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+          else if(t==="sav_tickets"){
+            if(ev==="INSERT")setSavTickets(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setSavTickets(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setSavTickets(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+          else if(t==="rapports"){
+            if(ev==="INSERT")setRapports(p=>[payload.new,...p.filter(x=>x.id!==payload.new.id)]);
+            else if(ev==="UPDATE")setRapports(p=>p.map(x=>x.id===payload.new.id?payload.new:x));
+            else if(ev==="DELETE")setRapports(p=>p.filter(x=>x.id!==payload.old.id));
+          }
+
+          // Toast notification
+          const label=LABELS[t]||t;
+          const evLabel=EVENTS[ev]||ev;
+          const client=rec.client||rec.article||"";
+          showToast(`${label} ${evLabel}${client?" — "+client:""}`);
+        };
+
+        const ch=sb.channel("app-realtime")
+          .on("postgres_changes",{event:"*",schema:"public",table:"ventes"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"chantiers"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"acomptes"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"stock"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"orders"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"sav_tickets"},handle)
+          .on("postgres_changes",{event:"*",schema:"public",table:"rapports"},handle)
+          .subscribe((status)=>{
+            if(status==="SUBSCRIBED")console.log("✅ Realtime connecté");
+            else if(status==="CHANNEL_ERROR")console.warn("⚠️ Realtime erreur");
+          });
+
+        return()=>{sb.removeChannel(ch);if(rtTimer.current)clearTimeout(rtTimer.current);};
+      },[profile,showToast]);
 
       const doSave=React.useCallback(async(ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
         console.log("doSave called, firstLoad=",firstLoad.current);if(firstLoad.current){console.warn("saveDB blocked: firstLoad still true");return;}
@@ -4574,6 +4639,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const openOEdit=o=>{setOEditModal(o);setOEditForm({qty:o.qty,notes:o.notes||""});};
       const oArt=stock.find(s=>s.id===oModal);
       const aOByAModal=oModal&&oArt?aOByA[oModal]:null;
+
+      // Toast realtime
+      const RealtimeToast=rtToast?React.createElement("div",{style:{position:"fixed",bottom:24,right:24,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:12,padding:"12px 18px",fontSize:13,color:"#E8F0FF",fontWeight:600,zIndex:9999,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",display:"flex",alignItems:"center",gap:10,maxWidth:320,animation:"fadeIn 0.2s ease"}},
+        React.createElement("span",{style:{fontSize:16}},"🔔"),
+        React.createElement("span",null,rtToast)
+      ):null;
 
       const syncCfg={
         saving:{c:"#F59E0B",t:"Sauvegarde…",spin:true},
@@ -5137,6 +5208,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             </div>
           </div>
+        {RealtimeToast}
         </div>
       );
     }
