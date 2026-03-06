@@ -93,10 +93,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe"],
       commercial:["accueil","commandes","ventes","administratif","cartes","messagerie","sav","suivi_comm"],
       installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
-      secretaire:["accueil","commandes","ventes","administratif","cartes","messagerie","sav"],
+      secretaire:["accueil","commandes","ventes","administratif","factures","cartes","messagerie","sav"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -414,6 +414,210 @@
     // ONGLET STATS (admin)
     // ══════════════════════════════════════
 
+
+
+    // ══════════════════════════════════════════
+    // ONGLET FACTURES
+    // ══════════════════════════════════════════
+    function FacturesTab({isMobile, chantiers, setChantiers, profile, role}){
+      const STATUTS_FACT = {
+        a_facturer:  {label:"À facturer",    color:"#EF4444", icon:"🔴"},
+        en_cours:    {label:"En cours",      color:"#F59E0B", icon:"🟡"},
+        facture:     {label:"Facturé",       color:"#3B82F6", icon:"📄"},
+        paye:        {label:"Payé",          color:"#10B981", icon:"✅"},
+      };
+
+      const [filtre, setFiltre]   = useState("tous");
+      const [search, setSearch]   = useState("");
+      const [detail, setDetail]   = useState(null);
+      const [copied, setCopied]   = useState(false);
+
+      const termines = chantiers.filter(ch => ch.statut === "termine");
+
+      const updateFacture = (id, patch) => {
+        setChantiers(p => p.map(ch =>
+          ch.id === id ? {...ch, facture: {...(ch.facture||{}), ...patch}} : ch
+        ));
+      };
+
+      const filtered = termines.filter(ch => {
+        const s = ch.facture?.statut || "a_facturer";
+        if(filtre !== "tous" && s !== filtre) return false;
+        if(search && !(ch.client||"").toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      });
+
+      const kpis = Object.entries(STATUTS_FACT).map(([k,v]) => ({
+        ...v, key:k,
+        nb: termines.filter(ch=>(ch.facture?.statut||"a_facturer")===k).length
+      }));
+
+      const urgent = termines.filter(ch => (ch.facture?.statut||"a_facturer") === "a_facturer").length;
+
+      const CARD = {background:"#0D1828", borderRadius:14, border:"1px solid #1B2D4F", padding:"18px"};
+      const INP  = {background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',outline:"none"};
+
+      // ── DÉTAIL ──
+      const ch = detail ? termines.find(c=>c.id===detail) : null;
+      if(ch){
+        const fact = ch.facture || {};
+        const etat = fact.statut || "a_facturer";
+        const E    = STATUTS_FACT[etat];
+        return(
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
+              <button onClick={()=>setDetail(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+              <div>
+                <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#F0F6FF"}}>🧾 {ch.client}</h2>
+                <div style={{fontSize:12,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"} · {ch.technicien||"—"}</div>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+                {/* Statut facturation */}
+                <div style={CARD}>
+                  <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📋 Statut facturation</h3>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
+                    {Object.entries(STATUTS_FACT).map(([k,v])=>(
+                      <button key={k} onClick={()=>updateFacture(ch.id,{statut:k, date_maj:new Date().toLocaleDateString("fr-FR"), maj_par:profile?.nom||""})} style={{
+                        padding:"9px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",
+                        background:etat===k?`${v.color}20`:"transparent",
+                        border:`1px solid ${etat===k?v.color:"#1B2D4F"}`,
+                        color:etat===k?v.color:"#4A6A9E"}}>
+                        {v.icon} {v.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{padding:"10px 14px",background:`${E.color}10`,border:`1px solid ${E.color}30`,borderRadius:10,fontSize:13,color:E.color,fontWeight:700}}>
+                    {E.icon} {E.label}
+                    {fact.date_maj&&<span style={{color:"#4A6A9E",fontWeight:400,fontSize:11}}> · Mis à jour le {fact.date_maj} par {fact.maj_par||"—"}</span>}
+                  </div>
+                </div>
+
+                {/* Infos chantier */}
+                <div style={CARD}>
+                  <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>ℹ️ Infos chantier</h3>
+                  {[
+                    {label:"Client",      val:ch.client},
+                    {label:"Adresse",     val:ch.adresse||ch.notes||"—"},
+                    {label:"Technicien",  val:ch.technicien||"—"},
+                    {label:"Date fin",    val:ch.date_fin||"—"},
+                    {label:"Matériels",   val:(ch.materiels||[]).map(m=>`${m.article} ×${m.qty}`).join(", ")||"—"},
+                  ].map(r=>(
+                    <div key={r.label} style={{display:"flex",gap:8,marginBottom:8,fontSize:13}}>
+                      <span style={{color:"#4A6A9E",minWidth:90,fontWeight:600}}>{r.label}</span>
+                      <span style={{color:"#E8F0FF"}}>{r.val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes facturation */}
+              <div style={CARD}>
+                <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📝 Notes de facturation</h3>
+                <textarea
+                  value={fact.notes||""}
+                  onChange={e=>updateFacture(ch.id,{notes:e.target.value})}
+                  placeholder="Numéro de facture, montant, références, remarques…"
+                  rows={8}
+                  style={{...INP,resize:"vertical",lineHeight:1.6}}
+                />
+                <div style={{marginTop:10}}>
+                  <label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:6,fontWeight:700,letterSpacing:"0.5px"}}>NUMÉRO DE FACTURE</label>
+                  <input value={fact.numero||""} onChange={e=>updateFacture(ch.id,{numero:e.target.value})}
+                    placeholder="FAC-2026-001" style={INP}/>
+                </div>
+                <div style={{marginTop:10}}>
+                  <label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:6,fontWeight:700,letterSpacing:"0.5px"}}>MONTANT (€)</label>
+                  <input type="number" value={fact.montant||""} onChange={e=>updateFacture(ch.id,{montant:e.target.value})}
+                    placeholder="0.00" style={INP}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ── LISTE ──
+      return(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>🧾 Facturation</h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{termines.length} chantier(s) terminé(s)</p>
+            </div>
+            {urgent>0&&(
+              <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"8px 14px",fontSize:13,color:"#EF4444",fontWeight:700}}>
+                🔴 {urgent} chantier{urgent>1?"s":""} à facturer !
+              </div>
+            )}
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:18}}>
+            {kpis.map(k=>(
+              <div key={k.key} onClick={()=>setFiltre(filtre===k.key?"tous":k.key)}
+                style={{background:"#0D1828",borderRadius:10,padding:"14px 12px",border:`1px solid ${filtre===k.key?k.color:"#1B2D4F"}`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}>
+                <div style={{fontSize:22,marginBottom:4}}>{k.icon}</div>
+                <div style={{fontSize:22,fontWeight:800,color:k.color}}>{k.nb}</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recherche */}
+          <div style={{marginBottom:14}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="🔍 Rechercher un client…"
+              style={{background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,color:"#F0F6FF",padding:"11px 14px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+          </div>
+
+          {/* Liste */}
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
+              <div style={{fontSize:48,marginBottom:12}}>🧾</div>
+              <div style={{fontWeight:800,fontSize:16,color:"#4A6A9E",marginBottom:6}}>
+                {termines.length===0?"Aucun chantier terminé":"Aucun résultat"}
+              </div>
+              <div style={{fontSize:13,color:"#2E4D82"}}>
+                {termines.length===0?"Les chantiers terminés apparaîtront ici pour facturation":"Modifiez votre filtre"}
+              </div>
+            </div>
+            :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {filtered.map(ch=>{
+                const fact = ch.facture||{};
+                const etat = fact.statut||"a_facturer";
+                const E    = STATUTS_FACT[etat];
+                return(
+                  <div key={ch.id} onClick={()=>setDetail(ch.id)}
+                    style={{background:"#0D1828",borderRadius:13,border:`1px solid ${etat==="a_facturer"?"rgba(239,68,68,0.3)":"#1B2D4F"}`,padding:"14px 18px",cursor:"pointer",transition:"border-color 0.2s",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}
+                    onMouseOver={e=>e.currentTarget.style.borderColor=E.color}
+                    onMouseOut={e=>e.currentTarget.style.borderColor=etat==="a_facturer"?"rgba(239,68,68,0.3)":"#1B2D4F"}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{ch.client||"—"}</span>
+                        <span style={{background:`${E.color}15`,color:E.color,border:`1px solid ${E.color}40`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>{E.icon} {E.label}</span>
+                        {fact.numero&&<span style={{color:"#4A6A9E",fontSize:11}}>N° {fact.numero}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
+                        {ch.date_fin&&<span>✅ Terminé le {ch.date_fin}</span>}
+                        {ch.technicien&&<span>🔧 {ch.technicien}</span>}
+                        {fact.montant&&<span style={{color:"#10B981",fontWeight:700}}>💰 {Number(fact.montant).toLocaleString("fr-FR",{minimumFractionDigits:2})} €</span>}
+                        {fact.notes&&<span style={{color:"#60A5FA"}}>📝 Note</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:18,color:"#2E4D82"}}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          }
+        </div>
+      );
+    }
 
     // ══════════════════════════════════════════
     // ONGLET SUIVI COMMERCIAL
@@ -3790,7 +3994,7 @@ L'équipe Ma Borne LR`;
             ...(ch.materiels||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:m.cat,unite:m.unite||"pce",qty:m.qty,par:ch.technicien||profile?.nom||""})),
             ...(ch.cables||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:"Câble",unite:"ml",qty:m.qty,par:ch.technicien||profile?.nom||""})),
           ];
-          const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,statut:"termine",date_fin:d}:c2);
+          const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,statut:"termine",date_fin:d,facture:{statut:"a_facturer"}}:c2);
           setChantiers(updated);
           if(window._appState)window._appState.finishChantier(ns,newHist,updated);
         }else{
@@ -3909,7 +4113,7 @@ L'équipe Ma Borne LR`;
                 ...(ch.materiels||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:m.cat,unite:m.unite||"pce",qty:m.qty,par:ch.technicien||profile?.nom||""})),
                 ...(ch.cables||[]).map(m=>({date:d,chantier:ch.client,article:m.article,cat:"Câble",unite:"ml",qty:m.qty,par:ch.technicien||profile?.nom||""})),
               ];
-              const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,statut:"termine",date_fin:d,rapport}:c2);
+              const updated=chantiers.map(c2=>c2.id===ch.id?{...c2,statut:"termine",date_fin:d,rapport,facture:{statut:"a_facturer"}}:c2);
               setChantiers(updated);
               if(window._appState)window._appState.finishChantier(ns,newHist,updated);
               setRapportModal(null);
@@ -4321,14 +4525,14 @@ L'équipe Ma Borne LR`;
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","messagerie"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","suivi_comm"]},
-        {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif"]},
+        {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Administratif",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -4455,6 +4659,7 @@ L'équipe Ma Borne LR`;
                                 <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:7,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.12)":"transparent"}}>
                                   <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
                                   <span style={{fontSize:12,fontWeight:isAct?700:500,color:isAct?"#60A5FA":"#5A7AAA"}}>{TAB_LABELS[t]}</span>
+                                  {t==="factures"&&(()=>{const n=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;return n>0?<span style={{marginLeft:4,background:"#EF4444",color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>{n}</span>:null;})()}
                                   {isAct&&<div style={{marginLeft:"auto",width:3,height:14,borderRadius:2,background:"#3B82F6"}}/>}
                                 </button>
                               );
@@ -4522,6 +4727,8 @@ L'équipe Ma Borne LR`;
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
+
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
