@@ -2806,8 +2806,10 @@ L'équipe Ma Borne LR`;
             {editModal.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
               <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
               <input type="number" min="0" max="100"
-                value={editModal.montant_vente>0?Math.round((editModal.montant_acompte/editModal.montant_vente)*100):""}
-                onChange={e=>{const raw=e.target.value;if(raw===""||raw==="-")return;const pct=Number(raw);setEditModal(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                value={editPct}
+                onFocus={()=>setEditPct(editModal.montant_vente>0?String(Math.round((editModal.montant_acompte/editModal.montant_vente)*100)):"")}
+                onChange={e=>{setEditPct(e.target.value);const pct=Number(e.target.value);if(e.target.value!==""&&!isNaN(pct))setEditModal(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                onBlur={()=>setEditPct(editModal.montant_vente>0?String(Math.round((editModal.montant_acompte/editModal.montant_vente)*100)):"")}
                 style={{...INP(),width:70,textAlign:"center"}}/>
               <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
               <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {editModal.montant_acompte>0?Number(editModal.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
@@ -2850,8 +2852,10 @@ L'équipe Ma Borne LR`;
             {newForm.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
               <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
               <input type="number" min="0" max="100"
-                value={newForm.montant_vente>0?Math.round((newForm.montant_acompte/newForm.montant_vente)*100):""}
-                onChange={e=>{const raw=e.target.value;if(raw===""||raw==="-")return;const pct=Number(raw);setNewForm(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                value={newPct}
+                onFocus={()=>setNewPct(newForm.montant_vente>0?String(Math.round((newForm.montant_acompte/newForm.montant_vente)*100)):"")}
+                onChange={e=>{setNewPct(e.target.value);const pct=Number(e.target.value);if(e.target.value!==""&&!isNaN(pct))setNewForm(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                onBlur={()=>setNewPct(newForm.montant_vente>0?String(Math.round((newForm.montant_acompte/newForm.montant_vente)*100)):"")}
                 style={{...INP(),width:70,textAlign:"center"}}/>
               <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
               <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {newForm.montant_acompte>0?Number(newForm.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
