@@ -2762,6 +2762,8 @@ L'équipe Ma Borne LR`;
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newModal,setNewModal]=useState(false);
+      const[editPct,setEditPct]=useState("");
+      const[newPct,setNewPct]=useState("");
       const[newForm,setNewForm]=useState({client:"",montant_vente:"",montant_acompte:"",date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",notes:"",par:profile?.nom||""});
 
       const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
