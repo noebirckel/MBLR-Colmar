@@ -4392,9 +4392,18 @@ L'équipe Ma Borne LR`;
               const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),5000));
               const{data}=await Promise.race([fetchPromise,timeout]);
               if(data){
+                // Si le rôle a changé, forcer la navigation vers un onglet autorisé
+                try{
+                  const cached=localStorage.getItem("app_profile");
+                  const old=cached?JSON.parse(cached):null;
+                  if(old&&old.role!==data.role){
+                    // Rôle changé : vider la vue en cache
+                    localStorage.removeItem("app_view");
+                  }
+                }catch(e){}
                 setProfile(data);
                 try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}
-                try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
+                try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur)){localStorage.removeItem("app_view");goTo(tabs[0]);};}catch(e){}
               }
             }catch(e){
               console.warn("profile fetch:",e.message);
