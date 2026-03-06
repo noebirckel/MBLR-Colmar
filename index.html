@@ -1051,6 +1051,104 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
+    function VendeurRow({nom, mKey, mM_now, mY_now, ventes, objectifs, setObjectifs, canEdit, isMobile, fmt}) {
+      const oKey     = `${mKey}__${nom}`;
+      const obj      = objectifs[oKey] || {};
+      const objCA    = Number(obj.ca    || 0);
+      const objMarge = Number(obj.marge || 0);
+      const caReel = ventes
+        .filter(v=>(v.par||"Inconnu")===nom && v.date
+          && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
+        .reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const margeReelle = ventes
+        .filter(v=>(v.par||"Inconnu")===nom && v.date
+          && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
+        .reduce((s,v)=>{
+          const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
+                    +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
+          return s+(Number(v.prix_ht||0)-cout);
+        },0);
+      const pctCA    = objCA    > 0 ? Math.min(100, Math.round((caReel/objCA)*100))    : null;
+      const pctMarge = objMarge > 0 ? Math.min(100, Math.round((margeReelle/objMarge)*100)) : null;
+      const colorCA    = pctCA===null?"#1B2D4F" : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
+      const colorMarge = pctMarge===null?"#1B2D4F" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
+      const[editMode,setEditMode]=useState(false);
+      const[draftCA,setDraftCA]  =useState(String(objCA||""));
+      const[draftMarge,setDraftMarge]=useState(String(objMarge||""));
+      const saveObj=()=>{
+        setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
+        setEditMode(false);
+      };
+      return (
+        <div style={{background:"#070D1A",borderRadius:12,padding:"14px 16px",border:"1px solid #1B2D4F"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#1B2D4F,#112038)",border:"1px solid #1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>💼</div>
+              <div>
+                <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{nom}</div>
+                <div style={{fontSize:11,color:"#4A6A9E"}}>
+                  {ventes.filter(v=>(v.par||"Inconnu")===nom&&v.date&&v.date.split("/")[1]===mM_now&&v.date.split("/")[2]===mY_now).length} vente(s) ce mois
+                </div>
+              </div>
+            </div>
+            {canEdit&&(editMode
+              ? <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setEditMode(false)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                  <button onClick={saveObj} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:8,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',boxShadow:"0 2px 10px rgba(59,130,246,0.3)"}}>💾 Sauver</button>
+                </div>
+              : <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditMode(true);}} style={{background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                  {objCA||objMarge?"✏️ Modifier":"➕ Fixer objectif"}
+                </button>
+            )}
+          </div>
+          {editMode&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14,padding:"12px",background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F"}}>
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>Objectif CA (€ HT)</label>
+                <input type="number" value={draftCA} onChange={e=>setDraftCA(e.target.value)} placeholder="Ex: 15000" style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>Objectif marge (€)</label>
+                <input type="number" value={draftMarge} onChange={e=>setDraftMarge(e.target.value)} placeholder="Ex: 3000" style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+              </div>
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>💶 Chiffre d'affaires</span>
+                {pctCA!==null&&<span style={{fontSize:12,fontWeight:800,color:colorCA}}>{pctCA}%</span>}
+              </div>
+              <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
+                <div style={{height:10,borderRadius:8,width:(pctCA||0)+"%",background:pctCA>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#3B82F6,#1D4ED8)",transition:"width 0.6s cubic-bezier(.4,0,.2,1)",boxShadow:pctCA>0?`0 0 8px ${colorCA}60`:"none"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                <span style={{color:colorCA,fontWeight:700}}>{fmt(caReel)}</span>
+                <span style={{color:"#2E4D82"}}>{objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif fixé"}</span>
+              </div>
+              {pctCA>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>🎉 Objectif atteint !</div>}
+              {pctCA!==null&&pctCA<100&&objCA>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>{fmt(objCA-caReel)} restants</div>}
+            </div>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+                <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>📈 Marge</span>
+                {pctMarge!==null&&<span style={{fontSize:12,fontWeight:800,color:colorMarge}}>{pctMarge}%</span>}
+              </div>
+              <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
+                <div style={{height:10,borderRadius:8,width:(pctMarge||0)+"%",background:pctMarge>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#8B5CF6,#6D28D9)",transition:"width 0.6s cubic-bezier(.4,0,.2,1)",boxShadow:pctMarge>0?`0 0 8px ${colorMarge}60`:"none"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                <span style={{color:colorMarge,fontWeight:700}}>{fmt(margeReelle)}</span>
+                <span style={{color:"#2E4D82"}}>{objMarge>0?`/ ${fmt(objMarge)}`:"Pas d'objectif fixé"}</span>
+              </div>
+              {pctMarge>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>🎉 Objectif atteint !</div>}
+              {pctMarge!==null&&pctMarge<100&&objMarge>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>{fmt(objMarge-margeReelle)} restants</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt, objectifs, setObjectifs, role}) {
       const[period,setPeriod]=useState(6); // nb de mois à afficher
 
@@ -1271,194 +1369,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       Aucun commercial — enregistrez des ventes d'abord
                     </div>
                   : <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      {vendeurs.map(nom => {
-                        const oKey     = `${mKey}__${nom}`;
-                        const obj      = objectifs[oKey] || {};
-                        const objCA    = Number(obj.ca    || 0);
-                        const objMarge = Number(obj.marge || 0);
-
-                        // CA réel ce mois
-                        const caReel = ventes
-                          .filter(v=>(v.par||"Inconnu")===nom && v.date
-                            && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
-                          .reduce((s,v)=>s+Number(v.prix_ht||0),0);
-
-                        // Marge réelle (prix_ht - coût matériel)
-                        const margeReelle = ventes
-                          .filter(v=>(v.par||"Inconnu")===nom && v.date
-                            && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
-                          .reduce((s,v)=>{
-                            const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
-                                      +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
-                            return s+(Number(v.prix_ht||0)-cout);
-                          },0);
-
-                        const pctCA    = objCA    > 0 ? Math.min(100, Math.round((caReel/objCA)*100))    : null;
-                        const pctMarge = objMarge > 0 ? Math.min(100, Math.round((margeReelle/objMarge)*100)) : null;
-
-                        const colorCA    = pctCA===null?"#1B2D4F" : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
-                        const colorMarge = pctMarge===null?"#1B2D4F" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
-
-                        const[editMode,setEditMode]=useState(false);
-                        const[draftCA,setDraftCA]  =useState(String(objCA||""));
-                        const[draftMarge,setDraftMarge]=useState(String(objMarge||""));
-
-                        const saveObj=()=>{
-                          setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
-                          setEditMode(false);
-                        };
-
-                        return (
-                          <div key={nom} style={{background:"#070D1A",borderRadius:12,padding:"14px 16px",
-                            border:"1px solid #1B2D4F"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",
-                              alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                <div style={{width:34,height:34,borderRadius:"50%",
-                                  background:"linear-gradient(135deg,#1B2D4F,#112038)",
-                                  border:"1px solid #1B2D4F",display:"flex",alignItems:"center",
-                                  justifyContent:"center",fontSize:15,flexShrink:0}}>💼</div>
-                                <div>
-                                  <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{nom}</div>
-                                  <div style={{fontSize:11,color:"#4A6A9E"}}>
-                                    {ventes.filter(v=>(v.par||"Inconnu")===nom&&v.date
-                                      &&v.date.split("/")[1]===mM_now&&v.date.split("/")[2]===mY_now).length} vente(s) ce mois
-                                  </div>
-                                </div>
-                              </div>
-                              {canEdit&&(
-                                editMode
-                                  ? <div style={{display:"flex",gap:6}}>
-                                      <button onClick={()=>setEditMode(false)} style={{
-                                        background:"#1B2D4F",border:"none",borderRadius:8,
-                                        color:"#7B96C8",padding:"6px 12px",cursor:"pointer",
-                                        fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
-                                      <button onClick={saveObj} style={{
-                                        background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",
-                                        border:"none",borderRadius:8,color:"#FFF",
-                                        padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700,
-                                        fontFamily:'"Outfit",sans-serif',
-                                        boxShadow:"0 2px 10px rgba(59,130,246,0.3)"}}>💾 Sauver</button>
-                                    </div>
-                                  : <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditMode(true);}} style={{
-                                      background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",
-                                      borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",
-                                      fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
-                                      {objCA||objMarge?"✏️ Modifier":"➕ Fixer objectif"}
-                                    </button>
-                              )}
-                            </div>
-
-                            {/* Formulaire édition */}
-                            {editMode&&(
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,
-                                marginBottom:14,padding:"12px",background:"#0D1828",borderRadius:10,
-                                border:"1px solid #1B2D4F"}}>
-                                <div>
-                                  <label style={{display:"block",fontSize:10,fontWeight:700,
-                                    color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",
-                                    letterSpacing:"0.08em"}}>Objectif CA (€ HT)</label>
-                                  <input type="number" value={draftCA}
-                                    onChange={e=>setDraftCA(e.target.value)}
-                                    placeholder="Ex: 15000"
-                                    style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",
-                                      borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,
-                                      outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
-                                </div>
-                                <div>
-                                  <label style={{display:"block",fontSize:10,fontWeight:700,
-                                    color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",
-                                    letterSpacing:"0.08em"}}>Objectif marge (€)</label>
-                                  <input type="number" value={draftMarge}
-                                    onChange={e=>setDraftMarge(e.target.value)}
-                                    placeholder="Ex: 3000"
-                                    style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",
-                                      borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,
-                                      outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Barres de progression */}
-                            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-
-                              {/* CA */}
-                              <div>
-                                <div style={{display:"flex",justifyContent:"space-between",
-                                  alignItems:"baseline",marginBottom:6}}>
-                                  <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>
-                                    💶 Chiffre d'affaires
-                                  </span>
-                                  {pctCA!==null&&(
-                                    <span style={{fontSize:12,fontWeight:800,color:colorCA}}>
-                                      {pctCA}%
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
-                                  <div style={{
-                                    height:10,borderRadius:8,width:(pctCA||0)+"%",
-                                    background:pctCA>=100
-                                      ?"linear-gradient(90deg,#10B981,#059669)"
-                                      :"linear-gradient(90deg,#3B82F6,#1D4ED8)",
-                                    transition:"width 0.6s cubic-bezier(.4,0,.2,1)",
-                                    boxShadow:pctCA>0?`0 0 8px ${colorCA}60`:"none"
-                                  }}/>
-                                </div>
-                                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                                  <span style={{color:colorCA,fontWeight:700}}>{fmt(caReel)}</span>
-                                  <span style={{color:"#2E4D82"}}>
-                                    {objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif fixé"}
-                                  </span>
-                                </div>
-                                {pctCA>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>
-                                  🎉 Objectif atteint !
-                                </div>}
-                                {pctCA!==null&&pctCA<100&&objCA>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>
-                                  {fmt(objCA-caReel)} restants
-                                </div>}
-                              </div>
-
-                              {/* MARGE */}
-                              <div>
-                                <div style={{display:"flex",justifyContent:"space-between",
-                                  alignItems:"baseline",marginBottom:6}}>
-                                  <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>
-                                    📈 Marge
-                                  </span>
-                                  {pctMarge!==null&&(
-                                    <span style={{fontSize:12,fontWeight:800,color:colorMarge}}>
-                                      {pctMarge}%
-                                    </span>
-                                  )}
-                                </div>
-                                <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
-                                  <div style={{
-                                    height:10,borderRadius:8,width:(pctMarge||0)+"%",
-                                    background:pctMarge>=100
-                                      ?"linear-gradient(90deg,#10B981,#059669)"
-                                      :"linear-gradient(90deg,#8B5CF6,#6D28D9)",
-                                    transition:"width 0.6s cubic-bezier(.4,0,.2,1)",
-                                    boxShadow:pctMarge>0?`0 0 8px ${colorMarge}60`:"none"
-                                  }}/>
-                                </div>
-                                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                                  <span style={{color:colorMarge,fontWeight:700}}>{fmt(margeReelle)}</span>
-                                  <span style={{color:"#2E4D82"}}>
-                                    {objMarge>0?`/ ${fmt(objMarge)}`:"Pas d'objectif fixé"}
-                                  </span>
-                                </div>
-                                {pctMarge>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>
-                                  🎉 Objectif atteint !
-                                </div>}
-                                {pctMarge!==null&&pctMarge<100&&objMarge>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>
-                                  {fmt(objMarge-margeReelle)} restants
-                                </div>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {vendeurs.map(nom => (
+                        <VendeurRow key={nom} nom={nom} mKey={mKey} mM_now={mM_now} mY_now={mY_now}
+                          ventes={ventes} objectifs={objectifs} setObjectifs={setObjectifs}
+                          canEdit={canEdit} isMobile={isMobile} fmt={fmt}/>
+                      ))}
                     </div>
                 }
               </div>
