@@ -136,29 +136,6 @@
         if(error)setErr("Email ou mot de passe incorrect");
         setLoading(false);
       };
-      // ── ACCUEIL COMPUTED ──────────────────────────────────
-      const _now=new Date();
-      const _hour=_now.getHours();
-      const _greeting=_hour<12?"Bonjour":_hour<18?"Bon après-midi":"Bonsoir";
-      const _dateStr=_now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-      const _prenom=profile?.nom?.split(" ")[0]||profile?.nom||"";
-      const _caMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()===_now.getMonth()&&d.getFullYear()===_now.getFullYear();}).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
-      const _chPlan=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
-      const _chEnCours=chantiersPipeline.filter(ch=>ch.statut==="en_cours").length;
-      const _chTermines=chantiersPipeline.filter(ch=>ch.statut==="termine").length;
-      const _savOuverts=savTickets.filter(s=>s.statut==="ouvert").length;
-      const _factAFaire=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
-      const _acomAEnv=acomptes.filter(a=>a.statut==="a_envoyer").length;
-      const _stockCrit=stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length;
-      const _ventesAuj=ventes.filter(v=>new Date(v.id).toDateString()===_now.toDateString()).length;
-      const _aAppeler=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;
-      const _myChPlan=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="planifie").length;
-      const _myChCours=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="en_cours").length;
-      const _acomPaye=acomptes.filter(a=>a.statut==="paye").length;
-      const _STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"},termine:{label:"Terminé",color:"#6B7280"}};
-      const _cardStyle={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
-      const _rowStyle={display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"};
-      // ────────────────────────────────────────────────────────
       return(
         <div style={{
           minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
@@ -4734,6 +4711,30 @@ const[search,setSearch]=useState("");
         error:{c:"#EF4444",t:"Erreur sync",spin:false},
       };
       const sc2=syncCfg[sync]||syncCfg.saved;
+
+      // ── ACCUEIL COMPUTED ──────────────────────────────────
+      const _now=new Date();
+      const _hour=_now.getHours();
+      const _greeting=_hour<12?"Bonjour":_hour<18?"Bon après-midi":"Bonsoir";
+      const _dateStr=_now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+      const _prenom=profile?.nom?.split(" ")[0]||profile?.nom||"";
+      const _caMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()===_now.getMonth()&&d.getFullYear()===_now.getFullYear();}).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
+      const _chPlan=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
+      const _chEnCours=chantiersPipeline.filter(ch=>ch.statut==="en_cours").length;
+      const _chTermines=chantiersPipeline.filter(ch=>ch.statut==="termine").length;
+      const _savOuverts=savTickets.filter(s=>s.statut==="ouvert").length;
+      const _factAFaire=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+      const _acomAEnv=acomptes.filter(a=>a.statut==="a_envoyer").length;
+      const _stockCrit=stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length;
+      const _ventesAuj=ventes.filter(v=>new Date(v.id).toDateString()===_now.toDateString()).length;
+      const _aAppeler=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;
+      const _myChPlan=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="planifie").length;
+      const _myChCours=chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="en_cours").length;
+      const _acomPaye=acomptes.filter(a=>a.statut==="paye").length;
+      const _STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"},termine:{label:"Terminé",color:"#6B7280"}};
+      const _cardStyle={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
+      const _rowStyle={display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"};
+      // ────────────────────────────────────────────────────────
 
       // Navigation groups
       const fmt=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0});
