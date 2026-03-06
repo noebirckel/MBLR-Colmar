@@ -548,7 +548,7 @@
             <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
-              <button onClick={()=>{const id=ch.id;setChantiers(p=>p.filter(x=>x.id!==id));deleteFromDB("chantiers",id);setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
+              <button onClick={()=>{const id=ch.id;setChantiers(p=>p.filter(x=>x.id!==id));sb.from("chantiers").delete().eq("id",id).then(({error})=>{if(error)console.error("delete chantiers:",error.message);});setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
             </div>
           </div>
         </div>}
@@ -2893,7 +2893,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E8F0FF"}}>{delConf.client}</strong> — {fmt(delConf.montant_acompte)}</p>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={()=>{const id=delConf.id;setAcomptes(p=>p.filter(a=>a.id!==id));deleteFromDB("acomptes",id);setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+              <button onClick={()=>{const id=delConf.id;setAcomptes(p=>p.filter(a=>a.id!==id));sb.from("acomptes").delete().eq("id",id).then(({error})=>{if(error)console.error("delete acomptes:",error.message);});setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
 
@@ -3379,7 +3379,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E8F0FF"}}>{delConf.client}</strong> — {fmt(delConf.prix_ht)}</p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-            <button onClick={()=>{const id=delConf.id;setVentes(p=>p.filter(v=>v.id!==id));deleteFromDB("ventes",id);setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+            <button onClick={()=>{const id=delConf.id;setVentes(p=>p.filter(v=>v.id!==id));sb.from("ventes").delete().eq("id",id).then(({error})=>{if(error)console.error("delete ventes:",error.message);});setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
           </div>
         </div></div>
       );
@@ -4087,7 +4087,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E8F0FF"}}>{delConf.client}</strong></p>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={()=>{const id=delConf.id;setChantiers(p=>p.filter(ch=>ch.id!==id));deleteFromDB("chantiers",id);setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+              <button onClick={()=>{const id=delConf.id;setChantiers(p=>p.filter(ch=>ch.id!==id));sb.from("chantiers").delete().eq("id",id).then(({error})=>{if(error)console.error("delete chantiers:",error.message);});setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
             </div>
           </div></div>}
 
@@ -4525,14 +4525,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             setSync("saved");
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
               },[]);
-      // Suppression Supabase
-      const deleteFromDB=React.useCallback(async(table,id)=>{
-        try{
-          const{error}=await sb.from(table).delete().eq("id",id);
-          if(error)console.error("delete "+table+":",error.message);
-        }catch(e){console.error("delete "+table+":",e.message);}
-      },[]);
-
       const pendingSave=React.useRef({});
       const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
         if(firstLoad.current)return;
@@ -4639,7 +4631,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer cette commande ?</h3>
             <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>{oDelConf.article} — qté {oDelConf.qty}</p>
             <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-              <button onClick={()=>{const id=oDelConf.id;const n=orders.filter(o=>o.id!==id);setOrders(n);deleteFromDB("orders",id);setODelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+              <button onClick={()=>{const id=oDelConf.id;const n=orders.filter(o=>o.id!==id);setOrders(n);sb.from("orders").delete().eq("id",id).then(({error})=>{if(error)console.error("delete orders:",error.message);});setODelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
               <button onClick={()=>setODelConf(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"10px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
@@ -4689,7 +4681,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <h3 style={{margin:"0 0 8px",fontWeight:800}}>Supprimer ce composant ?</h3>
             <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>{delConf?.article}</p>
             <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-              <button onClick={()=>{const id=delConf.id;const n=stock.filter(s=>s.id!==id);setStock(n);deleteFromDB("stock",id);setDelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
+              <button onClick={()=>{const id=delConf.id;const n=stock.filter(s=>s.id!==id);setStock(n);sb.from("stock").delete().eq("id",id).then(({error})=>{if(error)console.error("delete stock:",error.message);});setDelConf(null);}} style={{background:"#EF4444",border:"none",borderRadius:8,padding:"10px 20px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Supprimer</button>
               <button onClick={()=>setDelConf(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"10px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
