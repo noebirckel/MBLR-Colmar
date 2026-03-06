@@ -2803,9 +2803,14 @@ L'équipe Ma Borne LR`;
                 <input type="number" value={editModal.montant_acompte||""} onChange={e=>setEditModal(p=>({...p,montant_acompte:Number(e.target.value)}))} style={INP()}/>
               </div>
             </div>
-
-            {editModal.montant_vente>0&&<div style={{background:"#3B82F615",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#3B82F6"}}>
-              💡 Acompte = {editModal.montant_vente>0?((editModal.montant_acompte/editModal.montant_vente)*100).toFixed(0):"—"}% du montant HT
+            {editModal.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
+              <input type="number" min="1" max="100"
+                value={editModal.montant_vente>0?Math.round((editModal.montant_acompte/editModal.montant_vente)*100):""}
+                onChange={e=>{const pct=Math.min(100,Math.max(1,Number(e.target.value)));setEditModal(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                style={{...INP(),width:70,textAlign:"center"}}/>
+              <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
+              <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {editModal.montant_acompte>0?Number(editModal.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
             </div>}
 
             <div style={{marginBottom:12}}>
@@ -2842,8 +2847,14 @@ L'équipe Ma Borne LR`;
               <div><L c="MONTANT VENTE HT (€)"/><input type="number" value={newForm.montant_vente} onChange={e=>{const mv=Number(e.target.value);setNewForm(p=>({...p,montant_vente:mv,montant_acompte:Math.round(mv*(acompteDefPct/100)*100)/100}));}} style={INP()}/></div>
               <div><L c="ACOMPTE (€)"/><input type="number" value={newForm.montant_acompte} onChange={e=>setNewForm(p=>({...p,montant_acompte:Number(e.target.value)}))} style={INP()}/></div>
             </div>
-            {newForm.montant_vente>0&&<div style={{background:"#3B82F615",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#3B82F6"}}>
-              💡 Acompte = {((newForm.montant_acompte/newForm.montant_vente)*100).toFixed(0)}% du montant HT
+            {newForm.montant_vente>0&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <span style={{fontSize:12,color:"#4A6A9E",minWidth:60}}>ou en %</span>
+              <input type="number" min="1" max="100"
+                value={newForm.montant_vente>0?Math.round((newForm.montant_acompte/newForm.montant_vente)*100):""}
+                onChange={e=>{const pct=Math.min(100,Math.max(1,Number(e.target.value)));setNewForm(p=>({...p,montant_acompte:Math.round(p.montant_vente*(pct/100)*100)/100}));}}
+                style={{...INP(),width:70,textAlign:"center"}}/>
+              <span style={{fontSize:13,color:"#F0F6FF",fontWeight:700}}>%</span>
+              <span style={{fontSize:11,color:"#3B82F6",marginLeft:4}}>= {newForm.montant_acompte>0?Number(newForm.montant_acompte).toLocaleString("fr-FR",{minimumFractionDigits:2}):"0,00"} €</span>
             </div>}
             <div style={{marginBottom:12}}><L c="NOTES"/><textarea value={newForm.notes} onChange={e=>setNewForm(p=>({...p,notes:e.target.value}))} placeholder="Informations…" style={{...INP(),height:60,resize:"none"}}/></div>
             <div style={{display:"flex",gap:8}}>
