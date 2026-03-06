@@ -455,7 +455,7 @@
       const urgent = termines.filter(ch => (ch.facture?.statut||"a_facturer") === "a_facturer").length;
 
       const CARD = {background:"#0D1828", borderRadius:14, border:"1px solid #1B2D4F", padding:"18px"};
-      const INP  = {background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',outline:"none"};
+      const INP  = (e={}) => ({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',outline:"none",...e});
 
       // ── DÉTAIL ──
       const ch = detail ? termines.find(c=>c.id===detail) : null;
