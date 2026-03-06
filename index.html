@@ -431,8 +431,9 @@
       const [search, setSearch]   = useState("");
       const [detail, setDetail]   = useState(null);
       const [copied, setCopied]   = useState(false);
+      const [delConf, setDelConf]   = useState(false);
 
-      const termines = chantiers.filter(ch => ch.statut === "termine");
+      const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
 
       const updateFacture = (id, patch) => {
         setChantiers(p => p.map(ch =>
@@ -467,6 +468,7 @@
           <div>
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
               <button onClick={()=>setDetail(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+              <button onClick={()=>setDelConf(true)} style={{marginLeft:"auto",background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,color:"#EF4444",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️ Supprimer</button>
               <div>
                 <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#F0F6FF"}}>🧾 {ch.client}</h2>
                 <div style={{fontSize:12,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"} · {ch.technicien||"—"}</div>
@@ -538,6 +540,17 @@
               </div>
             </div>
           </div>
+        {delConf&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setDelConf(false)}>
+          <div style={{background:"#0D1828",borderRadius:16,border:"1px solid #1B2D4F",padding:"28px",maxWidth:360,width:"90%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:44,marginBottom:12}}>🗑️</div>
+            <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer cette facture ?</h3>
+            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+              <button onClick={()=>{setChantiers(p=>p.map(x=>x.id===ch.id?{...x,facture:{statut:"supprime"}}:x));setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
+            </div>
+          </div>
+        </div>}
         );
       }
 
@@ -649,7 +662,7 @@ L'équipe Ma Borne LR`;
       const [search, setSearch]     = useState("");
 
       // Chantiers terminés uniquement
-      const termines = chantiers.filter(ch => ch.statut === "termine");
+      const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
 
       const updateSuivi = (id, patch) => {
         setChantiers(p => p.map(ch =>
@@ -749,6 +762,17 @@ L'équipe Ma Borne LR`;
               </div>
             </div>
           </div>
+        {delConf&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setDelConf(false)}>
+          <div style={{background:"#0D1828",borderRadius:16,border:"1px solid #1B2D4F",padding:"28px",maxWidth:360,width:"90%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:44,marginBottom:12}}>🗑️</div>
+            <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer cette facture ?</h3>
+            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+              <button onClick={()=>{setChantiers(p=>p.map(x=>x.id===ch.id?{...x,facture:{statut:"supprime"}}:x));setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
+            </div>
+          </div>
+        </div>}
         );
       }
 
@@ -2435,6 +2459,17 @@ L'équipe Ma Borne LR`;
               </div>
             </div>
           </div>
+        {delConf&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setDelConf(false)}>
+          <div style={{background:"#0D1828",borderRadius:16,border:"1px solid #1B2D4F",padding:"28px",maxWidth:360,width:"90%",textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:44,marginBottom:12}}>🗑️</div>
+            <h3 style={{margin:"0 0 8px",fontWeight:800,color:"#F0F6FF"}}>Supprimer cette facture ?</h3>
+            <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}>Le chantier de <strong style={{color:"#E8F0FF"}}>{ch.client}</strong> sera retiré de la facturation.</p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setDelConf(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#E8F0FF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+              <button onClick={()=>{setChantiers(p=>p.map(x=>x.id===ch.id?{...x,facture:{statut:"supprime"}}:x));setDetail(null);setDelConf(false);}} style={{flex:1,background:"#EF4444",border:"none",borderRadius:10,color:"#FFF",padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Supprimer</button>
+            </div>
+          </div>
+        </div>}
         );
       }
 
