@@ -3908,7 +3908,7 @@
       const isMobile=useIsMobile();
       const[authUser,setAuthUser]=React.useState(null);
       const[authLoading,setAuthLoading]=React.useState(false);
-      const[profile,setProfile]=React.useState(null);
+      const[profile,setProfile]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?JSON.parse(p):null;}catch(e){return null;}});
       const[sync,setSync]=React.useState("saved");
       const[stock,setStock]=React.useState([]);
       const[orders,setOrders]=React.useState([]);
@@ -3953,6 +3953,7 @@
               const{data}=await Promise.race([fetchPromise,timeout]);
               if(data){
                 setProfile(data);
+                try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}
                 try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur))goTo(tabs[0]);}catch(e){}
               }
             }catch(e){
