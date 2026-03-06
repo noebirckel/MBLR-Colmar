@@ -4484,12 +4484,10 @@ L'équipe Ma Borne LR`;
         return()=>sb.removeChannel(ch);
       },[profile]);
 
-      const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
-        if(firstLoad.current)return;
-        if(timer.current)clearTimeout(timer.current);
+      const doSave=React.useCallback(async(ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
+        if(firstLoad.current){console.warn("saveDB blocked: firstLoad still true");return;}
         setSync("saving");
-        timer.current=setTimeout(async()=>{
-          try{
+        try{
             const run=async(table,data)=>{
               if(!data)return;
               const{error}=await sb.from(table).upsert(data);
@@ -4510,8 +4508,12 @@ L'équipe Ma Borne LR`;
             await run("rapports",nrapp);
             setSync("saved");
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
-        },800);
-      },[]);
+              },[]);
+      const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
+        if(firstLoad.current)return;
+        if(timer.current)clearTimeout(timer.current);
+        timer.current=setTimeout(()=>doSave(ns,no,nh,nv,nc,na,nsav,nobj,nrapp),300);
+      },[doSave]);
 
       const upd=(id,field,val)=>{const n=stock.map(s=>s.id===id?{...s,[field]:val}:s);setStock(n);saveDB(n,null,null,null,null,null,null,null,null);};
       const SV=React.useCallback(v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(null,null,null,n,null,null,null,null,null);},[ventes]);
@@ -4520,6 +4522,17 @@ L'équipe Ma Borne LR`;
       const SSAV=React.useCallback(v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(null,null,null,null,null,null,n,null,null);},[savTickets]);
       const SOBJ=React.useCallback(v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(null,null,null,null,null,null,null,n,null);},[objectifs]);
       const SR=React.useCallback(v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(null,null,null,null,null,null,null,null,n);},[rapports]);
+
+      // Sauvegarde forcée avant fermeture/actualisation
+      React.useEffect(()=>{
+        const handleUnload = ()=>{
+          if(timer.current){
+            clearTimeout(timer.current);
+          }
+        };
+        window.addEventListener("beforeunload", handleUnload);
+        return ()=>window.removeEventListener("beforeunload", handleUnload);
+      },[]);
 
       const role=profile?.role||"installateur";
       const allowedTabs=ROLE_TABS[role]||["accueil"];
