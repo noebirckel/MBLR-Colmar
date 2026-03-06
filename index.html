@@ -4654,6 +4654,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const sc2=syncCfg[sync]||syncCfg.saved;
 
       // Navigation groups
+      const fmt=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0});
       const NAV_GROUPS=[
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
@@ -4886,81 +4887,308 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
 
                 {view==="accueil"&&<>
-                  <div style={{marginBottom:20}}>
-                    <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>Bonjour {profile?.nom?.split(" ")[0]||""} {rCfg.icon}</div>
-                    <div style={{fontSize:12,color:"#4A6A9E"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-                    {[
-                      {l:"À commander",v:stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil&&!aOIds.has(s.id)).length,c:"#EF4444",i:"🔴",action:()=>goTo("stock")},
-                      {l:"En transit",v:orders.filter(o=>o.statut==="en_cours").length,c:"#3B82F6",i:"🚚",action:()=>goTo("commandes")},
-                      {l:"Surveiller",v:stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock>=s.seuil&&s.stock<s.seuil*1.3).length,c:"#F59E0B",i:"🟡",action:()=>goTo("stock")},
-                      {l:"Ruptures",v:stock.filter(s=>s.rupture).length,c:"#A855F7",i:"⛔",action:()=>goTo("stock")},
-                    ].map(({l,v,c,i,action})=>(
-                      <div key={l} onClick={action} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                          <div>
-                            <div style={{fontSize:isMobile?22:26,fontWeight:900,color:c}}>{v}</div>
-                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{l}</div>
-                          </div>
-                          <span style={{fontSize:20}}>{i}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
-                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:16}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                        <span style={{fontWeight:700,fontSize:14}}>📦 Stock critique</span>
-                        <button onClick={()=>goTo("stock")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#3B82F6",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Voir tout</button>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>{
-                          const st=gS(item.stock,item.seuil,item.rupture,aOIds.has(item.id));
-                          const sc=SC[st];
-                          return(
-                            <div key={item.id} style={{display:"flex",alignItems:"center",gap:10}}>
-                              <div style={{width:3,height:28,borderRadius:2,background:sc.color,flexShrink:0}}/>
-                              <div style={{flex:1}}>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                                  <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{item.article}</span>
-                                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                                    <span style={{fontSize:12,color:sc.color,fontWeight:700}}>{item.stock}/{item.seuil}</span>
-                                    {canOrder(role)&&<button onClick={()=>goTo("commandes")} style={{background:"transparent",border:"none",color:"#3B82F6",cursor:"pointer",fontSize:11,padding:0}}>Commander</button>}
-                                  </div>
-                                </div>
-                                <div style={{background:"#070D1A",borderRadius:4,height:4,width:"100%",overflow:"hidden"}}>
-                                  <div style={{height:4,borderRadius:4,width:`${Math.min(100,Math.round(item.stock/item.seuil*100))}%`,background:sc.color}}/>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"10px 0"}}>✅ Aucune alerte</div>}
-                      </div>
-                    </div>
-                    {allowedTabs.includes("ventes")&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:16}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                        <span style={{fontWeight:700,fontSize:14}}>💰 Dernières ventes</span>
-                        <button onClick={()=>goTo("ventes")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#3B82F6",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Voir tout</button>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {ventes.slice(0,4).map(v=>(
-                          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.client}</div>
-                              <div style={{fontSize:10,color:"#4A6A9E"}}>{v.date||""}</div>
-                            </div>
-                            <span style={{fontSize:12,fontWeight:700,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
-                          </div>
-                        ))}
-                        {ventes.length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"10px 0"}}>Aucune vente</div>}
-                      </div>
-                    </div>}
-                  </div>
-                </>}
+{/* ── ACCUEIL ROLE-BASED ── */}
+{(()=>{
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Bonjour" : hour < 18 ? "Bon après-midi" : "Bonsoir";
+  const dateStr = now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const prenom = profile?.nom?.split(" ")[0]||profile?.nom||"";
 
-                {view==="stock"&&<>
+  // Calculs communs
+  const caMonth = ventes.filter(v=>{
+    const d=new Date(v.id); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+  }).reduce((s,v)=>s+(v.prix_ht||0),0);
+  const chantiersAPlanifier = chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
+  const chantiersEnCours = chantiersPipeline.filter(ch=>ch.statut==="en_cours").length;
+  const chantiersTermines = chantiersPipeline.filter(ch=>ch.statut==="termine").length;
+  const savOuverts = savTickets.filter(s=>s.statut==="ouvert").length;
+  const facturesAFaire = chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+  const accomptesAEnvoyer = acomptes.filter(a=>a.statut==="a_envoyer").length;
+  const stockCritique = stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).length;
+  const cmdEnAttente = orders.filter(o=>o.statut==="en_attente").length;
+  const ventesAujourdhui = ventes.filter(v=>new Date(v.id).toDateString()===now.toDateString()).length;
+  const aAppeler = chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;
+
+  const CARD = {background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
+  const KPI = (val,label,icon,color,action) => (
+    <div onClick={action} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:`1px solid ${color}30`,cursor:action?"pointer":"default",transition:"border-color 0.15s"}}
+      onMouseOver={e=>{if(action)e.currentTarget.style.borderColor=color;}}
+      onMouseOut={e=>{if(action)e.currentTarget.style.borderColor=color+"30";}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+        <div>
+          <div style={{fontSize:isMobile?24:28,fontWeight:900,color,lineHeight:1}}>{val}</div>
+          <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{label}</div>
+        </div>
+        <span style={{fontSize:22}}>{icon}</span>
+      </div>
+    </div>
+  );
+
+  const Section = ({title,children,action,actionLabel}) => (
+    <div style={CARD}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{title}</span>
+        {action&&<button onClick={action} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>{actionLabel||"Voir →"}</button>}
+      </div>
+      {children}
+    </div>
+  );
+
+  const Empty = ({msg}) => <div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"16px 0"}}>{msg}</div>;
+
+  // ── ADMINISTRATEUR ──
+  if(role==="administrateur") return (
+    <>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} ⚡</div>
+      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
+    </div>
+
+    {/* Alertes urgentes */}
+    {(facturesAFaire>0||savOuverts>0||stockCritique>0)&&(
+      <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:6}}>
+        {facturesAFaire>0&&<div onClick={()=>goTo("factures")} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#EF4444",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          🔴 {facturesAFaire} facture{facturesAFaire>1?"s":""} à établir
+        </div>}
+        {savOuverts>0&&<div onClick={()=>goTo("sav")} style={{background:"rgba(239,68,68,0.06)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          🛠️ {savOuverts} ticket{savOuverts>1?"s":""} SAV ouvert{savOuverts>1?"s":""}
+        </div>}
+        {stockCritique>0&&<div onClick={()=>goTo("stock")} style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F59E0B",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          📦 {stockCritique} article{stockCritique>1?"s":""} en stock critique
+        </div>}
+      </div>
+    )}
+
+    {/* KPIs CA + chantiers */}
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+      {KPI(fmt(caMonth)+" €","CA ce mois","💰","#10B981",()=>goTo("stats"))}
+      {KPI(chantiersEnCours,"En cours","🔧","#3B82F6",()=>goTo("chantier"))}
+      {KPI(chantiersAPlanifier,"À planifier","📅","#F59E0B",()=>goTo("chantier"))}
+      {KPI(ventesAujourdhui,"Ventes aujourd'hui","💼","#A78BFA",()=>goTo("ventes"))}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+      {KPI(facturesAFaire,"À facturer","🧾","#EF4444",()=>goTo("factures"))}
+      {KPI(accomptesAEnvoyer,"Acomptes à envoyer","📋","#F59E0B",()=>goTo("administratif"))}
+      {KPI(stockCritique,"Stock critique","📦","#EF4444",()=>goTo("stock"))}
+      {KPI(savOuverts,"SAV ouverts","🛠️","#F87171",()=>goTo("sav"))}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+      {/* Dernières ventes */}
+      <Section title="💰 Dernières ventes" action={()=>goTo("ventes")}>
+        {ventes.slice(0,5).length===0?<Empty msg="Aucune vente"/>:ventes.slice(0,5).map(v=>(
+          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{v.date||"—"} · {v.par||"—"}</div></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
+          </div>
+        ))}
+      </Section>
+
+      {/* Chantiers récents */}
+      <Section title="🔧 Chantiers actifs" action={()=>goTo("chantier")}>
+        {chantiersPipeline.filter(ch=>ch.statut!=="termine").slice(0,5).length===0?<Empty msg="Aucun chantier actif"/>:
+        chantiersPipeline.filter(ch=>ch.statut!=="termine").slice(0,5).map(ch=>{
+          const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"},termine:{label:"Terminé",color:"#6B7280"}};
+          const s=STATUTS_CH[ch.statut]||STATUTS_CH.a_planifier;
+          return(
+            <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+              <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{ch.technicien||"Non assigné"}</div></div>
+              <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.color+"15",padding:"2px 8px",borderRadius:20}}>{s.label}</span>
+            </div>
+          );
+        })}
+      </Section>
+
+      {/* Stock critique */}
+      <Section title="📦 Stock critique" action={()=>goTo("stock")}>
+        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).length===0
+          ?<Empty msg="✅ Tout le stock est OK"/>
+          :stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>(
+          <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <span style={{fontSize:13,color:"#E8F0FF",fontWeight:600}}>{item.article}</span>
+            <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>{item.stock}/{item.seuil}</span>
+          </div>
+        ))}
+      </Section>
+
+      {/* Acomptes à envoyer */}
+      <Section title="📋 Acomptes en attente" action={()=>goTo("administratif")}>
+        {acomptes.filter(a=>a.statut==="a_envoyer").slice(0,5).length===0?<Empty msg="✅ Aucun acompte en attente"/>:
+        acomptes.filter(a=>a.statut==="a_envoyer").slice(0,5).map(a=>(
+          <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{a.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{a.date_creation||"—"}</div></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#F59E0B"}}>{fmt(a.montant_acompte)}€</span>
+          </div>
+        ))}
+      </Section>
+    </div>
+    </>
+  );
+
+  // ── COMMERCIAL ──
+  if(role==="commercial") return (
+    <>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 💼</div>
+      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+      {KPI(fmt(caMonth)+" €","CA ce mois","💰","#10B981",()=>goTo("stats"))}
+      {KPI(ventesAujourdhui,"Ventes aujourd'hui","📅","#A78BFA",()=>goTo("ventes"))}
+      {KPI(ventes.length,"Total ventes","📊","#3B82F6",()=>goTo("ventes"))}
+      {KPI(aAppeler,"Clients à appeler","📞","#F59E0B",()=>goTo("suivi_comm"))}
+    </div>
+
+    {aAppeler>0&&(
+      <div onClick={()=>goTo("suivi_comm")} style={{marginBottom:16,background:"rgba(59,130,246,0.08)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#60A5FA",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+        📞 {aAppeler} client{aAppeler>1?"s":""} à appeler pour un avis Google
+      </div>
+    )}
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+      <Section title="💰 Mes dernières ventes" action={()=>goTo("ventes")}>
+        {ventes.slice(0,6).length===0?<Empty msg="Aucune vente"/>:ventes.slice(0,6).map(v=>(
+          <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{v.date||"—"}</div></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(v.prix_ht)}€</span>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="📞 Suivi clients à rappeler" action={()=>goTo("suivi_comm")}>
+        {chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").slice(0,6).length===0
+          ?<Empty msg="✅ Tous les clients ont été contactés"/>
+          :chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").slice(0,6).map(ch=>(
+          <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"}</div></div>
+            <span style={{fontSize:18}}>📞</span>
+          </div>
+        ))}
+      </Section>
+    </div>
+    </>
+  );
+
+  // ── INSTALLATEUR ──
+  if(role==="installateur") return (
+    <>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 🔧</div>
+      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+      {KPI(chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="planifie").length,"Mes chantiers planifiés","📅","#3B82F6",()=>goTo("chantier"))}
+      {KPI(chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&ch.statut==="en_cours").length,"Mes chantiers en cours","🔧","#10B981",()=>goTo("chantier"))}
+      {KPI(stockCritique,"Stock critique","📦","#EF4444",()=>goTo("stock"))}
+      {KPI(savOuverts,"SAV ouverts","🛠️","#F87171",()=>goTo("sav"))}
+    </div>
+
+    {savOuverts>0&&(
+      <div onClick={()=>goTo("sav")} style={{marginBottom:16,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F87171",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+        🛠️ {savOuverts} ticket{savOuverts>1?"s":""} SAV ouvert{savOuverts>1?"s":""} — intervention requise
+      </div>
+    )}
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+      <Section title="📅 Mes prochains chantiers" action={()=>goTo("chantier")}>
+        {chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&["planifie","a_planifier","en_cours"].includes(ch.statut)).slice(0,5).length===0
+          ?<Empty msg="Aucun chantier assigné"/>
+          :chantiersPipeline.filter(ch=>ch.technicien===profile?.nom&&["planifie","a_planifier","en_cours"].includes(ch.statut)).slice(0,5).map(ch=>{
+            const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#10B981"}};
+            const s=STATUTS_CH[ch.statut]||STATUTS_CH.a_planifier;
+            return(
+              <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0F1E35"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div>
+                  <div style={{fontSize:11,color:"#4A6A9E"}}>{ch.adresse||"Adresse non renseignée"}</div>
+                  {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600}}>📅 {ch.date_installation}</div>}
+                </div>
+                <span style={{fontSize:11,fontWeight:700,color:s.color,background:s.color+"15",padding:"2px 8px",borderRadius:20}}>{s.label}</span>
+              </div>
+            );
+          })}
+      </Section>
+
+      <Section title="📦 Stock à surveiller" action={()=>goTo("stock")}>
+        {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).length===0
+          ?<Empty msg="✅ Tout le stock est OK"/>
+          :stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>(
+          <div key={item.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <span style={{fontSize:13,color:"#E8F0FF",fontWeight:600}}>{item.article}</span>
+            <span style={{fontSize:12,color:"#EF4444",fontWeight:800}}>{item.stock}/{item.seuil}</span>
+          </div>
+        ))}
+      </Section>
+    </div>
+    </>
+  );
+
+  // ── SECRÉTAIRE ──
+  if(role==="secretaire") return (
+    <>
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 📋</div>
+      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
+    </div>
+
+    {(facturesAFaire>0||accomptesAEnvoyer>0)&&(
+      <div style={{marginBottom:16,display:"flex",flexDirection:"column",gap:6}}>
+        {facturesAFaire>0&&<div onClick={()=>goTo("factures")} style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#EF4444",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          🔴 {facturesAFaire} facture{facturesAFaire>1?"s":""} à établir
+        </div>}
+        {accomptesAEnvoyer>0&&<div onClick={()=>goTo("administratif")} style={{background:"rgba(245,158,11,0.06)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#F59E0B",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          📤 {accomptesAEnvoyer} acompte{accomptesAEnvoyer>1?"s":""} à envoyer
+        </div>}
+      </div>
+    )}
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+      {KPI(facturesAFaire,"Factures à établir","🧾","#EF4444",()=>goTo("factures"))}
+      {KPI(accomptesAEnvoyer,"Acomptes à envoyer","📤","#F59E0B",()=>goTo("administratif"))}
+      {KPI(chantiersTermines,"Chantiers terminés","✅","#10B981",()=>goTo("factures"))}
+      {KPI(acomptes.filter(a=>a.statut==="paye").length,"Acomptes payés","💰","#10B981",()=>goTo("administratif"))}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14}}>
+      <Section title="🧾 Factures à établir" action={()=>goTo("factures")}>
+        {chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").slice(0,6).length===0
+          ?<Empty msg="✅ Toutes les factures sont à jour"/>
+          :chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").slice(0,6).map(ch=>(
+          <div key={ch.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"}</div></div>
+            <span style={{fontSize:11,color:"#EF4444",fontWeight:700}}>🔴 À facturer</span>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="📋 Acomptes à envoyer" action={()=>goTo("administratif")}>
+        {acomptes.filter(a=>a.statut==="a_envoyer").slice(0,6).length===0?<Empty msg="✅ Aucun acompte en attente"/>:
+        acomptes.filter(a=>a.statut==="a_envoyer").slice(0,6).map(a=>(
+          <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #0F1E35"}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{a.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{a.date_creation||"—"}</div></div>
+            <span style={{fontSize:13,fontWeight:800,color:"#F59E0B"}}>{fmt(a.montant_acompte)}€</span>
+          </div>
+        ))}
+      </Section>
+    </div>
+    </>
+  );
+
+  // ── FALLBACK ──
+  return (
+    <div style={{marginBottom:20}}>
+      <div style={{fontSize:22,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{greeting} {prenom} 👋</div>
+      <div style={{fontSize:12,color:"#4A6A9E"}}>{dateStr}</div>
+    </div>
+  );
+})()}
+</>}
+
+
+{view==="stock"&&<>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
                     {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Ajouter</button>}
