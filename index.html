@@ -4792,7 +4792,18 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                                 <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:7,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"rgba(59,130,246,0.12)":"transparent"}}>
                                   <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
                                   <span style={{fontSize:12,fontWeight:isAct?700:500,color:isAct?"#60A5FA":"#5A7AAA"}}>{TAB_LABELS[t]}</span>
-                                  {t==="factures"&&(()=>{const n=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;return n>0?<span style={{marginLeft:4,background:"#EF4444",color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>{n}</span>:null;})()}
+                                  {(()=>{
+                                    let badge=0;
+                                    let color="#EF4444";
+                                    if(t==="factures") { badge=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length; color="#EF4444"; }
+                                    else if(t==="chantier") { badge=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length; color="#F59E0B"; }
+                                    else if(t==="commandes") { badge=orders.filter(o=>o.statut==="en_attente").length; color="#F59E0B"; }
+                                    else if(t==="sav") { badge=savTickets.filter(s=>s.statut==="ouvert").length; color="#EF4444"; }
+                                    else if(t==="administratif") { badge=acomptes.filter(a=>a.statut==="a_envoyer").length; color="#F59E0B"; }
+                                    else if(t==="suivi_comm") { badge=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length; color="#3B82F6"; }
+                                    else if(t==="ventes") { badge=ventes.filter(v=>{const age=(Date.now()-v.id)/1000/3600;return age<24;}).length; color="#10B981"; }
+                                    return badge>0?<span style={{marginLeft:"auto",background:color,color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:16,textAlign:"center"}}>{badge>99?"99+":badge}</span>:null;
+                                  })()}
                                   {isAct&&<div style={{marginLeft:"auto",width:3,height:14,borderRadius:2,background:"#3B82F6"}}/>}
                                 </button>
                               );
