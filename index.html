@@ -4424,36 +4424,38 @@ L'équipe Ma Borne LR`;
       React.useEffect(()=>{
         if(!profile)return;
         const loadAll=async()=>{
+          const load=async(table,orderCol)=>{
+            try{
+              const q=sb.from(table).select("*");
+              const{data}=orderCol?await q.order(orderCol,{ascending:false}):await q;
+              return data||[];
+            }catch(e){console.warn("load "+table+":",e.message);return[];}
+          };
           try{
             const[rs,ro,rh,rv,rc,ra,rsav,robj,rrapp]=await Promise.all([
-              sb.from("stock").select("*").order("cat"),
-              sb.from("orders").select("*").order("created_at",{ascending:false}),
-              sb.from("historique").select("*").order("date",{ascending:false}),
-              sb.from("ventes").select("*").order("created_at",{ascending:false}),
-              sb.from("chantiers").select("*").order("date_creation",{ascending:false}),
-              sb.from("acomptes").select("*").order("created_at",{ascending:false}),
-              sb.from("sav_tickets").select("*").order("created_at",{ascending:false}),
-              sb.from("objectifs").select("*"),
-              sb.from("rapports").select("*").order("created_at",{ascending:false}),
+              load("stock","cat"),
+              load("orders","created_at"),
+              load("historique","id"),
+              load("ventes","created_at"),
+              load("chantiers","created_at"),
+              load("acomptes","created_at"),
+              load("sav_tickets","created_at"),
+              load("objectifs",null),
+              load("rapports","created_at"),
             ]);
-            if(rs?.data)setStock(rs.data);
-            if(ro?.data)setOrders(ro.data);
-            if(rh?.data)setHist(rh.data);
-            if(rv?.data)setVentes(rv.data);
-            if(rc?.data)setChantiersPipeline(rc.data);
-            if(ra?.data)setAcomptes(ra.data);
-            if(rsav?.data)setSavTickets(rsav.data);
-            if(robj?.data){
-              // Transform array [{key, ca, marge}] to object {key: {ca, marge}}
-              if(Array.isArray(robj.data)){
-                const obj={};
-                robj.data.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
-                setObjectifs(obj);
-              } else {
-                setObjectifs(robj.data||{});
-              }
+            if(rs.length)setStock(rs);
+            if(ro.length)setOrders(ro);
+            if(rh.length)setHist(rh);
+            if(rv.length)setVentes(rv);
+            if(rc.length)setChantiersPipeline(rc);
+            if(ra.length)setAcomptes(ra);
+            if(rsav.length)setSavTickets(rsav);
+            if(robj.length){
+              const obj={};
+              robj.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
+              setObjectifs(obj);
             }
-            if(rrapp?.data)setRapports(rrapp.data);
+            if(rrapp.length)setRapports(rrapp);
           }catch(e){console.error("loadAll:",e);}
           firstLoad.current=false;
         };
