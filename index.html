@@ -792,8 +792,8 @@
 
       return(
         <div style={{maxWidth:720}}>
-          {/* Modal édition objectif */}
-          {editObjModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditObjModal(false)}>
+          {/* Modal édition objectif — admin seulement */}
+          {editObjModal&&role==="administrateur"&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditObjModal(false)}>
             <div style={{background:"#0D1828",borderRadius:16,padding:24,width:"100%",maxWidth:400,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
               <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:16,color:"#F0F6FF"}}>🎯 Modifier mes objectifs — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
               <div style={{marginBottom:12}}>
@@ -817,10 +817,12 @@
               <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>🎯 Mes Objectifs</h2>
               <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
             </div>
-            <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditObjModal(true);}}
-              style={{background:"rgba(59,130,246,0.1)",border:"1px solid #1B2D4F",borderRadius:9,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
-              ✏️ {objCA||objMarge?"Modifier mes objectifs":"Fixer mes objectifs"}
-            </button>
+            {role==="administrateur"&&(
+              <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditObjModal(true);}}
+                style={{background:"rgba(59,130,246,0.1)",border:"1px solid #1B2D4F",borderRadius:9,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+                ✏️ {objCA||objMarge?"Modifier les objectifs":"Fixer les objectifs"}
+              </button>
+            )}
           </div>
 
           {/* KPIs MOIS */}
@@ -884,11 +886,14 @@
           {(!objCA&&!objMarge)&&<div style={{...CARD,textAlign:"center",padding:"24px",borderStyle:"dashed"}}>
             <div style={{fontSize:36,marginBottom:8}}>🎯</div>
             <div style={{fontWeight:700,color:"#4A6A9E",marginBottom:6}}>Aucun objectif fixé pour ce mois</div>
-            <div style={{fontSize:12,color:"#2E4D82",marginBottom:14}}>Fixez vos objectifs pour suivre votre progression</div>
-            <button onClick={()=>{setDraftCA("");setDraftMarge("");setEditObjModal(true);}}
-              style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"10px 20px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
-              ➕ Fixer mes objectifs
-            </button>
+            {role==="administrateur"
+              ?<><div style={{fontSize:12,color:"#2E4D82",marginBottom:14}}>Fixez les objectifs pour suivre la progression</div>
+                <button onClick={()=>{setDraftCA("");setDraftMarge("");setEditObjModal(true);}}
+                  style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"10px 20px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                  ➕ Fixer les objectifs
+                </button></>
+              :<div style={{fontSize:12,color:"#2E4D82"}}>Votre administrateur n'a pas encore fixé vos objectifs pour ce mois.</div>
+            }
           </div>}
 
           {/* HISTORIQUE 6 MOIS — graphique barres */}
