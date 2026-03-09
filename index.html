@@ -486,22 +486,64 @@
                 {/* Statut facturation */}
                 <div style={CARD}>
                   <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📋 Statut facturation</h3>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
-                    {Object.entries(STATUTS_FACT).map(([k,v])=>(
-                      <button key={k} onClick={()=>updateFacture(ch.id,{statut:k, date_maj:new Date().toLocaleDateString("fr-FR"), maj_par:profile?.nom||""})} style={{
-                        padding:"9px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
-                        fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",
-                        background:etat===k?`${v.color}20`:"transparent",
-                        border:`1px solid ${etat===k?v.color:"#1B2D4F"}`,
-                        color:etat===k?v.color:"#4A6A9E"}}>
-                        {v.icon} {v.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{padding:"10px 14px",background:`${E.color}10`,border:`1px solid ${E.color}30`,borderRadius:10,fontSize:13,color:E.color,fontWeight:700}}>
-                    {E.icon} {E.label}
-                    {fact.date_maj&&<span style={{color:"#4A6A9E",fontWeight:400,fontSize:11}}> · Mis à jour le {fact.date_maj} par {fact.maj_par||"—"}</span>}
-                  </div>
+
+                  {/* Barre de progression visuelle */}
+                  {(()=>{
+                    const steps=["a_facturer","en_cours","facture","paye"];
+                    const idx=steps.indexOf(etat);
+                    const nextKey=steps[idx+1]||null;
+                    const nextLabel={a_facturer:"En cours",en_cours:"Facturé",facture:"Payé"}[etat];
+                    const nextIcon={a_facturer:"🟡",en_cours:"📄",facture:"✅"}[etat];
+                    const nextColor={a_facturer:"#F59E0B",en_cours:"#3B82F6",facture:"#10B981"}[etat];
+                    return(
+                      <>
+                        {/* Steps visuels */}
+                        <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:16}}>
+                          {steps.map((s,i)=>{
+                            const SF=STATUTS_FACT[s];
+                            const done=i<idx; const active=i===idx;
+                            return(
+                              <React.Fragment key={s}>
+                                <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
+                                  <div style={{
+                                    width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",
+                                    justifyContent:"center",fontSize:14,fontWeight:800,
+                                    background:done?"#10B981":active?SF.color+"30":"#0D1828",
+                                    border:`2px solid ${done?"#10B981":active?SF.color:"#1B2D4F"}`,
+                                    color:done?"#10B981":active?SF.color:"#2E4D82",
+                                    transition:"all 0.3s"
+                                  }}>{done?"✓":SF.icon}</div>
+                                  <div style={{fontSize:9,fontWeight:700,color:active?SF.color:done?"#10B981":"#2E4D82",marginTop:4,textAlign:"center",whiteSpace:"nowrap"}}>{SF.label}</div>
+                                </div>
+                                {i<steps.length-1&&<div style={{height:2,flex:0.5,background:i<idx?"#10B981":"#1B2D4F",marginBottom:16,transition:"background 0.3s"}}/>}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+
+                        {/* Bouton avancer */}
+                        {nextKey&&canEdit(role)&&(
+                          <button onClick={()=>updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""})}
+                            style={{width:"100%",background:`linear-gradient(135deg,${nextColor},${nextColor}CC)`,
+                              border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",
+                              fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',
+                              boxShadow:`0 4px 14px ${nextColor}40`,marginBottom:10,
+                              display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                            {nextIcon} Passer à : {nextLabel} →
+                          </button>
+                        )}
+                        {etat==="paye"&&(
+                          <div style={{background:"#10B98115",border:"1px solid #10B98140",borderRadius:10,
+                            padding:"10px 14px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
+                            ✅ Facture payée — rien à faire
+                          </div>
+                        )}
+                        {fact.date_maj&&<div style={{fontSize:11,color:"#2E4D82",textAlign:"center",marginTop:6}}>
+                          Mis à jour le {fact.date_maj} par {fact.maj_par||"—"}
+                        </div>}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Infos chantier */}
@@ -2900,12 +2942,31 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     </div>
 
                     {/* Actions rapides statut */}
-                    {canEdit(role)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      {a.statut==="a_envoyer"&&<button onClick={()=>updateAcompte(a.id,{statut:"envoye",date_envoi:new Date().toLocaleDateString("fr-FR")})} style={BTN("#3B82F6",{flex:2,padding:"7px 10px",fontSize:12})}>📨 Marquer envoyé</button>}
-                      {a.statut==="envoye"&&<button onClick={()=>updateAcompte(a.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})} style={BTN("#10B981",{flex:2,padding:"7px 10px",fontSize:12})}>✅ Marquer payé</button>}
-                      {a.statut==="paye"&&<div style={{flex:2,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"7px 10px",textAlign:"center",fontSize:12,color:"#10B981",fontWeight:700}}>✅ Acompte encaissé le {a.date_paiement}</div>}
-                      <button onClick={()=>setEditModal({...a})} style={BTN("#1B2D4F",{padding:"7px 12px",fontSize:12})}>✏️</button>
-                      <button onClick={()=>setDelConf(a)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
+                    {canEdit(role)&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+                      {a.statut==="a_envoyer"&&(
+                        <button onClick={()=>updateAcompte(a.id,{statut:"envoye",date_envoi:new Date().toLocaleDateString("fr-FR")})}
+                          style={{flex:2,background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"9px 12px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',boxShadow:"0 3px 12px rgba(59,130,246,0.35)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                          📨 Marquer comme envoyé →
+                        </button>
+                      )}
+                      {a.statut==="envoye"&&(
+                        <button onClick={()=>updateAcompte(a.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})}
+                          style={{flex:2,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:9,color:"#FFF",padding:"9px 12px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',boxShadow:"0 3px 12px rgba(16,185,129,0.35)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                          ✅ Marquer comme payé →
+                        </button>
+                      )}
+                      {a.statut==="paye"&&(
+                        <div style={{flex:2,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
+                          ✅ Encaissé le {a.date_paiement}
+                        </div>
+                      )}
+                      {a.statut==="annule"&&(
+                        <div style={{flex:2,background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#EF4444",fontWeight:700}}>
+                          ❌ Annulé
+                        </div>
+                      )}
+                      <button onClick={()=>setEditModal({...a})} style={{background:"#1B2D4F",border:"none",borderRadius:9,color:"#7B96C8",padding:"9px 12px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}} title="Modifier">✏️</button>
+                      <button onClick={()=>setDelConf(a)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"9px 10px",cursor:"pointer",fontSize:13,fontWeight:700}} title="Supprimer">🗑️</button>
                     </div>}
                   </div>
                 );
