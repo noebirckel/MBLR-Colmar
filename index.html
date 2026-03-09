@@ -5006,16 +5006,37 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[pSearch,setPSearch]=React.useState("");
       const[pCat,setPCat]=React.useState("Toutes");
       const firstLoad=React.useRef(true);
-      const[rtToast,setRtToast]=React.useState(null);
-      const rtTimer=React.useRef(null);
-      const showToast=React.useCallback((msg)=>{
-        setRtToast(msg);
-        if(rtTimer.current)clearTimeout(rtTimer.current);
-        rtTimer.current=setTimeout(()=>setRtToast(null),3500);
-      },[]);
-      const timer=React.useRef(null);
+      const[notifs,setNotifs]=React.useState([]);
+      const[notifPanel,setNotifPanel]=React.useState(false);
+      const notifId=React.useRef(0);
 
-      const goTo=v=>{try{localStorage.setItem("app_view",v);}catch(e){}setView(v);};
+      const addNotif=React.useCallback((icon,title,msg,tab)=>{
+        const id=++notifId.current;
+        setNotifs(p=>[{id,icon,title,msg,tab,ts:new Date(),read:false},...p].slice(0,50));
+      },[]);
+
+      const markRead=React.useCallback((id)=>{
+        setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
+      },[]);
+
+      const markAllRead=React.useCallback(()=>{
+        setNotifs(p=>p.map(n=>({...n,read:true})));
+      },[]);
+
+      const deleteNotif=React.useCallback((id)=>{
+        setNotifs(p=>p.filter(n=>n.id!==id));
+      },[]);
+
+      // Marquer comme lues les notifs d'un onglet quand on le visite
+      const goTo=v=>{
+        try{localStorage.setItem("app_view",v);}catch(e){}
+        setView(v);
+        setNotifs(p=>p.map(n=>n.tab===v?{...n,read:true}:n));
+        setNotifPanel(false);
+      };
+
+      const unreadCount=notifs.filter(n=>!n.read).length;
+      const timer=React.useRef(null);
       const logout=()=>sb.auth.signOut();
 
       // Auth
@@ -5166,10 +5187,26 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             else if(ev==="DELETE")setRapports(p=>p.filter(x=>x.id!==payload.old.id));
           }
 
+        const TAB_MAP={
+          ventes:"ventes", chantiers:"chantier", acomptes:"administratif",
+          stock:"stock", orders:"commandes", sav_tickets:"sav", rapports:"rapports"
+        };
+        const EV_ICONS={INSERT:"🆕",UPDATE:"✏️",DELETE:"🗑️"};
+        const EV_LABELS={INSERT:"Nouveau",UPDATE:"Modifié",DELETE:"Supprimé"};
+        const TABLE_ICONS={ventes:"💰",chantiers:"🔧",acomptes:"📋",stock:"📦",orders:"🛒",sav_tickets:"🛠️",rapports:"📄"};
+        const TABLE_LABELS={ventes:"Vente",chantiers:"Chantier",acomptes:"Acompte",stock:"Stock",orders:"Commande",sav_tickets:"Ticket SAV",rapports:"Rapport"};
+
           const label=LABELS[t]||t;
           const evLabel=EVENTS[ev]||ev;
-          const client=rec.client||rec.article||"";
-          showToast(`${label} ${evLabel}${client?" — "+client:""}`);
+          const client=rec.client||rec.article||rec.titre||"";
+          // Ignorer les suppressions propres et events du propre utilisateur (même session)
+          if(ev==="DELETE") return;
+          addNotif(
+            TABLE_ICONS[t]||"🔔",
+            `${EV_LABELS[ev]||ev} — ${TABLE_LABELS[t]||t}`,
+            client||label,
+            TAB_MAP[t]||"accueil"
+          );
         };
 
         const ch=sb.channel("app-realtime")
@@ -5185,8 +5222,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             else if(status==="CHANNEL_ERROR")console.warn("⚠️ Realtime erreur");
           });
 
-        return()=>{sb.removeChannel(ch);if(rtTimer.current)clearTimeout(rtTimer.current);};
-      },[profile,showToast]);
+        return()=>{sb.removeChannel(ch);};
+      },[profile,addNotif]);
 
       const doSave=React.useCallback(async(ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
         console.log("doSave called, firstLoad=",firstLoad.current);if(firstLoad.current){console.warn("saveDB blocked: firstLoad still true");return;}
@@ -5267,10 +5304,66 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const aOByAModal=oModal&&oArt?aOByA[oModal]:null;
 
 
-      // Toast realtime
-      const RealtimeToast=rtToast?(
-        <div style={{position:"fixed",bottom:24,right:24,background:"#1B2D4F",border:"1px solid #3B82F6",borderRadius:12,padding:"12px 18px",color:"#E8F0FF",fontSize:13,fontWeight:600,zIndex:9999,boxShadow:"0 4px 20px rgba(0,0,0,0.4)",animation:"slideIn 0.3s ease",display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:16}}>🔔</span>{rtToast}
+      // ── NOTIFICATION PANEL ──────────────────────────────────────
+      const timeAgo=(ts)=>{
+        const d=Math.floor((new Date()-new Date(ts))/1000);
+        if(d<60)return "À l'instant";
+        if(d<3600)return `Il y a ${Math.floor(d/60)} min`;
+        if(d<86400)return `Il y a ${Math.floor(d/3600)} h`;
+        return new Date(ts).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+      };
+
+      const NotifPanel=notifPanel?(
+        <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setNotifPanel(false)}>
+          <div style={{position:"absolute",top:56,left:isMobile?8:228,width:isMobile?"calc(100vw - 16px)":340,maxHeight:"75vh",background:"#0A1628",border:"1px solid #1B2D4F",borderRadius:14,boxShadow:"0 8px 40px rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",overflow:"hidden",animation:"slideIn 0.2s ease"}}
+            onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{padding:"14px 16px",borderBottom:"1px solid #1B2D4F",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:16}}>🔔</span>
+                <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>Notifications</span>
+                {unreadCount>0&&<span style={{background:"#EF4444",color:"#FFF",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 7px"}}>{unreadCount}</span>}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                {unreadCount>0&&<button onClick={markAllRead} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 9px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>Tout lire</button>}
+                {notifs.length>0&&<button onClick={()=>setNotifs([])} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 9px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>Effacer</button>}
+              </div>
+            </div>
+            {/* Liste */}
+            <div style={{overflowY:"auto",flex:1}}>
+              {notifs.length===0
+                ?<div style={{padding:"40px 20px",textAlign:"center"}}>
+                  <div style={{fontSize:36,marginBottom:8}}>🔕</div>
+                  <div style={{color:"#4A6A9E",fontSize:13,fontWeight:600}}>Aucune notification</div>
+                  <div style={{color:"#2E4D82",fontSize:11,marginTop:4}}>Tout est calme pour l'instant</div>
+                </div>
+                :notifs.map(n=>(
+                  <div key={n.id} onClick={()=>{if(n.tab)goTo(n.tab);markRead(n.id);}}
+                    style={{padding:"12px 14px",borderBottom:"1px solid #0F1E35",cursor:n.tab?"pointer":"default",display:"flex",alignItems:"flex-start",gap:10,background:n.read?"transparent":"rgba(59,130,246,0.05)",transition:"background 0.15s",position:"relative"}}
+                    onMouseOver={e=>e.currentTarget.style.background=n.read?"rgba(255,255,255,0.02)":"rgba(59,130,246,0.08)"}
+                    onMouseOut={e=>e.currentTarget.style.background=n.read?"transparent":"rgba(59,130,246,0.05)"}>
+                    {/* Icône */}
+                    <div style={{width:34,height:34,borderRadius:10,background:"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>
+                      {n.icon}
+                    </div>
+                    {/* Contenu */}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+                        <span style={{fontWeight:n.read?600:800,fontSize:12,color:n.read?"#7B96C8":"#E8F0FF",lineHeight:1.3}}>{n.title}</span>
+                        {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:"#3B82F6",flexShrink:0,marginTop:3}}/>}
+                      </div>
+                      {n.msg&&<div style={{fontSize:11,color:"#4A6A9E",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.msg}</div>}
+                      <div style={{fontSize:10,color:"#2E4D82",marginTop:3}}>{timeAgo(n.ts)}</div>
+                    </div>
+                    {/* Supprimer */}
+                    <button onClick={e=>{e.stopPropagation();deleteNotif(n.id);}}
+                      style={{background:"transparent",border:"none",color:"#2E4D82",cursor:"pointer",padding:"2px 4px",fontSize:13,lineHeight:1,fontFamily:'"Outfit",sans-serif',flexShrink:0}}
+                      title="Supprimer">✕</button>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
         </div>
       ):null;
 
@@ -5420,10 +5513,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <aside style={{width:220,flexShrink:0,background:"#08101F",borderRight:"1px solid #1B2D4F",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
                 <div style={{padding:"14px 12px",borderBottom:"1px solid #1B2D4F",display:"flex",alignItems:"center",gap:10}}>
                   <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:32,height:32,borderRadius:7}}/>
-                  <div>
+                  <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:12,color:"#F0F6FF"}}>Ma Borne LR</div>
                     <div style={{fontSize:9,color:"#4A6A9E",textTransform:"uppercase",fontWeight:600}}>Colmar</div>
                   </div>
+                  <button onClick={()=>setNotifPanel(p=>!p)} title="Notifications"
+                    style={{position:"relative",background:notifPanel?"rgba(59,130,246,0.15)":"transparent",border:`1px solid ${notifPanel?"#3B82F6":"#1B2D4F"}`,borderRadius:8,padding:"5px 7px",cursor:"pointer",color:unreadCount>0?"#F0F6FF":"#4A6A9E",fontSize:16,lineHeight:1,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",flexShrink:0}}>
+                    🔔
+                    {unreadCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:8,fontWeight:800,width:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>{unreadCount>9?"9+":unreadCount}</span>}
+                  </button>
                 </div>
                 <nav style={{flex:1,padding:"8px 6px",overflowY:"auto"}}>
                   {visibleGroups.map(g=>{
@@ -5494,6 +5592,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>Ma Borne LR</span>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <button onClick={()=>setNotifPanel(p=>!p)} title="Notifications"
+                      style={{position:"relative",background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"4px 7px",cursor:"pointer",color:unreadCount>0?"#F0F6FF":"#4A6A9E",fontSize:15,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>
+                      🔔
+                      {unreadCount>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:7,fontWeight:800,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center"}}>{unreadCount>9?"9+":unreadCount}</span>}
+                    </button>
                     <span style={{fontSize:10,color:sc2.c}}>{sc2.t}</span>
                     <button onClick={logout} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,color:"#4A6A9E",padding:"4px 8px",cursor:"pointer",fontSize:11}}>🚪</button>
                   </div>
@@ -5947,7 +6050,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             </div>
           </div>
-          {RealtimeToast}
+          {NotifPanel}
         </div>
       );
     }
