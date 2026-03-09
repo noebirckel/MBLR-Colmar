@@ -2964,38 +2964,70 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       </div>
                     </div>
 
-                    {/* Barre de progression paiement */}
-                    <div style={{background:"#070D1A",borderRadius:6,height:4,marginBottom:10,overflow:"hidden"}}>
-                      <div style={{height:4,borderRadius:6,width:a.statut==="paye"?"100%":a.statut==="envoye"?"50%":a.statut==="annule"?"100%":"15%",background:a.statut==="paye"?"#10B981":a.statut==="annule"?"#EF4444":"#F59E0B",transition:"width 0.3s"}}/>
-                    </div>
+                    {/* Avancement statut — même style que Factures */}
+                    {(()=>{
+                      const steps=["a_envoyer","envoye","paye"];
+                      const idx=steps.indexOf(a.statut);
+                      const nextKey=steps[idx+1]||null;
+                      const cfg={
+                        a_envoyer:{label:"Marquer Envoyé", icon:"📨", color:"#3B82F6", grad:"linear-gradient(135deg,#3B82F6,#1D4ED8)"},
+                        envoye:   {label:"Marquer Payé",   icon:"✅", color:"#10B981", grad:"linear-gradient(135deg,#10B981,#059669)"},
+                      }[a.statut];
 
-                    {/* Actions rapides statut */}
-                    {canEdit(role)&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-                      {a.statut==="a_envoyer"&&(
-                        <button onClick={()=>updateAcompte(a.id,{statut:"envoye",date_envoi:new Date().toLocaleDateString("fr-FR")})}
-                          style={{flex:2,background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"9px 12px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',boxShadow:"0 3px 12px rgba(59,130,246,0.35)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                          📨 Marquer comme envoyé →
-                        </button>
-                      )}
-                      {a.statut==="envoye"&&(
-                        <button onClick={()=>updateAcompte(a.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})}
-                          style={{flex:2,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:9,color:"#FFF",padding:"9px 12px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',boxShadow:"0 3px 12px rgba(16,185,129,0.35)",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                          ✅ Marquer comme payé →
-                        </button>
-                      )}
-                      {a.statut==="paye"&&(
-                        <div style={{flex:2,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
-                          ✅ Encaissé le {a.date_paiement}
-                        </div>
-                      )}
-                      {a.statut==="annule"&&(
-                        <div style={{flex:2,background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#EF4444",fontWeight:700}}>
-                          ❌ Annulé
-                        </div>
-                      )}
-                      <button onClick={()=>setEditModal({...a})} style={{background:"#1B2D4F",border:"none",borderRadius:9,color:"#7B96C8",padding:"9px 12px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}} title="Modifier">✏️</button>
-                      <button onClick={()=>setDelConf(a)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"9px 10px",cursor:"pointer",fontSize:13,fontWeight:700}} title="Supprimer">🗑️</button>
-                    </div>}
+                      return(
+                        <>
+                          {/* Steps visuels */}
+                          <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:10}}>
+                            {steps.map((s,i)=>{
+                              const SF=STATUTS[s]||STATUTS.a_envoyer;
+                              const done=i<idx; const active=i===idx;
+                              return(
+                                <React.Fragment key={s}>
+                                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1}}>
+                                    <div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,
+                                      background:done?"#10B981":active?SF.color+"30":"#0D1828",
+                                      border:`2px solid ${done?"#10B981":active?SF.color:"#1B2D4F"}`,
+                                      color:done?"#10B981":active?SF.color:"#2E4D82",transition:"all 0.3s"}}>
+                                      {done?"✓":SF.icon}
+                                    </div>
+                                    <div style={{fontSize:9,fontWeight:700,color:active?SF.color:done?"#10B981":"#2E4D82",marginTop:3,textAlign:"center",whiteSpace:"nowrap"}}>{SF.label}</div>
+                                  </div>
+                                  {i<steps.length-1&&<div style={{height:2,flex:0.5,background:i<idx?"#10B981":"#1B2D4F",marginBottom:14,transition:"background 0.3s"}}/>}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+
+                          {/* Bouton avancer / état final */}
+                          <div style={{display:"flex",gap:6}}>
+                            {nextKey&&cfg&&canEdit(role)
+                              ? <button onClick={()=>updateAcompte(a.id,{
+                                    statut:nextKey,
+                                    ...(nextKey==="envoye"?{date_envoi:new Date().toLocaleDateString("fr-FR")}:{}),
+                                    ...(nextKey==="paye"?{date_paiement:new Date().toLocaleDateString("fr-FR")}:{}),
+                                  })}
+                                  style={{flex:1,background:cfg.grad,border:"none",borderRadius:9,color:"#FFF",
+                                    padding:"9px 14px",cursor:"pointer",fontWeight:800,fontSize:13,
+                                    fontFamily:'"Outfit",sans-serif',boxShadow:`0 3px 12px ${cfg.color}40`,
+                                    display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                                  {cfg.icon} {cfg.label} →
+                                </button>
+                              : a.statut==="paye"
+                                ? <div style={{flex:1,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
+                                    ✅ Encaissé le {a.date_paiement}
+                                  </div>
+                                : a.statut==="annule"
+                                  ? <div style={{flex:1,background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#EF4444",fontWeight:700}}>❌ Annulé</div>
+                                  : null
+                            }
+                            {canEdit(role)&&<>
+                              <button onClick={()=>setEditModal({...a})} style={{background:"#1B2D4F",border:"none",borderRadius:9,color:"#7B96C8",padding:"9px 12px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}} title="Modifier">✏️</button>
+                              <button onClick={()=>setDelConf(a)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"9px 10px",cursor:"pointer",fontSize:13,fontWeight:700}} title="Supprimer">🗑️</button>
+                            </>}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 );
               })}
