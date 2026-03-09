@@ -2545,12 +2545,26 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[lightbox,setLightbox]=useState(null);
       const[filter,setFilter]=useState("tous");
       const[addModal,setAddModal]=useState(false);
-      const[addForm,setAddForm]=useState({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:""});
+      const[addForm,setAddForm]=useState({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:"",photos:[]});
+      const[addPhotoPreviews,setAddPhotoPreviews]=useState([]);
       const[addLoading,setAddLoading]=useState(false);
       const[addErr,setAddErr]=useState("");
 
       const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+
+      const handleAddPhotos=e=>{
+        const files=Array.from(e.target.files);
+        files.forEach(file=>{
+          const reader=new FileReader();
+          reader.onload=ev=>{
+            setAddForm(p=>({...p,photos:[...(p.photos||[]),ev.target.result]}));
+            setAddPhotoPreviews(p=>[...p,ev.target.result]);
+          };
+          reader.readAsDataURL(file);
+        });
+        e.target.value="";
+      };
 
       const saveManualChantier=async()=>{
         if(!addForm.client||!addForm.adresse){setAddErr("Client et adresse requis");return;}
@@ -2572,11 +2586,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             coords,
             materiels:[],cables:[],
             par:"",
+            photos:addForm.photos||[],
             _historique:true,
           };
           setVentes(p=>[entry,...p]);
           setAddModal(false);
-          setAddForm({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:""});
+          setAddPhotoPreviews([]);
+          setAddForm({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:"",photos:[]});
         }catch(e){setAddErr("Erreur de géocodage : "+e.message);}
         setAddLoading(false);
       };
@@ -2704,10 +2720,32 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <textarea value={addForm.description} onChange={e=>setAddForm(p=>({...p,description:e.target.value}))} placeholder="Type de borne, observations…" style={{...INP(),height:70,resize:"none",lineHeight:1.5}}/>
               </div>
 
-              {addErr&&<div style={{background:"#EF444415",border:"1px solid #EF444440",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#EF4444",fontWeight:600,marginBottom:12}}>⚠️ {addErr}</div>}
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>PHOTOS DU CHANTIER</label>
+                <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:"2px dashed #1B2D4F",borderRadius:10,padding:"14px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,transition:"border-color 0.2s"}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
+                  onMouseOut={e=>e.currentTarget.style.borderColor="#1B2D4F"}>
+                  <span style={{fontSize:20}}>📸</span> Ajouter des photos
+                  <input type="file" accept="image/*" multiple onChange={handleAddPhotos} style={{display:"none"}}/>
+                </label>
+                {addPhotoPreviews.length>0&&(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginTop:8}}>
+                    {addPhotoPreviews.map((url,i)=>(
+                      <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
+                        <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                        <button onClick={()=>{
+                          setAddPhotoPreviews(p=>p.filter((_,j)=>j!==i));
+                          setAddForm(p=>({...p,photos:(p.photos||[]).filter((_,j)=>j!==i)}));
+                        }} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.7)",border:"none",borderRadius:"50%",color:"white",width:20,height:20,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
+              {addErr&&<div style={{background:"#EF444415",border:"1px solid #EF444440",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#EF4444",fontWeight:600,marginBottom:12}}>⚠️ {addErr}</div>}
               <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>setAddModal(false)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+                <button onClick={()=>{setAddModal(false);setAddPhotoPreviews([]);setAddForm({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:"",photos:[]});}} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
                 <button onClick={saveManualChantier} disabled={addLoading||!addForm.client||!addForm.adresse}
                   style={BTN(addLoading||!addForm.client||!addForm.adresse?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"12px",opacity:addLoading?0.7:1})}>
                   {addLoading?"⏳ Géocodage en cours…":"📍 Ajouter sur la carte"}
@@ -2731,7 +2769,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
               {role==="administrateur"&&(
                 <button onClick={()=>setAddModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"8px 14px",fontSize:12,display:"flex",alignItems:"center",gap:5})}>
-                  ➕ Chantier historique
+                  ➕ Ajout chantier manuel
                 </button>
               )}
               {[["tous","Tous","#7B96C8"],["avec_photos","📸 Avec photos","#3B82F6"]].map(([k,l,col])=>(
