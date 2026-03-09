@@ -1959,7 +1959,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
-    function SavTab({isMobile, tickets, setTickets, profile, role}) {
+    function SavTab({isMobile, tickets, setTickets, profile, role, onDeleteTicket}) {
 
       const STATUTS = {
         ouvert:           { label:"Ouvert",               color:"#F59E0B", bg:"rgba(245,158,11,0.1)",   icon:"🔴" },
@@ -2076,7 +2076,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 </p>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setDelConf(null)} style={{...BTN_SM("#1B2D4F"),flex:1,padding:"10px"}}>Annuler</button>
-                  <button onClick={()=>{setTickets(p=>p.filter(t=>t.id!==delConf.id));setDelConf(null);}}
+                  <button onClick={()=>{if(onDeleteTicket)onDeleteTicket(delConf.id);else setTickets(p=>p.filter(t=>t.id!==delConf.id));setDelConf(null);}}
                     style={{...BTN_SM("#EF4444"),flex:1,padding:"10px"}}>Supprimer</button>
                 </div>
               </div>
@@ -5533,7 +5533,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
 
                 {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
-                {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role}/>}
+                {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role} onDeleteTicket={async(id)=>{
+                  setSavTickets(p=>p.filter(t=>t.id!==id));
+                  try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
+                }}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
