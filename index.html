@@ -97,8 +97,8 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe"],
-      commercial:["accueil","ventes","suivi_comm","cartes","messagerie"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","ventes","mes_objectifs","suivi_comm","cartes","messagerie"],
       installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
       secretaire:["accueil","commandes","ventes","administratif","factures","cartes","messagerie","sav"],
     };
@@ -704,6 +704,293 @@
               })}
             </div>
           }
+        </div>
+      );
+    }
+
+    // ══════════════════════════════════════════
+    // ONGLET MES OBJECTIFS (commercial)
+    // ══════════════════════════════════════════
+    function MesObjectifsTab({isMobile, ventes, objectifs, setObjectifs, profile, fmt, role}) {
+      const now = new Date();
+      const mM  = String(now.getMonth()+1).padStart(2,"0");
+      const mY  = String(now.getFullYear());
+      const mKey= `${mY}-${mM}`;
+      const nom = profile?.nom||"";
+
+      // Objectif du commercial connecté ce mois
+      const oKey    = `${mKey}__${nom}`;
+      const obj     = objectifs[oKey]||{};
+      const objCA   = Number(obj.ca||0);
+      const objMarge= Number(obj.marge||0);
+
+      // Filtre ventes par ce commercial
+      const mesVentes = ventes.filter(v=>(v.par||"")=== nom);
+
+      // Ventes du mois en cours
+      const ventesMonth = mesVentes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+      const caMonth = ventesMonth.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const margeMonth = ventesMonth.reduce((s,v)=>{
+        const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
+                  +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
+        return s+(Number(v.prix_ht||0)-cout);
+      },0);
+
+      const pctCA    = objCA>0    ? Math.min(100,Math.round((caMonth/objCA)*100))    : null;
+      const pctMarge = objMarge>0 ? Math.min(100,Math.round((margeMonth/objMarge)*100)) : null;
+      const colorCA    = pctCA===null?"#3B82F6"    : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
+      const colorMarge = pctMarge===null?"#8B5CF6" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
+
+      // Historique 6 derniers mois
+      const history6 = Array.from({length:6},(_,i)=>{
+        const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+        const mm=String(d.getMonth()+1).padStart(2,"0");
+        const yy=String(d.getFullYear());
+        const mk=`${yy}-${mm}`;
+        const ok=`${mk}__${nom}`;
+        const o=objectifs[ok]||{};
+        const vs=mesVentes.filter(v=>v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy);
+        const ca=vs.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+        const objc=Number(o.ca||0);
+        return{label:d.toLocaleDateString("fr-FR",{month:"short",year:"numeric"}),ca,objCA:objc,nb:vs.length,isCurrentMonth:i===0};
+      }).reverse();
+
+      // Top 5 clients
+      const clientMap={};
+      mesVentes.forEach(v=>{
+        const c=v.client||"Inconnu";
+        clientMap[c]=(clientMap[c]||0)+Number(v.prix_ht||0);
+      });
+      const topClients=Object.entries(clientMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+      // Top produits vendus (par mois en cours)
+      const prodMap={};
+      ventesMonth.forEach(v=>{(v.materiels||[]).forEach(m=>{prodMap[m.article]=(prodMap[m.article]||0)+Number(m.qty||1);});});
+      const topProd=Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).slice(0,4);
+
+      // Classement vs autres commerciaux ce mois
+      const allCommerciaux=[...new Set(ventes.map(v=>v.par).filter(Boolean))];
+      const ranking=allCommerciaux.map(n=>{
+        const vs2=ventes.filter(v=>(v.par||"")===n&&v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+        return{nom:n,ca:vs2.reduce((s,v)=>s+Number(v.prix_ht||0),0),nb:vs2.length};
+      }).sort((a,b)=>b.ca-a.ca);
+      const myRank=ranking.findIndex(r=>r.nom===nom)+1;
+
+      const [editObjModal,setEditObjModal]=useState(false);
+      const [draftCA,setDraftCA]=useState(String(objCA||""));
+      const [draftMarge,setDraftMarge]=useState(String(objMarge||""));
+
+      const saveObj=()=>{
+        setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
+        setEditObjModal(false);
+      };
+
+      const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px 18px",marginBottom:14};
+      const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:9,color:"#E8F0FF",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
+
+      const maxHistory=Math.max(...history6.map(h=>Math.max(h.ca,h.objCA)),1);
+
+      return(
+        <div style={{maxWidth:720}}>
+          {/* Modal édition objectif */}
+          {editObjModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditObjModal(false)}>
+            <div style={{background:"#0D1828",borderRadius:16,padding:24,width:"100%",maxWidth:400,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
+              <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:16,color:"#F0F6FF"}}>🎯 Modifier mes objectifs — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>OBJECTIF CA (€ HT)</label>
+                <input type="number" value={draftCA} onChange={e=>setDraftCA(e.target.value)} placeholder="Ex: 15000" style={INP()}/>
+              </div>
+              <div style={{marginBottom:20}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>OBJECTIF MARGE (€)</label>
+                <input type="number" value={draftMarge} onChange={e=>setDraftMarge(e.target.value)} placeholder="Ex: 3000" style={INP()}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setEditObjModal(false)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:9,color:"#7B96C8",padding:"10px",cursor:"pointer",fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                <button onClick={saveObj} style={{flex:2,background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"10px",cursor:"pointer",fontWeight:800,fontFamily:'"Outfit",sans-serif',boxShadow:"0 3px 12px rgba(59,130,246,0.3)"}}>💾 Enregistrer</button>
+              </div>
+            </div>
+          </div>}
+
+          {/* HEADER */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>🎯 Mes Objectifs</h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
+            </div>
+            <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditObjModal(true);}}
+              style={{background:"rgba(59,130,246,0.1)",border:"1px solid #1B2D4F",borderRadius:9,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+              ✏️ {objCA||objMarge?"Modifier mes objectifs":"Fixer mes objectifs"}
+            </button>
+          </div>
+
+          {/* KPIs MOIS */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8,marginBottom:14}}>
+            {[
+              {icon:"💶",label:"CA ce mois",val:fmt(caMonth),color:colorCA,sub:objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif"},
+              {icon:"📈",label:"Marge ce mois",val:fmt(margeMonth),color:colorMarge,sub:objMarge>0?`/ ${fmt(objMarge)}`:"Pas d'objectif"},
+              {icon:"🧾",label:"Ventes ce mois",val:ventesMonth.length,color:"#A855F7",sub:`${mesVentes.length} au total`},
+              {icon:"🏆",label:"Classement",val:myRank>0?`#${myRank}`:"—",color:"#F59E0B",sub:`sur ${ranking.length} commercial${ranking.length>1?"s":""}`},
+            ].map(k=>(
+              <div key={k.label} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:`1px solid ${k.color}25`,textAlign:"center"}}>
+                <div style={{fontSize:22,marginBottom:4}}>{k.icon}</div>
+                <div style={{fontSize:isMobile?16:20,fontWeight:800,color:k.color}}>{k.val}</div>
+                <div style={{fontSize:10,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.label}</div>
+                <div style={{fontSize:10,color:"#2E4D82",marginTop:1}}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* BARRES DE PROGRESSION */}
+          {(objCA>0||objMarge>0)&&<div style={CARD}>
+            <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📊 Progression du mois</h3>
+            {objCA>0&&(
+              <div style={{marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#7B96C8"}}>💶 Chiffre d'affaires</span>
+                  <div style={{display:"flex",gap:10,alignItems:"baseline"}}>
+                    <span style={{fontSize:13,fontWeight:800,color:colorCA}}>{pctCA}%</span>
+                    <span style={{fontSize:11,color:"#2E4D82"}}>{fmt(caMonth)} / {fmt(objCA)}</span>
+                  </div>
+                </div>
+                <div style={{background:"#070D1A",borderRadius:8,height:14,overflow:"hidden",position:"relative"}}>
+                  <div style={{height:14,borderRadius:8,width:pctCA+"%",background:pctCA>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#3B82F6,#1D4ED8)",transition:"width 0.8s cubic-bezier(.4,0,.2,1)",boxShadow:`0 0 10px ${colorCA}60`}}/>
+                </div>
+                {pctCA>=100
+                  ? <div style={{fontSize:11,color:"#10B981",fontWeight:700,marginTop:5}}>🎉 Objectif atteint !</div>
+                  : <div style={{fontSize:11,color:"#4A6A9E",marginTop:5}}>{fmt(objCA-caMonth)} restants pour atteindre l'objectif</div>
+                }
+              </div>
+            )}
+            {objMarge>0&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"#7B96C8"}}>📈 Marge</span>
+                  <div style={{display:"flex",gap:10,alignItems:"baseline"}}>
+                    <span style={{fontSize:13,fontWeight:800,color:colorMarge}}>{pctMarge}%</span>
+                    <span style={{fontSize:11,color:"#2E4D82"}}>{fmt(margeMonth)} / {fmt(objMarge)}</span>
+                  </div>
+                </div>
+                <div style={{background:"#070D1A",borderRadius:8,height:14,overflow:"hidden"}}>
+                  <div style={{height:14,borderRadius:8,width:pctMarge+"%",background:pctMarge>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#8B5CF6,#6D28D9)",transition:"width 0.8s cubic-bezier(.4,0,.2,1)",boxShadow:`0 0 10px ${colorMarge}60`}}/>
+                </div>
+                {pctMarge>=100
+                  ? <div style={{fontSize:11,color:"#10B981",fontWeight:700,marginTop:5}}>🎉 Objectif atteint !</div>
+                  : <div style={{fontSize:11,color:"#4A6A9E",marginTop:5}}>{fmt(objMarge-margeMonth)} restants pour atteindre l'objectif</div>
+                }
+              </div>
+            )}
+          </div>}
+
+          {(!objCA&&!objMarge)&&<div style={{...CARD,textAlign:"center",padding:"24px",borderStyle:"dashed"}}>
+            <div style={{fontSize:36,marginBottom:8}}>🎯</div>
+            <div style={{fontWeight:700,color:"#4A6A9E",marginBottom:6}}>Aucun objectif fixé pour ce mois</div>
+            <div style={{fontSize:12,color:"#2E4D82",marginBottom:14}}>Fixez vos objectifs pour suivre votre progression</div>
+            <button onClick={()=>{setDraftCA("");setDraftMarge("");setEditObjModal(true);}}
+              style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"10px 20px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+              ➕ Fixer mes objectifs
+            </button>
+          </div>}
+
+          {/* HISTORIQUE 6 MOIS — graphique barres */}
+          <div style={CARD}>
+            <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📅 Historique CA — 6 derniers mois</h3>
+            <div style={{display:"flex",alignItems:"flex-end",gap:isMobile?4:8,height:100,marginBottom:8}}>
+              {history6.map((h,i)=>{
+                const pct=maxHistory>0?Math.round((h.ca/maxHistory)*100):0;
+                const pctObj=maxHistory>0&&h.objCA>0?Math.round((h.objCA/maxHistory)*100):0;
+                return(
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,height:"100%",justifyContent:"flex-end"}}>
+                    <div style={{fontSize:9,color:"#4A6A9E",fontWeight:700,whiteSpace:"nowrap"}}>{h.ca>0?fmt(h.ca).replace(/\s/g,"").replace("€","k".slice(-1)!="k"?"€":""):"—"}</div>
+                    <div style={{width:"100%",position:"relative",height:Math.max(pct,2)+"%",minHeight:4}}>
+                      <div style={{position:"absolute",bottom:0,left:0,right:0,height:"100%",background:h.isCurrentMonth?"linear-gradient(180deg,#3B82F6,#1D4ED8)":"#1B2D4F",borderRadius:"4px 4px 0 0",transition:"height 0.5s"}}/>
+                      {h.objCA>0&&<div style={{position:"absolute",bottom:Math.max(pctObj,2)+"%",left:0,right:0,height:2,background:"#F59E0B",borderRadius:2}}/>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",gap:4,overflowX:"auto"}}>
+              {history6.map((h,i)=>(
+                <div key={i} style={{flex:1,textAlign:"center",fontSize:9,color:h.isCurrentMonth?"#3B82F6":"#2E4D82",fontWeight:h.isCurrentMonth?800:400,whiteSpace:"nowrap"}}>{h.label}</div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:12,marginTop:8,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#7B96C8"}}><div style={{width:10,height:10,background:"#3B82F6",borderRadius:2}}/> CA réel</div>
+              <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#7B96C8"}}><div style={{width:14,height:2,background:"#F59E0B",borderRadius:2}}/> Objectif</div>
+            </div>
+          </div>
+
+          {/* CLASSEMENT */}
+          {ranking.length>1&&<div style={CARD}>
+            <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>🏆 Classement commerciaux — {now.toLocaleDateString("fr-FR",{month:"long"})}</h3>
+            {ranking.map((r,i)=>{
+              const isMe=r.nom===nom;
+              const maxCA=ranking[0].ca||1;
+              const pct2=Math.round((r.ca/maxCA)*100);
+              const medals=["🥇","🥈","🥉"];
+              return(
+                <div key={r.nom} style={{marginBottom:10,background:isMe?"rgba(59,130,246,0.08)":"transparent",borderRadius:10,padding:isMe?"10px 12px":"4px 0",border:isMe?"1px solid #1B2D4F":"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16,minWidth:24}}>{medals[i]||`#${i+1}`}</span>
+                      <span style={{fontWeight:isMe?800:600,fontSize:13,color:isMe?"#E8F0FF":"#7B96C8"}}>{r.nom}{isMe&&<span style={{fontSize:10,color:"#3B82F6",marginLeft:5}}>← vous</span>}</span>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:isMe?"#3B82F6":"#4A6A9E"}}>{fmt(r.ca)}</span>
+                      <span style={{fontSize:10,color:"#2E4D82",marginLeft:6}}>{r.nb} vente{r.nb>1?"s":""}</span>
+                    </div>
+                  </div>
+                  <div style={{background:"#070D1A",borderRadius:4,height:4,overflow:"hidden"}}>
+                    <div style={{height:4,borderRadius:4,width:pct2+"%",background:isMe?"linear-gradient(90deg,#3B82F6,#1D4ED8)":"#1B2D4F",transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>}
+
+          {/* TOP CLIENTS */}
+          {topClients.length>0&&<div style={CARD}>
+            <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>👥 Mes meilleurs clients</h3>
+            {topClients.map(([client,ca],i)=>(
+              <div key={client} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0F1E35"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:11,color:"#2E4D82",minWidth:20,fontWeight:700}}>#{i+1}</span>
+                  <span style={{fontSize:13,color:"#E8F0FF",fontWeight:600}}>{client}</span>
+                </div>
+                <span style={{fontSize:13,fontWeight:800,color:"#10B981"}}>{fmt(ca)}</span>
+              </div>
+            ))}
+          </div>}
+
+          {/* TOP PRODUITS CE MOIS */}
+          {topProd.length>0&&<div style={CARD}>
+            <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>⚡ Produits vendus ce mois</h3>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {topProd.map(([prod,qty])=>(
+                <div key={prod} style={{background:"#070D1A",borderRadius:8,padding:"8px 12px",border:"1px solid #1B2D4F"}}>
+                  <div style={{fontSize:12,color:"#E8F0FF",fontWeight:700}}>{prod}</div>
+                  <div style={{fontSize:10,color:"#3B82F6",fontWeight:700,marginTop:2}}>×{qty} vendu{qty>1?"s":""}</div>
+                </div>
+              ))}
+            </div>
+          </div>}
+
+          {/* DERNIÈRES VENTES */}
+          <div style={CARD}>
+            <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>🧾 Mes dernières ventes</h3>
+            {mesVentes.length===0
+              ?<div style={{textAlign:"center",padding:"20px 0",color:"#2E4D82",fontSize:12}}>Aucune vente enregistrée</div>
+              :<div>{mesVentes.slice(0,5).map(v=>(
+                <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0F1E35"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div>
+                    <div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{v.date}</div>
+                  </div>
+                  <span style={{fontSize:14,fontWeight:800,color:"#10B981"}}>{fmt(Number(v.prix_ht||0))}</span>
+                </div>
+              ))}</div>
+            }
+          </div>
         </div>
       );
     }
@@ -4925,14 +5212,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges"]},
-        {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","suivi_comm"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -5139,6 +5426,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
+                {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
