@@ -1039,6 +1039,8 @@ L'équipe Ma Borne LR`;
       const [copied, setCopied]     = useState(false);
       const [filtre, setFiltre]     = useState("tous");
       const [search, setSearch]     = useState("");
+      const [showArchive, setShowArchive] = useState(false);
+      const [confirmDel, setConfirmDel]  = useState(null);
 
       // Chantiers terminés uniquement
       const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
@@ -1145,9 +1147,6 @@ L'équipe Ma Borne LR`;
       }
 
       // ── LISTE ──
-const [showArchive, setShowArchive] = useState(false);
-const [confirmDel, setConfirmDel]  = useState(null);
-
 const deleteClient = (id) => {
   setChantiers(p => p.map(ch =>
     ch.id === id ? {...ch, suivi_comm: {...(ch.suivi_comm||{}), supprime: true}} : ch
