@@ -2752,7 +2752,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET ADMINISTRATIF — Acomptes
     // ══════════════════════════════════════
-    function AdminTab({isMobile, acomptes, setAcomptes, ventes, profile, fmt, role}) {
+    function AdminTab({isMobile, acomptes, setAcomptes, ventes, profile, fmt, role, acompteDefPct=50, saveAcomptePct}) {
       const canEdit = r => ["administrateur","secretaire","commercial"].includes(r);
 
       const STATUTS = {
