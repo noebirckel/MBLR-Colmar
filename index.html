@@ -3062,7 +3062,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET VENTES
     // ══════════════════════════════════════
-    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, users=[], onVenteSaved}) {
+    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, onVenteSaved}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
@@ -3332,12 +3332,21 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             {/* Commercial */}
             <div style={{marginBottom:14}}>
               <L c="COMMERCIAL"/>
-              {users.length>0
-                ? <select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}>
-                    <option value="">Choisir un commercial…</option>
-                    {users.map(u=><option key={u.id} value={u.nom}>{u.nom}{u.role==="commercial"?" (Commercial)":u.role==="administrateur"?" (Admin)":""}</option>)}
-                  </select>
-                : <input value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom du commercial" style={INP()}/>
+              {(()=>{
+                const known=[...new Set([
+                  ...(profile?.nom?[profile.nom]:[]),
+                  ...ventes.map(v=>v.par).filter(Boolean)
+                ])].sort();
+                return known.length>0
+                  ? <select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}>
+                      <option value="">Choisir un commercial…</option>
+                      {known.map(n=><option key={n} value={n}>{n}</option>)}
+                      <option value="__other__">✏️ Autre (saisir manuellement)</option>
+                    </select>
+                  : null;
+              })()}
+              {(form.par==="__other__"||(form.par&&![...new Set([...(profile?.nom?[profile.nom]:[]),...ventes.map(v=>v.par).filter(Boolean)])].includes(form.par)))&&
+                <input value={form.par==="__other__"?"":form.par} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom du commercial" style={{...INP(),marginTop:6}}/>
               }
             </div>
 
@@ -4874,7 +4883,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 
 
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} users={users} onVenteSaved={v=>{
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
                   SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:""},...p]);
                   SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"en_attente",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
                 }}/>}
