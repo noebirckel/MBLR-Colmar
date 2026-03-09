@@ -98,14 +98,14 @@
     // Tabs accessibles par rôle
     const ROLE_TABS = {
       administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","ventes","mes_objectifs","suivi_comm","cartes","messagerie"],
-      installateur:["accueil","stock","chantier","cartes","messagerie","sav","rapports"],
-      secretaire:["accueil","commandes","ventes","administratif","factures","cartes","messagerie","sav"],
+      commercial:["accueil","messagerie","cartes","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      installateur:["accueil","messagerie","cartes","chantier","sav","rapports","stock","commandes"],
+      secretaire:["accueil","messagerie","cartes","ventes","administratif","factures","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
-    const canOrder     = r => ["administrateur","commercial"].includes(r);
-    const canDeliver   = r => ["administrateur","commercial","secretaire"].includes(r);
+    const canOrder     = r => ["administrateur","secretaire","installateur"].includes(r);
+    const canDeliver   = r => ["administrateur","secretaire","installateur"].includes(r);
     const canRupture   = r => ["administrateur"].includes(r);
     const canParams    = r => r === "administrateur";
 
@@ -3266,7 +3266,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ONGLET ADMINISTRATIF — Acomptes
     // ══════════════════════════════════════
     function AdminTab({isMobile, acomptes, setAcomptes, ventes, profile, fmt, role, acompteDefPct=50, saveAcomptePct}) {
-      const canEdit = r => ["administrateur","secretaire","commercial"].includes(r);
+      const canEdit = r => ["administrateur","secretaire"].includes(r);
 
       const STATUTS = {
         a_envoyer:  {label:"À envoyer",   color:"#F59E0B", bg:"#2D2008", icon:"📤"},
@@ -3700,7 +3700,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
-      const canEdit = r => ["administrateur","commercial"].includes(r);
+      const canEdit = r => ["administrateur","commercial","secretaire"].includes(r);
       const BRANDS = ["Easee","Ohme","Zaptec","V2C"];
       const BC = {"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935"};
 
@@ -4542,7 +4542,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     }
 
     function ChantierTab({isMobile, chantiers, setChantiers, stock, hist, profile, fmt, role, goTo, BTN, INP, BDG}) {
-      const canEdit = r => ["administrateur","installateur"].includes(r);
+      const canEdit = r => ["administrateur","installateur","commercial","secretaire"].includes(r);
 
       const STATUTS_CH = {
         a_planifier: {label:"À planifier", color:"#F59E0B", bg:"#2D2008", icon:"📋", next:"planifie"},
