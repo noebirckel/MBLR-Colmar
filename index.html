@@ -4976,7 +4976,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
     function App(){
       const isMobile=useIsMobile();
-      const[authUser,setAuthUser]=React.useState(null);
+      // Initialiser authUser depuis le cache pour éviter le flash LoginScreen
+      const[authUser,setAuthUser]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?{id:JSON.parse(p).id,_cached:true}:null;}catch(e){return null;}});
       const[authLoading,setAuthLoading]=React.useState(false);
       const[profile,setProfile]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?JSON.parse(p):null;}catch(e){return null;}});
       const[sync,setSync]=React.useState("saved");
@@ -5042,11 +5043,45 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Auth
       React.useEffect(()=>{
-        const t=setTimeout(()=>setAuthLoading(false),6000);
+        // Vérification immédiate de la session (plus rapide que d'attendre onAuthStateChange)
+        const verifySession=async()=>{
+          try{
+            const{data:{session}}=await sb.auth.getSession();
+            if(!session){
+              // Pas de session valide → vider le cache et afficher login
+              setAuthUser(null);
+              setProfile(null);
+              try{localStorage.removeItem("app_profile");}catch(e){}
+              setAuthLoading(false);
+              return;
+            }
+            setAuthUser(session.user);
+            // Refresh profil en arrière-plan (silencieux si cache déjà présent)
+            const hasCached=!!localStorage.getItem("app_profile");
+            if(!hasCached){
+              // Pas de cache : fetch bloquant
+              const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+              if(data){setProfile(data);try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}}
+            } else {
+              // Cache présent : refresh silencieux en arrière-plan
+              sb.from("profiles").select("*").eq("id",session.user.id).single().then(({data})=>{
+                if(data){
+                  setProfile(data);
+                  try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}
+                }
+              });
+            }
+            setAuthLoading(false);
+          }catch(e){
+            console.warn("verifySession:",e.message);
+            setAuthLoading(false);
+          }
+        };
+        verifySession();
 
+        const t=setTimeout(()=>setAuthLoading(false),4000);
         const{data:{subscription}}=sb.auth.onAuthStateChange(async(event,session)=>{
           if(event==="SIGNED_OUT"){
-            // Déconnexion réelle : vider le cache
             setAuthUser(null);
             setProfile(null);
             try{localStorage.removeItem("app_profile");}catch(e){}
@@ -5054,39 +5089,29 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             setAuthLoading(false);
             return;
           }
-          if(session?.user){
+          if(event==="SIGNED_IN"&&session?.user){
             setAuthUser(session.user);
-            // NE PAS effacer le profil en cache pendant le rechargement
-            // → le rôle reste correct pendant la transition
             try{
-              const fetchPromise=sb.from("profiles").select("*").eq("id",session.user.id).single();
-              const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),5000));
-              const{data}=await Promise.race([fetchPromise,timeout]);
-              if(data){
-                // Si le rôle a changé, forcer la navigation vers un onglet autorisé
-                try{
-                  const cached=localStorage.getItem("app_profile");
-                  const old=cached?JSON.parse(cached):null;
-                  if(old&&old.role!==data.role){
-                    // Rôle changé : vider la vue en cache
-                    localStorage.removeItem("app_view");
+              const cached=localStorage.getItem("app_profile");
+              const old=cached?JSON.parse(cached):null;
+              if(old&&old.role){
+                // Rôle en cache dispo : refresh silencieux
+                sb.from("profiles").select("*").eq("id",session.user.id).single().then(({data})=>{
+                  if(data){
+                    if(old.role!==data.role)try{localStorage.removeItem("app_view");}catch(e){}
+                    setProfile(data);
+                    try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}
+                    try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur)){localStorage.removeItem("app_view");goTo(tabs[0]);};}catch(e){}
                   }
-                }catch(e){}
-                setProfile(data);
-                try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}
-                try{const cur=localStorage.getItem("app_view")||"accueil";const tabs=ROLE_TABS[data.role]||["accueil"];if(!tabs.includes(cur)){localStorage.removeItem("app_view");goTo(tabs[0]);};}catch(e){}
+                });
+              } else {
+                const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+                if(data){setProfile(data);try{localStorage.setItem("app_profile",JSON.stringify(data));}catch(e){}}
               }
-            }catch(e){
-              console.warn("profile fetch:",e.message);
-              // Garder le profil en cache si disponible
-              try{
-                const cached=localStorage.getItem("app_profile");
-                if(cached)setProfile(JSON.parse(cached));
-              }catch(e2){}
-            }
+            }catch(e){console.warn("profile fetch:",e.message);}
+            clearTimeout(t);
+            setAuthLoading(false);
           }
-          clearTimeout(t);
-          setAuthLoading(false);
         });
         return()=>{subscription.unsubscribe();clearTimeout(t);};
       },[]);
@@ -5094,44 +5119,80 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       // Load data
       React.useEffect(()=>{
         if(!profile)return;
-        const loadAll=async()=>{
-          const load=async(table,orderCol)=>{
-            try{
-              const q=sb.from(table).select("*");
-              const{data,error}=orderCol?await q.order(orderCol,{ascending:false}):await q;
-              if(error){console.warn("load "+table+":",error.message);return[];}
-              console.log("load "+table+":",(data||[]).length+" rows");
-              return data||[];
-            }catch(e){console.warn("load "+table+":",e.message);return[];}
-          };
+
+        // ── Helpers cache localStorage ─────────────────────────
+        const CACHE_PREFIX="maborne_cache_";
+        const cacheGet=(key)=>{try{const v=localStorage.getItem(CACHE_PREFIX+key);return v?JSON.parse(v):null;}catch(e){return null;}};
+        const cacheSet=(key,val)=>{try{localStorage.setItem(CACHE_PREFIX+key,JSON.stringify(val));}catch(e){}};
+
+        // 1. Charger le cache instantanément (0ms)
+        const cached_stock     = cacheGet("stock");
+        const cached_orders    = cacheGet("orders");
+        const cached_hist      = cacheGet("historique");
+        const cached_ventes    = cacheGet("ventes");
+        const cached_chantiers = cacheGet("chantiers");
+        const cached_acomptes  = cacheGet("acomptes");
+        const cached_sav       = cacheGet("sav_tickets");
+        const cached_obj       = cacheGet("objectifs");
+        const cached_rapp      = cacheGet("rapports");
+
+        if(cached_stock?.length)   setStock(cached_stock);
+        if(cached_orders?.length)  setOrders(cached_orders);
+        if(cached_hist?.length)    setHist(cached_hist);
+        if(cached_ventes?.length)  setVentes(cached_ventes);
+        if(cached_chantiers?.length) setChantiersPipeline(cached_chantiers);
+        if(cached_acomptes?.length) setAcomptes(cached_acomptes);
+        if(cached_sav?.length)     setSavTickets(cached_sav);
+        if(cached_obj){
+          const obj={};
+          cached_obj.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
+          setObjectifs(obj);
+        }
+        if(cached_rapp?.length)   setRapports(cached_rapp);
+
+        // 2. Rafraîchissement Supabase en arrière-plan
+        const load=async(table,orderCol)=>{
           try{
-            const[rs,ro,rh,rv,rc,ra,rsav,robj,rrapp]=await Promise.all([
-              load("stock","id"),
-              load("orders","id"),
-              load("historique","id"),
-              load("ventes","id"),
-              load("chantiers","id"),
-              load("acomptes","id"),
-              load("sav_tickets","id"),
-              load("objectifs",null),
-              load("rapports","id"),
-            ]);
-            if(rs.length)setStock(rs);
-            if(ro.length)setOrders(ro);
-            if(rh.length)setHist(rh);
-            if(rv.length)setVentes(rv);
-            if(rc.length)setChantiersPipeline(rc);
-            if(ra.length)setAcomptes(ra);
-            if(rsav.length)setSavTickets(rsav);
-            if(robj.length){
-              const obj={};
-              robj.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
-              setObjectifs(obj);
-            }
-            if(rrapp.length)setRapports(rrapp);
-          }catch(e){console.error("loadAll:",e);}
+            const q=sb.from(table).select("*");
+            const{data,error}=orderCol?await q.order(orderCol,{ascending:false}):await q;
+            if(error){console.warn("load "+table+":",error.message);return null;}
+            return data||[];
+          }catch(e){console.warn("load "+table+":",e.message);return null;}
+        };
+
+        const loadAll=async()=>{
+          // Priorité 1 : tables critiques en parallèle immédiat
+          const[rv,rc,ra,rsav]=await Promise.all([
+            load("ventes","id"),
+            load("chantiers","id"),
+            load("acomptes","id"),
+            load("sav_tickets","id"),
+          ]);
+          if(rv){setVentes(rv);cacheSet("ventes",rv);}
+          if(rc){setChantiersPipeline(rc);cacheSet("chantiers",rc);}
+          if(ra){setAcomptes(ra);cacheSet("acomptes",ra);}
+          if(rsav){setSavTickets(rsav);cacheSet("sav_tickets",rsav);}
+
+          // Priorité 2 : reste (moins urgent)
+          const[rs,ro,rh,robj,rrapp]=await Promise.all([
+            load("stock","id"),
+            load("orders","id"),
+            load("historique","id"),
+            load("objectifs",null),
+            load("rapports","id"),
+          ]);
+          if(rs){setStock(rs);cacheSet("stock",rs);}
+          if(ro){setOrders(ro);cacheSet("orders",ro);}
+          if(rh){setHist(rh);cacheSet("historique",rh);}
+          if(robj){
+            const obj={};
+            robj.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
+            setObjectifs(obj);
+            cacheSet("objectifs",robj);
+          }
+          if(rrapp){setRapports(rrapp);cacheSet("rapports",rrapp);}
+
           firstLoad.current=false;
-        console.log("firstLoad set to false");
         };
         loadAll();
       },[profile]);
