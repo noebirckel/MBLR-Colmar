@@ -2537,13 +2537,49 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET CARTES
     // ══════════════════════════════════════
-    function CarteTab({isMobile, ventes, chantiers, fmt}) {
+    function CarteTab({isMobile, ventes, setVentes, chantiers, fmt, role}) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const markersRef = useRef([]);
       const[selectedPoint,setSelectedPoint]=useState(null);
       const[lightbox,setLightbox]=useState(null);
-      const[filter,setFilter]=useState("tous"); // tous | avec_photos | sans_coords
+      const[filter,setFilter]=useState("tous");
+      const[addModal,setAddModal]=useState(false);
+      const[addForm,setAddForm]=useState({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:""});
+      const[addLoading,setAddLoading]=useState(false);
+      const[addErr,setAddErr]=useState("");
+
+      const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+
+      const saveManualChantier=async()=>{
+        if(!addForm.client||!addForm.adresse){setAddErr("Client et adresse requis");return;}
+        setAddLoading(true);setAddErr("");
+        try{
+          const q=encodeURIComponent(addForm.adresse);
+          const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`,{headers:{"Accept-Language":"fr"}});
+          const data=await res.json();
+          const coords=data.length>0?{lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)}:null;
+          if(!coords){setAddErr("Adresse introuvable — vérifiez l'adresse saisie");setAddLoading(false);return;}
+          const entry={
+            id:Date.now(),
+            client:addForm.client,
+            adresse:addForm.adresse,
+            date:addForm.date,
+            technicien:addForm.technicien,
+            description:addForm.description,
+            prix_ht:Number(addForm.montant)||0,
+            coords,
+            materiels:[],cables:[],
+            par:"",
+            _historique:true,
+          };
+          setVentes(p=>[entry,...p]);
+          setAddModal(false);
+          setAddForm({client:"",adresse:"",date:new Date().toLocaleDateString("fr-FR"),technicien:"",description:"",montant:""});
+        }catch(e){setAddErr("Erreur de géocodage : "+e.message);}
+        setAddLoading(false);
+      };
 
       // Points : ventes avec coords + chantiers terminés liés
       const points = useMemo(()=>{
@@ -2634,6 +2670,52 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       return(
         <div>
+          {/* MODAL AJOUT CHANTIER HISTORIQUE */}
+          {addModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setAddModal(false)}>
+            <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"24px",width:isMobile?"100%":"100%",maxWidth:480,border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+              {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
+              <h3 style={{margin:"0 0 18px",fontWeight:800,fontSize:17,color:"#F0F6FF"}}>📍 Ajouter un chantier historique</h3>
+
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>CLIENT *</label>
+                <input value={addForm.client} onChange={e=>setAddForm(p=>({...p,client:e.target.value}))} placeholder="Nom du client" style={INP()}/>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>ADRESSE D'INSTALLATION *</label>
+                <input value={addForm.adresse} onChange={e=>setAddForm(p=>({...p,adresse:e.target.value}))} placeholder="12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
+                <div style={{fontSize:10,color:"#2E4D82",marginTop:4}}>📍 Sera géolocalisé automatiquement</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                <div>
+                  <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>DATE</label>
+                  <input value={addForm.date} onChange={e=>setAddForm(p=>({...p,date:e.target.value}))} placeholder="JJ/MM/AAAA" style={INP()}/>
+                </div>
+                <div>
+                  <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>MONTANT HT (€)</label>
+                  <input type="number" value={addForm.montant} onChange={e=>setAddForm(p=>({...p,montant:e.target.value}))} placeholder="0" style={INP()}/>
+                </div>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>TECHNICIEN</label>
+                <input value={addForm.technicien} onChange={e=>setAddForm(p=>({...p,technicien:e.target.value}))} placeholder="Nom du technicien" style={INP()}/>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>DESCRIPTION</label>
+                <textarea value={addForm.description} onChange={e=>setAddForm(p=>({...p,description:e.target.value}))} placeholder="Type de borne, observations…" style={{...INP(),height:70,resize:"none",lineHeight:1.5}}/>
+              </div>
+
+              {addErr&&<div style={{background:"#EF444415",border:"1px solid #EF444440",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#EF4444",fontWeight:600,marginBottom:12}}>⚠️ {addErr}</div>}
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setAddModal(false)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+                <button onClick={saveManualChantier} disabled={addLoading||!addForm.client||!addForm.adresse}
+                  style={BTN(addLoading||!addForm.client||!addForm.adresse?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"12px",opacity:addLoading?0.7:1})}>
+                  {addLoading?"⏳ Géocodage en cours…":"📍 Ajouter sur la carte"}
+                </button>
+              </div>
+            </div>
+          </div>}
+
           {/* LIGHTBOX */}
           {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
             <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain"}}/>
@@ -2646,7 +2728,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>🗺️ Carte des chantiers</h2>
               <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{points.length} chantier(s) géolocalisé(s) sur {ventes.length} vente(s)</p>
             </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              {role==="administrateur"&&(
+                <button onClick={()=>setAddModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"8px 14px",fontSize:12,display:"flex",alignItems:"center",gap:5})}>
+                  ➕ Chantier historique
+                </button>
+              )}
               {[["tous","Tous","#7B96C8"],["avec_photos","📸 Avec photos","#3B82F6"]].map(([k,l,col])=>(
                 <button key={k} onClick={()=>setFilter(k)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${filter===k?col:"#1B2D4F"}`,background:filter===k?col+"25":"transparent",color:filter===k?col:"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
               ))}
@@ -5010,7 +5097,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 }}/>}
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
-                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} fmt={fmt}/>}
+                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
