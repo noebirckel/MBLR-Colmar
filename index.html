@@ -2693,36 +2693,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       };
 
       const[filter,setFilter]=useState("tous");
-const[search,setSearch]=useState("");
-      const[matSearch,setMatSearch]=useState("");
-      const[matCat,setMatCat]=useState("tous");
-      const[cabSearch,setCabSearch]=useState("");
-
-      // Sous-catégories
-      const SUBCATS=[
-        {id:"tous",label:"Tous",icon:"📋"},
-        {id:"borne",label:"Borne",icon:"⚡"},
-        {id:"energie",label:"Gestion énergie",icon:"🔋"},
-        {id:"pied",label:"Pied",icon:"🦾"},
-        {id:"type2",label:"Type 2",icon:"🔌"},
-        {id:"elec",label:"Électricité",icon:"🔧"},
-        {id:"access",label:"Accessoire",icon:"📦"},
-      ];
-      const getSubcat=s=>{
-        const n=(s.article+" "+(s.cat||"")).toLowerCase();
-        const has=(...words)=>words.some(w=>n.includes(w));
-        if(has("borne","wallbox","chargeur","station"))return"borne";
-        if(has("gestionnaire","énergie","energie","dlm","grid","power"))return"energie";
-        if(has("pied","socle","support","poteau"))return"pied";
-        if(has("type 2","type2","t2","charge cable"))return"type2";
-        if(has("cable","gaine","conduit","disjoncteur","differentiel","protection","tableau"))return"elec";
-        return"access";
-      };
-      const BORNES_FILT=BORNES
-        .filter(s=>matCat==="tous"||getSubcat(s)===matCat)
-        .filter(s=>!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()));
-      const CABLES_FILT=CABLES
-        .filter(s=>!cabSearch||s.article.toLowerCase().includes(cabSearch.toLowerCase()));
+      const[search,setSearch]=useState("");
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newModal,setNewModal]=useState(false);
@@ -3127,6 +3098,35 @@ const[search,setSearch]=useState("");
       const[search,setSearch]=useState("");
       const[editId,setEditId]=useState(null);
       const[delConf,setDelConf]=useState(null);
+      const[matSearch,setMatSearch]=useState("");
+      const[matCat,setMatCat]=useState("tous");
+      const[cabSearch,setCabSearch]=useState("");
+
+      // Sous-catégories matériels
+      const SUBCATS=[
+        {id:"tous",label:"Tous",icon:"📋"},
+        {id:"borne",label:"Borne",icon:"⚡"},
+        {id:"energie",label:"Gestion énergie",icon:"🔋"},
+        {id:"pied",label:"Pied",icon:"🦾"},
+        {id:"type2",label:"Type 2",icon:"🔌"},
+        {id:"elec",label:"Électricité",icon:"🔧"},
+        {id:"access",label:"Accessoire",icon:"📦"},
+      ];
+      const getSubcat=s=>{
+        const n=(s.article+" "+(s.cat||"")).toLowerCase();
+        const has=(...words)=>words.some(w=>n.includes(w));
+        if(has("borne","wallbox","chargeur","station"))return"borne";
+        if(has("gestionnaire","énergie","energie","dlm","grid","power"))return"energie";
+        if(has("pied","socle","support","poteau"))return"pied";
+        if(has("type 2","type2","t2","charge cable"))return"type2";
+        if(has("cable","gaine","conduit","disjoncteur","differentiel","protection","tableau"))return"elec";
+        return"access";
+      };
+      const BORNES_FILT=BORNES
+        .filter(s=>matCat==="tous"||getSubcat(s)===matCat)
+        .filter(s=>!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()));
+      const CABLES_FILT=CABLES
+        .filter(s=>!cabSearch||s.article.toLowerCase().includes(cabSearch.toLowerCase()));
 
       const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",...e});
