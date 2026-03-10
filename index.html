@@ -5703,7 +5703,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 }}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif"}}/>}
+                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
 {view==="accueil"&&<>
           {/* Bonjour */}
