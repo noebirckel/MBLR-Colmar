@@ -4564,10 +4564,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[cItem,setCItem]=useState({id:"",qty:""});
       const[calMonth,setCalMonth]=useState(new Date().getMonth());
       const[calYear,setCalYear]=useState(new Date().getFullYear());
-      const[photosModal,setPhotosModal]=useState(null); // chantier en cours de visualisation
-      const[rapportModal,setRapportModal]=useState(null); // {ch, rapport}
-      const[lightbox,setLightbox]=useState(null);       // URL photo plein écran
+      const[photosModal,setPhotosModal]=useState(null);
+      const[rapportModal,setRapportModal]=useState(null);
+      const[lightbox,setLightbox]=useState(null);
       const[uploading,setUploading]=useState(false);
+      const[planifModal,setPlanifModal]=useState(null); // {ch, dateStr, mode:"planifier"|"redate"}
 
       const uploadPhotos=async(ch,files)=>{
         if(!files||files.length===0)return;
@@ -4727,6 +4728,52 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:2001}}>✕</button>
           </div>}
 
+          {/* MODAL PLANIFICATION DATE */}
+          {planifModal&&<div style={OVL} onClick={()=>setPlanifModal(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
+            <Handle/>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+              <div style={{width:40,height:40,borderRadius:12,background:"#0F1F3D",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📅</div>
+              <div>
+                <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{planifModal.mode==="redate"?"Modifier la date":"Planifier le chantier"}</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{planifModal.ch.client}</div>
+              </div>
+            </div>
+            <L c="Date d'installation"/>
+            <input
+              type="date"
+              value={(()=>{
+                const s=planifModal.dateStr||"";
+                if(!s)return "";
+                const p=s.split("/");
+                if(p.length===3)return `${p[2]}-${p[1]}-${p[0]}`;
+                return s;
+              })()}
+              onChange={e=>{
+                const v=e.target.value; // yyyy-mm-dd
+                if(!v){setPlanifModal(p=>({...p,dateStr:""}));return;}
+                const[y,m,d]=v.split("-");
+                setPlanifModal(p=>({...p,dateStr:`${d}/${m}/${y}`}));
+              }}
+              style={{...INP(),fontSize:15,padding:"12px 14px",marginBottom:20,background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",width:"100%",boxSizing:"border-box",colorScheme:"dark"}}
+            />
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{
+                if(!planifModal.dateStr){return;}
+                if(planifModal.mode==="planifier"){
+                  // Passer en statut planifié avec la date
+                  updateChantier(planifModal.ch.id,{statut:"planifie",date_installation:planifModal.dateStr});
+                } else {
+                  // Juste mettre à jour la date
+                  updateChantier(planifModal.ch.id,{date_installation:planifModal.dateStr});
+                }
+                setPlanifModal(null);
+              }} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px",fontSize:14})}>
+                {planifModal.mode==="redate"?"💾 Mettre à jour":"📅 Confirmer & planifier"}
+              </button>
+              <button onClick={()=>setPlanifModal(null)} style={BTN("#1B2D4F",{flex:1,padding:"12px",fontSize:13})}>Annuler</button>
+            </div>
+          </div></div>}
+
           {/* MODAL PHOTOS */}
           {rapportModal&&<RapportModal
             isMobile={isMobile}
@@ -4849,7 +4896,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
                             {ch.vente_id&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔗 Depuis vente</div>}
                             <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2}}>📅 {ch.date_installation}</div>}
+                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
                           </div>
                           <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
                         </div>
@@ -4876,8 +4923,18 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         <div style={{display:"flex",gap:6}}>
                           <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
                           {S.next&&<button onClick={()=>{
-                            if(S.next==="termine"){setRapportModal({ch,rapport:{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:new Date().toLocaleDateString("fr-FR"),rapport_par:profile?.nom||""}});}
-                            else nextStatut(ch);
+                            if(S.next==="planifie"){
+                              // Ouvrir modal de planification avec date
+                              const today=new Date();
+                              const dd=String(today.getDate()).padStart(2,"0");
+                              const mm=String(today.getMonth()+1).padStart(2,"0");
+                              const yyyy=today.getFullYear();
+                              setPlanifModal({ch,dateStr:ch.date_installation||`${dd}/${mm}/${yyyy}`,mode:"planifier"});
+                            } else if(S.next==="termine"){
+                              setRapportModal({ch,rapport:{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:new Date().toLocaleDateString("fr-FR"),rapport_par:profile?.nom||""}});
+                            } else {
+                              nextStatut(ch);
+                            }
                           }} style={BTN(S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11})}>
                             {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
                           </button>}
