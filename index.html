@@ -5367,7 +5367,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             await run("chantiers",nc);
             await run("acomptes",na);
             await run("sav_tickets",nsav);
-            await run("objectifs",nobj);
+            // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour Supabase
+            if(nobj){
+              const rows=Object.entries(nobj).map(([k,v])=>({key:k,ca:v.ca||0,marge:v.marge||0}));
+              if(rows.length){
+                const{error}=await sb.from("objectifs").upsert(rows,{onConflict:"key"});
+                if(error){console.error("objectifs:",error.message);setSync("error");throw error;}
+              }
+            }
             await run("rapports",nrapp);
             setSync("saved");
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
