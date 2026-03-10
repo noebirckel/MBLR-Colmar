@@ -5369,7 +5369,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             await run("sav_tickets",nsav);
             // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour Supabase
             if(nobj){
-              const rows=Object.entries(nobj).map(([k,v])=>({key:k,ca:v.ca||0,marge:v.marge||0}));
+              const rows=Object.entries(nobj).map(([k,v])=>({id:Date.now()+Math.floor(Math.random()*100000),key:k,ca:v.ca||0,marge:v.marge||0}));
               if(rows.length){
                 // Pas de contrainte UNIQUE sur key → delete toutes les lignes puis insert
                 const{error:delErr}=await sb.from("objectifs").delete().neq("key","__never__");
