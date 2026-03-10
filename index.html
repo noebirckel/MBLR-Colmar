@@ -2937,6 +2937,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[addPhotoPreviews,setAddPhotoPreviews]=useState([]);
       const[addLoading,setAddLoading]=useState(false);
       const[addErr,setAddErr]=useState("");
+      // Recherche village sur carte
+      const[villageSearch,setVillageSearch]=useState("");
+      const[villageLoading,setVillageLoading]=useState(false);
+      // Pin manuel : vente sans coordonnées
+      const[pinMode,setPinMode]=useState(false); // true = clic sur carte pour placer
+      const[pinVente,setPinVente]=useState(null); // vente à géolocaliser manuellement
+      const[pinModalOpen,setPinModalOpen]=useState(false); // choix de la vente à pinner
+      // Autocomplete adresse dans le modal addModal
+      const[addAddrSugg,setAddAddrSugg]=useState([]);
+      const addAddrTimer=useRef(null);
 
       const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
@@ -3021,7 +3031,65 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         return()=>{map.remove();mapInstanceRef.current=null;};
       },[]);
 
-      // Update markers when points change
+      // Village search → fly to
+      const searchVillage=async()=>{
+        if(!villageSearch.trim())return;
+        setVillageLoading(true);
+        try{
+          const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(villageSearch)}&limit=1&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
+          const d=await r.json();
+          if(d[0]&&mapInstanceRef.current){
+            mapInstanceRef.current.flyTo([parseFloat(d[0].lat),parseFloat(d[0].lon)],13,{duration:1});
+          }
+        }catch(e){}
+        setVillageLoading(false);
+      };
+
+      // Pin mode: on click on map, place coords on selected vente
+      useEffect(()=>{
+        const map=mapInstanceRef.current;
+        if(!map)return;
+        if(!pinMode||!pinVente){
+          map.getContainer().style.cursor="";
+          return;
+        }
+        map.getContainer().style.cursor="crosshair";
+        const onClick=e=>{
+          const{lat,lng}=e.latlng;
+          // Reverse geocode to get address
+          fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,{headers:{"Accept-Language":"fr"}})
+            .then(r=>r.json())
+            .then(d=>{
+              const adresse=d.display_name||`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+              setVentes(p=>p.map(v=>v.id===pinVente.id?{...v,coords:{lat,lng},adresse:v.adresse||adresse}:v));
+              setPinMode(false);
+              setPinVente(null);
+              map.getContainer().style.cursor="";
+            })
+            .catch(()=>{
+              setVentes(p=>p.map(v=>v.id===pinVente.id?{...v,coords:{lat,lng}}:v));
+              setPinMode(false);
+              setPinVente(null);
+              map.getContainer().style.cursor="";
+            });
+        };
+        map.on("click",onClick);
+        return()=>map.off("click",onClick);
+      },[pinMode,pinVente]);
+
+      // Autocomplete adresse addForm
+      const onAddAddrChange=v=>{
+        setAddForm(p=>({...p,adresse:v}));
+        clearTimeout(addAddrTimer.current);
+        if(v.length<3){setAddAddrSugg([]);return;}
+        addAddrTimer.current=setTimeout(async()=>{
+          try{
+            const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
+            const d=await r.json();
+            setAddAddrSugg(d.map(x=>x.display_name));
+          }catch(e){}
+        },400);
+      };
       useEffect(()=>{
         const map=mapInstanceRef.current;
         if(!map)return;
@@ -3086,8 +3154,19 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>ADRESSE D'INSTALLATION *</label>
-                <input value={addForm.adresse} onChange={e=>setAddForm(p=>({...p,adresse:e.target.value}))} placeholder="12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
-                <div style={{fontSize:10,color:"#2E4D82",marginTop:4}}>📍 Sera géolocalisé automatiquement</div>
+                <div style={{position:"relative"}}>
+                  <input value={addForm.adresse} onChange={e=>onAddAddrChange(e.target.value)} placeholder="12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
+                  {addAddrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:"0 0 10px 10px",zIndex:100,boxShadow:"0 8px 24px #0008"}}>
+                    {addAddrSugg.map((s,i)=>(
+                      <div key={i} onClick={()=>{setAddForm(p=>({...p,adresse:s}));setAddAddrSugg([]);}}
+                        style={{padding:"9px 13px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addAddrSugg.length-1?"1px solid #1B2D4F":"none"}}
+                        onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
+                        onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        📍 {s}
+                      </div>
+                    ))}
+                  </div>}
+                </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                 <div>
@@ -3142,6 +3221,32 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div>}
 
+          {/* MODAL SÉLECTION VENTE À PINNER */}
+          {pinModalOpen&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setPinModalOpen(false)}>
+            <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"20px",width:isMobile?"100%":"100%",maxWidth:420,border:"1px solid #1B2D4F",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+              {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 14px"}}/>}
+              <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:15,color:"#F0F6FF"}}>📍 Placer une vente sur la carte</h3>
+              <p style={{margin:"0 0 14px",fontSize:12,color:"#4A6A9E"}}>Sélectionnez la vente à géolocaliser, puis cliquez sur la carte.</p>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {ventes.filter(v=>v.adresse&&!v.coords).map(v=>(
+                  <button key={v.id} onClick={()=>{setPinVente(v);setPinMode(true);setPinModalOpen(false);}}
+                    style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 12px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:3,fontFamily:'"Outfit",sans-serif'}}>
+                    <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{v.client}</span>
+                    <span style={{fontSize:11,color:"#4A6A9E"}}>📍 {v.adresse}</span>
+                  </button>
+                ))}
+                {ventes.filter(v=>!v.coords&&!v.adresse).map(v=>(
+                  <button key={v.id} onClick={()=>{setPinVente(v);setPinMode(true);setPinModalOpen(false);}}
+                    style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 12px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:3,fontFamily:'"Outfit",sans-serif'}}>
+                    <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{v.client}</span>
+                    <span style={{fontSize:11,color:"#2E4D82"}}>Pas d'adresse enregistrée</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setPinModalOpen(false)} style={{width:"100%",background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"10px",cursor:"pointer",fontWeight:700,fontSize:13,marginTop:14,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+            </div>
+          </div>}
+
           {/* LIGHTBOX */}
           {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
             <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain"}}/>
@@ -3167,9 +3272,31 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>
 
           {/* Alerte adresses non géocodées */}
-          {sansCoords>0&&<div style={{background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#F59E0B",display:"flex",gap:8,alignItems:"center"}}>
+          {sansCoords>0&&<div style={{background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#F59E0B",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:16}}>⚠️</span>
-            <span><strong>{sansCoords} vente(s)</strong> ont une adresse non encore géocodée. Ouvre et réenregistre ces ventes pour les placer sur la carte.</span>
+            <span style={{flex:1}}><strong>{sansCoords} vente(s)</strong> ont une adresse non encore géocodée.</span>
+            <button onClick={()=>setPinModalOpen(true)} style={{background:"#F59E0B20",border:"1px solid #F59E0B60",borderRadius:8,color:"#F59E0B",padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📍 Placer manuellement</button>
+          </div>}
+
+          {/* Barre recherche village */}
+          <div style={{display:"flex",gap:8,marginBottom:12}}>
+            <div style={{flex:1,position:"relative"}}>
+              <input value={villageSearch} onChange={e=>setVillageSearch(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&searchVillage()}
+                placeholder="🔍 Rechercher un village, une ville…"
+                style={{...INP(),padding:"10px 14px",fontSize:13,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <button onClick={searchVillage} disabled={villageLoading}
+              style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13,opacity:villageLoading?0.7:1,flexShrink:0})}>
+              {villageLoading?"…":"🔍"}
+            </button>
+          </div>
+
+          {/* Banner mode pin actif */}
+          {pinMode&&pinVente&&<div style={{background:"#3B82F615",border:"2px solid #3B82F6",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#60A5FA",display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:16}}>📍</span>
+            <span style={{flex:1}}>Cliquez sur la carte pour placer <strong>{pinVente.client}</strong></span>
+            <button onClick={()=>{setPinMode(false);setPinVente(null);}} style={{background:"transparent",border:"1px solid #3B82F6",borderRadius:6,color:"#60A5FA",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
           </div>}
 
           {/* LÉGENDE */}
@@ -3735,6 +3862,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[matSearch,setMatSearch]=useState("");
       const[matCat,setMatCat]=useState("tous");
       const[cabSearch,setCabSearch]=useState("");
+      const[addrSugg,setAddrSugg]=useState([]);
+      const addrTimer=useRef(null);
 
       // Sous-catégories matériels
       const SUBCATS=[
@@ -3871,10 +4000,36 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:14}}>
               <L c="ADRESSE D'INSTALLATION"/>
               <div style={{position:"relative"}}>
-                <input value={form.adresse||""} onChange={e=>setForm(p=>({...p,adresse:e.target.value,coords:null}))} placeholder="Ex: 12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
-                {form.coords&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,color:"#10B981",fontWeight:700}}>📍 Géolocalisé</div>}
+                <input value={form.adresse||""} onChange={e=>{
+                  setForm(p=>({...p,adresse:e.target.value,coords:null}));
+                  clearTimeout(addrTimer.current);
+                  const v=e.target.value;
+                  if(v.length<3){setAddrSugg([]);return;}
+                  addrTimer.current=setTimeout(async()=>{
+                    try{
+                      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
+                      const d=await r.json();
+                      setAddrSugg(d.map(x=>({display:x.display_name,lat:parseFloat(x.lat),lng:parseFloat(x.lon)})));
+                    }catch(e2){}
+                  },400);
+                }} placeholder="Ex: 12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
+                {form.coords&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,color:"#10B981",fontWeight:700}}>📍</div>}
+                {addrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:"0 0 10px 10px",zIndex:200,boxShadow:"0 8px 24px #0009",maxHeight:200,overflowY:"auto"}}>
+                  {addrSugg.map((s,i)=>(
+                    <div key={i} onClick={()=>{
+                      setForm(p=>({...p,adresse:s.display,coords:{lat:s.lat,lng:s.lng}}));
+                      setAddrSugg([]);
+                    }}
+                      style={{padding:"9px 13px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addrSugg.length-1?"1px solid #1B2D4F":"none",display:"flex",gap:6,alignItems:"flex-start"}}
+                      onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
+                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      <span style={{flexShrink:0,marginTop:1}}>📍</span>
+                      <span style={{lineHeight:1.4}}>{s.display}</span>
+                    </div>
+                  ))}
+                </div>}
               </div>
-              {form.adresse&&!form.coords&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>📍 Sera géocodé automatiquement à l'enregistrement</div>}
+              {form.adresse&&!form.coords&&addrSugg.length===0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>Sélectionnez une suggestion ou l'adresse sera géocodée à l'enregistrement</div>}
             </div>
         {/* Matériel */}
           <div style={{marginBottom:14}}>
