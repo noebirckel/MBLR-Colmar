@@ -3837,6 +3837,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         date: new Date().toLocaleDateString("fr-FR"),
         par: profile?.nom||"",
         coords:null,
+        photos_vente:[],
       });
 
       // viewMode: "list" | "stats" | "form"
@@ -3945,8 +3946,33 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         setEditId(null);
       };
 
+      const[uploadingVentePhotos,setUploadingVentePhotos]=useState(false);
+
+      const uploadVentePhotos=async(files)=>{
+        if(!files||files.length===0)return;
+        setUploadingVentePhotos(true);
+        const urls=[];
+        const venteId=editId||form._tmpId||(()=>{const id=Date.now();setForm(p=>({...p,_tmpId:id}));return id;})();
+        for(const file of Array.from(files)){
+          const ext=file.name.split(".").pop().toLowerCase();
+          const path=`vente-${venteId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const{data,error}=await sb.storage.from("chantier-photos").upload(path,file,{cacheControl:"3600",upsert:false});
+          if(!error){
+            const{data:pub}=sb.storage.from("chantier-photos").getPublicUrl(path);
+            if(pub?.publicUrl)urls.push(pub.publicUrl);
+          }
+        }
+        if(urls.length>0)setForm(p=>({...p,photos_vente:[...(p.photos_vente||[]),...urls]}));
+        setUploadingVentePhotos(false);
+      };
+
+      const removeVentePhoto=async(url)=>{
+        const path=url.split("/chantier-photos/")[1];
+        if(path)await sb.storage.from("chantier-photos").remove([path]);
+        setForm(p=>({...p,photos_vente:(p.photos_vente||[]).filter(u=>u!==url)}));
+      };
+
       const addMat = () => {
-        if(!mItem.id||!mItem.qty)return;
         const a=stock.find(s=>s.id===Number(mItem.id));
         setForm(p=>({...p,materiels:[...p.materiels.filter(x=>x.id!==mItem.id),{id:mItem.id,article:a?.article,cat:a?.cat,qty:Number(mItem.qty),prix_unit:a?.prix||0}]}));
         setMItem({id:"",qty:""});
@@ -4140,9 +4166,61 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
 
             {/* Description */}
-            <div style={{marginBottom:20}}>
+            <div style={{marginBottom:14}}>
               <L c="DESCRIPTION / NOTES"/>
               <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails du projet, conditions particulières…" style={{...INP(),height:90,resize:"none",lineHeight:1.6}}/>
+            </div>
+
+            {/* Photos de visite */}
+            <div style={{marginBottom:20}}>
+              <L c="PHOTOS DE VISITE / PRÉ-INSTALLATION"/>
+              <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:"2px dashed #1B2D4F",borderRadius:10,padding:"13px",cursor:uploadingVentePhotos?"default":"pointer",color:uploadingVentePhotos?"#2E4D82":"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8,opacity:uploadingVentePhotos?0.6:1}}
+                onMouseOver={e=>{if(!uploadingVentePhotos)e.currentTarget.style.borderColor="#3B82F6";}}
+                onMouseOut={e=>e.currentTarget.style.borderColor="#1B2D4F"}>
+                <span style={{fontSize:18}}>{uploadingVentePhotos?"⏳":"📷"}</span>
+                {uploadingVentePhotos?"Chargement en cours…":"Compteur, coffret, emplacement borne…"}
+                <input type="file" accept="image/*" multiple disabled={uploadingVentePhotos}
+                  onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}}/>
+              </label>
+              {(form.photos_vente||[]).length>0&&(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:6}}>
+                  {(form.photos_vente||[]).map((url,i)=>(
+                    <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
+                      <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      <button onClick={()=>removeVentePhoto(url)}
+                        style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.75)",border:"none",borderRadius:"50%",color:"white",width:22,height:22,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(form.photos_vente||[]).length>0&&<div style={{fontSize:10,color:"#10B981"}}>📷 {(form.photos_vente||[]).length} photo(s) · visibles dans l'onglet Chantier</div>}
+            </div>
+
+            {/* Photos de visite */}
+            <div style={{marginBottom:20}}>
+              <L c="📸 PHOTOS DE VISITE / CHANTIER"/>
+              <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:`2px dashed ${uploadingVentePhotos?"#3B82F6":"#1B2D4F"}`,borderRadius:10,padding:"14px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8,transition:"border-color 0.2s"}}
+                onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
+                onMouseOut={e=>e.currentTarget.style.borderColor=uploadingVentePhotos?"#3B82F6":"#1B2D4F"}>
+                {uploadingVentePhotos
+                  ?<><div style={{width:14,height:14,borderRadius:"50%",border:"2px solid #1B2D4F",borderTop:"2px solid #3B82F6",animation:"spin 0.8s linear infinite"}}/> Upload en cours…</>
+                  :<><span style={{fontSize:18}}>📸</span> Ajouter des photos de visite</>
+                }
+                <input type="file" accept="image/*" multiple onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}} disabled={uploadingVentePhotos}/>
+              </label>
+              {(form.photos_vente||[]).length>0&&(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                  {(form.photos_vente||[]).map((url,i)=>(
+                    <div key={i} style={{position:"relative",borderRadius:9,overflow:"hidden",aspectRatio:"1",border:"1px solid #1B2D4F"}}>
+                      <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      <button onClick={()=>removeVentePhoto(url)}
+                        style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.75)",border:"none",borderRadius:"50%",color:"white",width:22,height:22,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                      <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,#000A)",padding:"6px 4px 4px",fontSize:9,color:"#AAC4E8",textAlign:"center"}}>Photo {i+1}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(form.photos_vente||[]).length===0&&<div style={{fontSize:10,color:"#2E4D82",textAlign:"center"}}>Ces photos seront visibles dans l'onglet Chantier pour préparer l'intervention</div>}
             </div>
 
             <div style={{display:"flex",gap:8}}>
@@ -4696,7 +4774,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
-    function ChantierTab({isMobile, chantiers, setChantiers, stock, hist, profile, fmt, role, goTo, BTN, INP, BDG}) {
+    function ChantierTab({isMobile, ventes, chantiers, setChantiers, stock, hist, profile, fmt, role, goTo, BTN, INP, BDG}) {
       const canEdit = r => ["administrateur","installateur","commercial","secretaire"].includes(r);
 
       const STATUTS_CH = {
@@ -5068,13 +5146,25 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         </div>
                         <div style={{fontSize:10,color:"#4A6A9E",marginBottom:8}}>{checkDone}/{CHECKLIST_ITEMS.length} vérifiés</div>
                         {ch.notes&&<div style={{fontSize:11,color:"#4A6A9E",fontStyle:"italic",marginBottom:8,padding:"6px 8px",background:"#070D1A",borderRadius:6}}>"{ch.notes}"</div>}
-                        {/* Miniatures photos */}
+                        {/* Miniatures photos chantier */}
                         {(ch.photos||[]).length>0&&<div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
                           {(ch.photos||[]).slice(0,4).map((url,i)=>(
                             <img key={i} src={url} onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"2px solid #1B2D4F"}}/>
                           ))}
                           {(ch.photos||[]).length>4&&<div onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,borderRadius:7,background:"#070D1A",border:"2px solid #1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#4A6A9E",fontWeight:700}}>+{(ch.photos||[]).length-4}</div>}
                         </div>}
+                        {/* Photos de vente (pré-installation) */}
+                        {(()=>{const vl=ventes?.find(v=>v.id===ch.vente_id);const vp=vl?.photos_vente||[];if(!vp.length)return null;return(
+                          <div style={{background:"#0A1628",borderRadius:8,border:"1px solid #F59E0B30",padding:"8px 10px",marginBottom:8}}>
+                            <div style={{fontSize:10,fontWeight:700,color:"#F59E0B",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>📷 Photos visite commerciale ({vp.length})</div>
+                            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                              {vp.slice(0,5).map((url,i)=>(
+                                <img key={i} src={url} onClick={()=>setLightbox(url)} style={{width:48,height:48,objectFit:"cover",borderRadius:7,cursor:"zoom-in",border:"2px solid #F59E0B40"}}/>
+                              ))}
+                              {vp.length>5&&<div onClick={()=>setLightbox(vp[5])} style={{width:48,height:48,borderRadius:7,background:"#070D1A",border:"2px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#F59E0B",fontWeight:700}}>+{vp.length-5}</div>}
+                            </div>
+                          </div>
+                        );})()}
                         <div style={{display:"flex",gap:6}}>
                           <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
                           {S.next&&<button onClick={()=>{
@@ -5925,7 +6015,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 }}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-                {view==="chantier"&&<ChantierTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
+                {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
 {view==="accueil"&&<>
           {/* Bonjour */}
