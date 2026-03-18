@@ -2376,7 +2376,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET RAPPORTS D'INTERVENTION
     // ══════════════════════════════════════
-    function RapportsTab({isMobile, rapports, setRapports, chantiers, ventes, profile, role}) {
+    function RapportsTab({isMobile, rapports, setRapports, chantiers, ventes, profile, role, allProfiles}) {
 
       const emptyForm = (ch=null) => ({
         id: null,
@@ -2546,8 +2546,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>⏱️ Intervenant & durée</h3>
                 <div style={{marginBottom:12}}>
                   <L c="Technicien"/>
-                  <input value={form.technicien} onChange={e=>F("technicien",e.target.value)}
-                    placeholder="Nom du technicien" style={INP()}/>
+                  {(()=>{
+                    const opts=[...new Set([...((allProfiles||[]).filter(p=>p.role==="installateur"||p.role==="administrateur").map(p=>p.nom)),...chantiers.map(c=>c.technicien)].filter(Boolean))].sort();
+                    return opts.length>0
+                      ?<select value={form.technicien||""} onChange={e=>F("technicien",e.target.value)} style={{...INP(),appearance:"none"}}>
+                          <option value="">— Choisir un technicien —</option>
+                          {opts.map(n=><option key={n} value={n}>{n}</option>)}
+                        </select>
+                      :<input value={form.technicien} onChange={e=>F("technicien",e.target.value)} placeholder="Nom du technicien" style={INP()}/>;
+                  })()}
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                   <div>
@@ -2960,7 +2967,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET CARTES
     // ══════════════════════════════════════
-    function CarteTab({isMobile, ventes, setVentes, chantiers, fmt, role}) {
+    function CarteTab({isMobile, ventes, setVentes, chantiers, fmt, role, allProfiles}) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
       const markersRef = useRef([]);
@@ -3215,7 +3222,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>TECHNICIEN</label>
-                <input value={addForm.technicien} onChange={e=>setAddForm(p=>({...p,technicien:e.target.value}))} placeholder="Nom du technicien" style={INP()}/>
+                <select value={addForm.technicien} onChange={e=>setAddForm(p=>({...p,technicien:e.target.value}))} style={{...INP(),appearance:"none"}}>
+                  <option value="">— Choisir un installateur —</option>
+                  {[...new Set([...((allProfiles||[]).filter(p=>p.role==="installateur"||p.role==="administrateur").map(p=>p.nom)),...chantiers.map(c=>c.technicien)].filter(Boolean))].sort().map(n=><option key={n} value={n}>{n}</option>)}
+                </select>
               </div>
               <div style={{marginBottom:16}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>DESCRIPTION</label>
@@ -4815,7 +4825,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
-    function ChantierTab({isMobile, ventes, chantiers, setChantiers, stock, hist, profile, fmt, role, goTo, BTN, INP, BDG, setRapports}) {
+    function ChantierTab({isMobile, ventes, chantiers, setChantiers, stock, hist, profile, allProfiles, fmt, role, goTo, BTN, INP, BDG, setRapports}) {
       const canEdit = r => ["administrateur","installateur","commercial","secretaire"].includes(r);
 
       const STATUTS_CH = {
@@ -4883,6 +4893,22 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const CABLES=stock.filter(s=>s.unite==="ml");
       const BORNES=stock.filter(s=>s.unite!=="ml");
       const emptyNew={client:"",notes:"",date_installation:"",technicien:"",materiels:[],cables:[]};
+
+      // Liste des installateurs actifs depuis les profils
+      const installers=React.useMemo(()=>{
+        const fromProfiles=(allProfiles||[]).filter(p=>p.role==="installateur"||p.role==="administrateur").map(p=>p.nom).filter(Boolean);
+        // Compléter avec les techniciens déjà utilisés dans les chantiers (rétrocompatibilité)
+        const fromChantiers=[...new Set(chantiers.map(c=>c.technicien).filter(Boolean))];
+        return [...new Set([...fromProfiles,...fromChantiers])].sort();
+      },[allProfiles,chantiers]);
+
+      // Composant select technicien réutilisable
+      const TechSelect=({value,onChange,style})=>(
+        <select value={value||""} onChange={e=>onChange(e.target.value)} style={{...INP(),appearance:"none",...style}}>
+          <option value="">— Choisir un installateur —</option>
+          {installers.map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+      );
 
       const reservations=useMemo(()=>{
         const r={};
@@ -4956,7 +4982,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:12}}><L c="CLIENT"/><input value={editModal.client} onChange={e=>setEditModal(p=>({...p,client:e.target.value}))} style={INP()}/></div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
               <div><L c="DATE D'INSTALLATION"/><input value={editModal.date_installation||""} onChange={e=>setEditModal(p=>({...p,date_installation:e.target.value}))} placeholder="JJ/MM/AAAA" style={INP()}/></div>
-              <div><L c="TECHNICIEN"/><input value={editModal.technicien||""} onChange={e=>setEditModal(p=>({...p,technicien:e.target.value}))} placeholder="Nom technicien" style={INP()}/></div>
+              <div><L c="TECHNICIEN"/><TechSelect value={editModal.technicien||""} onChange={v=>setEditModal(p=>({...p,technicien:v}))}/></div>
             </div>
             <div style={{marginBottom:10}}>
               <L c="MATÉRIEL"/>
@@ -5183,7 +5209,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <h3 style={{margin:"0 0 12px",fontWeight:800,fontSize:15}}>➕ Nouveau chantier</h3>
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
                 <div><L c="CLIENT"/><input value={newForm.client} onChange={e=>setNewForm(p=>({...p,client:e.target.value}))} placeholder="Nom client" style={INP()}/></div>
-                <div><L c="TECHNICIEN"/><input value={newForm.technicien} onChange={e=>setNewForm(p=>({...p,technicien:e.target.value}))} style={INP()}/></div>
+                <div><L c="TECHNICIEN"/><TechSelect value={newForm.technicien} onChange={v=>setNewForm(p=>({...p,technicien:v}))}/></div>
               </div>
               <div style={{display:"flex",gap:6,marginBottom:8}}>
                 <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}><option value="">Matériel…</option>{BORNES.map(s=><option key={s.id} value={s.id}>{s.cat} — {s.article}</option>)}</select>
@@ -5368,6 +5394,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[authUser,setAuthUser]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?{id:JSON.parse(p).id,_cached:true}:null;}catch(e){return null;}});
       const[authLoading,setAuthLoading]=React.useState(false);
       const[profile,setProfile]=React.useState(()=>{try{const p=localStorage.getItem("app_profile");return p?JSON.parse(p):null;}catch(e){return null;}});
+      const[allProfiles,setAllProfiles]=React.useState([]);
       const[sync,setSync]=React.useState("saved");
       const[syncErr,setSyncErr]=React.useState("");
       const[stock,setStock]=React.useState([]);
@@ -5595,6 +5622,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           firstLoad.current=false;
         };
         loadAll();
+        // Charger tous les profils actifs pour les sélecteurs d'installateur
+        sb.from("profiles").select("id,nom,role,actif").then(({data})=>{
+          if(data)setAllProfiles(data.filter(u=>u.actif!==false));
+        });
       },[profile]);
 
       // ── REALTIME ──────────────────────────────────────────────
@@ -6148,7 +6179,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 />}
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
-                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role}/>}
+                {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
@@ -6159,16 +6190,19 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="perf_installateurs"&&(()=>{
                   // ── Données croisées ────────────────────────────────────────
-                  const techs=[...new Set([
-                    ...chantiersPipeline.map(c=>c.technicien).filter(Boolean),
-                    ...rapports.map(r=>r.technicien).filter(Boolean),
-                  ])].sort();
+                  // Priorité aux profils installateurs réels
+                  const profileInstallers=(allProfiles||[]).filter(p=>p.role==="installateur"||p.role==="administrateur").map(p=>p.nom).filter(Boolean);
+                  const fromChantiers=[...new Set(chantiersPipeline.map(c=>c.technicien).filter(Boolean))];
+                  const fromRapports=[...new Set(rapports.map(r=>r.technicien).filter(Boolean))];
+                  const techs=[...new Set([...profileInstallers,...fromChantiers,...fromRapports])].sort();
 
                   const techStats=techs.map(tech=>{
-                    const chantiers_tech=chantiersPipeline.filter(c=>c.technicien===tech);
+                    const techLower=tech.toLowerCase();
+                    const match=t=>(t||"").toLowerCase()===techLower;
+                    const chantiers_tech=chantiersPipeline.filter(c=>match(c.technicien));
                     const termines=chantiers_tech.filter(c=>c.statut==="termine");
                     const enCours=chantiers_tech.filter(c=>c.statut==="en_cours");
-                    const raps=rapports.filter(r=>r.technicien===tech);
+                    const raps=rapports.filter(r=>match(r.technicien));
                     const rapsOk=raps.filter(r=>r.etat_final==="ok").length;
                     const rapsRevoir=raps.filter(r=>r.etat_final==="a_revoir").length;
                     const rapsUrgence=raps.filter(r=>r.etat_final==="urgence").length;
@@ -6314,9 +6348,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   setSavTickets(p=>p.filter(t=>t.id!==id));
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
                 }}/>}
-                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} ventes={ventes}/>}
+                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} ventes={ventes} allProfiles={allProfiles}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
-                {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} setRapports={SR} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
+                {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} allProfiles={allProfiles} fmt={fmt} role={role} goTo={goTo} BDG={BDG} setRapports={SR} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
 {view==="accueil"&&<>
           {/* Bonjour */}
