@@ -5399,6 +5399,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[stockSearch,setStockSearch]=React.useState("");
       const[collapsedCats,setCollapsedCats]=React.useState({});
       const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
+      const stockFil=React.useMemo(()=>stock.filter(s=>{
+        if(!stockSearch)return true;
+        const q=stockSearch.toLowerCase();
+        return (s.article||"").toLowerCase().includes(q)||(s.cat||"").toLowerCase().includes(q);
+      }),[stock,stockSearch]);
       const firstLoad=React.useRef(true);
       const[notifs,setNotifs]=React.useState([]);
       const[notifPanel,setNotifPanel]=React.useState(false);
@@ -6300,11 +6305,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           
 {view==="stock"&&(()=>{
   // ── computed ─────────────────────────────────────
-  const stockFil=React.useMemo(()=>stock.filter(s=>{
-    if(!stockSearch)return true;
-    const q=stockSearch.toLowerCase();
-    return (s.article||"").toLowerCase().includes(q)||(s.cat||"").toLowerCase().includes(q);
-  }),[stock,stockSearch]);
 
   const allCats=[...new Set(stock.map(s=>s.cat).filter(Boolean))].sort();
 
