@@ -2502,9 +2502,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     }}
                     style={{...INP(),appearance:"none"}}>
                     <option value="">— Sélectionner un chantier —</option>
-                    {chantiers.map(ch=>(
-                      <option key={ch.id} value={ch.id}>{ch.client} {ch.date_installation?"("+ch.date_installation+")":""}</option>
-                    ))}
+                    {chantiers
+                      .filter(ch=>ch.client&&ch.statut!=="annule")
+                      .sort((a,b)=>(a.client||"").localeCompare(b.client||""))
+                      .map(ch=>(
+                        <option key={ch.id} value={ch.id}>
+                          {ch.client}{ch.date_installation?" ("+ch.date_installation+")":""} — {ch.statut==="termine"?"✅":"🔧"}
+                        </option>
+                      ))
+                    }
                   </select>
                 </div>
                 <div style={{marginBottom:12}}>
