@@ -2376,7 +2376,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET RAPPORTS D'INTERVENTION
     // ══════════════════════════════════════
-    function RapportsTab({isMobile, rapports, setRapports, chantiers, profile, role}) {
+    function RapportsTab({isMobile, rapports, setRapports, chantiers, ventes, profile, role}) {
 
       const emptyForm = (ch=null) => ({
         id: null,
@@ -2397,8 +2397,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       });
 
       const TYPES_TRAVAUX = [
-        "Installation borne","Mise en service","Câblage","Raccordement TGBT",
-        "Pose gaine","Pose pied","Remplacement borne","Diagnostic","Autre"
+        "Borne de recharge",
+        "Panneaux solaires",
       ];
       const ETAT = {
         ok:       {label:"Installation OK",   color:"#10B981", bg:"rgba(16,185,129,0.1)",  icon:"✅"},
@@ -2498,7 +2498,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <select value={form.chantier_id}
                     onChange={e=>{
                       const ch=chantiers.find(c=>String(c.id)===e.target.value);
-                      setForm(p=>({...p,chantier_id:e.target.value,chantier_nom:ch?.client||"",adresse:ch?.adresse||""}));
+                      // Récupérer les matériels depuis le chantier + la vente liée
+                      const vente=ch?.vente_id?(ventes||[]).find(v=>v.id===ch.vente_id):null;
+                      const mats=[
+                        ...(ch?.materiels||[]).map(m=>({nom:m.article||"",qty:m.qty||1,_from_vente:true})),
+                        ...(ch?.cables||[]).map(m=>({nom:m.article+" (câble)"||"",qty:m.qty||1,unite:"ml",_from_vente:true})),
+                      ];
+                      // Compléter avec les matériels de la vente si pas déjà dans le chantier
+                      if(vente){
+                        (vente.materiels||[]).forEach(m=>{
+                          if(!mats.find(x=>x.nom===m.article))mats.push({nom:m.article||"",qty:m.qty||1,_from_vente:true});
+                        });
+                        (vente.cables||[]).forEach(m=>{
+                          const n=m.article+" (câble)";
+                          if(!mats.find(x=>x.nom===n))mats.push({nom:n,qty:m.qty||1,unite:"ml",_from_vente:true});
+                        });
+                      }
+                      setForm(p=>({...p,chantier_id:e.target.value,chantier_nom:ch?.client||"",adresse:ch?.adresse||"",materiels_poses:mats}));
                     }}
                     style={{...INP(),appearance:"none"}}>
                     <option value="">— Sélectionner un chantier —</option>
@@ -2585,14 +2601,20 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
               {/* Matériels posés */}
               <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
-                <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📦 Matériels posés</h3>
+                <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📦 Matériels posés</h3>
+                {(form.materiels_poses||[]).some(m=>m._from_vente)&&
+                  <p style={{margin:"0 0 12px",fontSize:11,color:"#4A6A9E"}}>Pré-rempli depuis la vente — modifiable</p>
+                }
+                {(form.materiels_poses||[]).length===0&&<p style={{fontSize:12,color:"#2E4D82",marginBottom:10}}>Sélectionne un chantier pour pré-remplir automatiquement</p>}
                 {(form.materiels_poses||[]).map((m,i)=>(
                   <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto auto",
                     gap:8,marginBottom:8,alignItems:"center"}}>
                     <input value={m.nom||""} onChange={e=>{
                       const arr=[...(form.materiels_poses||[])];
                       arr[i]={...arr[i],nom:e.target.value};F("materiels_poses",arr);
-                    }} placeholder="Désignation" style={{...INP(),fontSize:13,padding:"9px 12px"}}/>
+                    }} placeholder="Désignation" style={{...INP(),fontSize:13,padding:"9px 12px",
+                      background:m._from_vente?"#0A1628":"#070D1A",
+                      borderColor:m._from_vente?"#3B82F640":"#1B2D4F"}}/>
                     <input value={m.qty||""} type="number" min="1" onChange={e=>{
                       const arr=[...(form.materiels_poses||[])];
                       arr[i]={...arr[i],qty:e.target.value};F("materiels_poses",arr);
@@ -2603,11 +2625,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         fontSize:14,fontFamily:'"Outfit",sans-serif'}}>✕</button>
                   </div>
                 ))}
-                <button onClick={()=>F("materiels_poses",[...(form.materiels_poses||[]),{nom:"",qty:1}])}
-                  style={{...BTN("rgba(59,130,246,0.08)",{border:"1px solid #1B2D4F",
-                    color:"#3B82F6",padding:"8px 14px",fontSize:12,width:"100%",marginTop:4})}}>
-                  ➕ Ajouter matériel
-                </button>
+                <div style={{borderTop:"1px dashed #1B2D4F",marginTop:8,paddingTop:10}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}}>➕ Matériel supplémentaire</div>
+                  <button onClick={()=>F("materiels_poses",[...(form.materiels_poses||[]),{nom:"",qty:1,_from_vente:false}])}
+                    style={{...BTN("rgba(59,130,246,0.08)",{border:"1px solid #1B2D4F",
+                      color:"#3B82F6",padding:"8px 14px",fontSize:12,width:"100%"})}}>
+                    ➕ Ajouter une ligne
+                  </button>
+                </div>
               </div>
 
               {/* Observations */}
@@ -6086,7 +6111,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   setSavTickets(p=>p.filter(t=>t.id!==id));
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
                 }}/>}
-                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline}/>}
+                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} ventes={ventes}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} fmt={fmt} role={role} goTo={goTo} BDG={BDG} setRapports={SR} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
