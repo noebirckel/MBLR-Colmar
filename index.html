@@ -97,7 +97,7 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","perf_installateurs","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
       commercial:["accueil","messagerie","cartes","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","messagerie","cartes","chantier","sav","rapports","stock","commandes"],
       secretaire:["accueil","messagerie","cartes","ventes","administratif","factures","chantier","sav","rapports"],
@@ -5878,15 +5878,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
-        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges"]},
+        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","perf_installateurs"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",perf_installateurs:"Perf. Installateurs"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -6155,6 +6155,159 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
+
+                {view==="perf_installateurs"&&(()=>{
+                  // ── Données croisées ────────────────────────────────────────
+                  const techs=[...new Set([
+                    ...chantiersPipeline.map(c=>c.technicien).filter(Boolean),
+                    ...rapports.map(r=>r.technicien).filter(Boolean),
+                  ])].sort();
+
+                  const techStats=techs.map(tech=>{
+                    const chantiers_tech=chantiersPipeline.filter(c=>c.technicien===tech);
+                    const termines=chantiers_tech.filter(c=>c.statut==="termine");
+                    const enCours=chantiers_tech.filter(c=>c.statut==="en_cours");
+                    const raps=rapports.filter(r=>r.technicien===tech);
+                    const rapsOk=raps.filter(r=>r.etat_final==="ok").length;
+                    const rapsRevoir=raps.filter(r=>r.etat_final==="a_revoir").length;
+                    const rapsUrgence=raps.filter(r=>r.etat_final==="urgence").length;
+                    const pbRaps=raps.filter(r=>r.etat_final!=="ok"||r.problemes);
+                    // SAV liés aux chantiers de ce technicien
+                    const chantierIds=new Set(chantiers_tech.map(c=>c.id));
+                    const savTech=savTickets.filter(t=>chantierIds.has(t.chantier_id)||(t.technicien&&t.technicien===tech));
+                    const tauxSAV=termines.length>0?Math.round((savTech.length/termines.length)*100):0;
+                    const tauxPb=raps.length>0?Math.round(((rapsRevoir+rapsUrgence)/raps.length)*100):0;
+
+                    // Problèmes listés
+                    const problemes=[
+                      ...savTech.map(t=>({type:"sav",date:t.date_ouverture||"",desc:`SAV — ${t.client||""}${t.description?` : ${t.description.slice(0,80)}`:""}`,statut:t.statut,urgence:false})),
+                      ...pbRaps.map(r=>({type:"rapport",date:r.date||"",desc:`Rapport — ${r.chantier_nom||""}${r.problemes?` : ${r.problemes.slice(0,80)}`:""}${r.etat_final==="urgence"?" ⚠️":""}`,statut:r.etat_final,urgence:r.etat_final==="urgence"})),
+                    ].sort((a,b)=>(b.urgence?1:0)-(a.urgence?1:0));
+
+                    return{tech,termines:termines.length,enCours:enCours.length,nbRaps:raps.length,rapsOk,rapsRevoir,rapsUrgence,tauxSAV,tauxPb,problemes,savCount:savTech.length};
+                  });
+
+                  const[selectedTech,setSelectedTech]=React.useState(techs[0]||"");
+                  const sel=techStats.find(t=>t.tech===selectedTech)||techStats[0];
+
+                  const ScoreBadge=({pct,label,color})=>(
+                    <div style={{textAlign:"center"}}>
+                      <div style={{width:64,height:64,borderRadius:"50%",border:`4px solid ${pct<=10?"#10B981":pct<=30?"#F59E0B":"#EF4444"}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px",background:pct<=10?"#10B98115":pct<=30?"#F59E0B15":"#EF444415"}}>
+                        <span style={{fontWeight:900,fontSize:16,color:pct<=10?"#10B981":pct<=30?"#F59E0B":"#EF4444"}}>{pct}%</span>
+                      </div>
+                      <div style={{fontSize:10,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase"}}>{label}</div>
+                    </div>
+                  );
+
+                  return(<>
+                    <div style={{marginBottom:20}}>
+                      <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>🔍 Performance Installateurs</h2>
+                      <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Taux SAV, problèmes chantiers, incidents par technicien</p>
+                    </div>
+
+                    {/* ── Sélecteur technicien ── */}
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
+                      {techs.map(t=>{
+                        const ts=techStats.find(x=>x.tech===t);
+                        const hasAlert=(ts?.tauxSAV||0)>20||(ts?.tauxPb||0)>30||(ts?.rapsUrgence||0)>0;
+                        return(
+                          <button key={t} onClick={()=>setSelectedTech(t)}
+                            style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${selectedTech===t?"#3B82F6":hasAlert?"#EF444440":"#1B2D4F"}`,background:selectedTech===t?"linear-gradient(135deg,#3B82F6,#1D4ED8)":hasAlert?"#EF444408":"#0D1828",color:selectedTech===t?"#FFF":hasAlert?"#EF4444":"#7B96C8",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+                            🔧 {t}
+                            {hasAlert&&<span style={{fontSize:10}}>⚠️</span>}
+                          </button>
+                        );
+                      })}
+                      {techs.length===0&&<div style={{color:"#4A6A9E",fontSize:13}}>Aucun installateur trouvé — associez un technicien à vos chantiers</div>}
+                    </div>
+
+                    {sel&&<>
+                      {/* ── KPIs du technicien sélectionné ── */}
+                      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                        {[
+                          {v:sel.termines,l:"Chantiers terminés",i:"✅",c:"#10B981"},
+                          {v:sel.enCours,l:"En cours",i:"🔧",c:"#3B82F6"},
+                          {v:sel.nbRaps,l:"Rapports rédigés",i:"📋",c:"#A855F7"},
+                          {v:sel.savCount,l:"Tickets SAV liés",i:"🛠️",c:"#EF4444"},
+                        ].map(k=>(
+                          <div key={k.l} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px 12px"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                              <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
+                              <span style={{fontSize:20}}>{k.i}</span>
+                            </div>
+                            <div style={{fontSize:11,color:"#4A6A9E",fontWeight:600}}>{k.l}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ── Taux visuels ── */}
+                      <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"20px",marginBottom:16}}>
+                        <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📈 Indicateurs qualité</h3>
+                        <div style={{display:"flex",justifyContent:"space-around",flexWrap:"wrap",gap:16,marginBottom:16}}>
+                          <ScoreBadge pct={sel.tauxSAV} label="Taux SAV"/>
+                          <ScoreBadge pct={sel.tauxPb} label="Taux problèmes"/>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{width:64,height:64,borderRadius:"50%",border:"4px solid #10B981",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px",background:"#10B98115"}}>
+                              <span style={{fontWeight:900,fontSize:16,color:"#10B981"}}>{sel.rapsOk}</span>
+                            </div>
+                            <div style={{fontSize:10,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase"}}>Install. OK</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{width:64,height:64,borderRadius:"50%",border:"4px solid #F59E0B",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px",background:"#F59E0B15"}}>
+                              <span style={{fontWeight:900,fontSize:16,color:"#F59E0B"}}>{sel.rapsRevoir}</span>
+                            </div>
+                            <div style={{fontSize:10,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase"}}>À revoir</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{width:64,height:64,borderRadius:"50%",border:"4px solid #EF4444",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px",background:"#EF444415"}}>
+                              <span style={{fontWeight:900,fontSize:16,color:"#EF4444"}}>{sel.rapsUrgence}</span>
+                            </div>
+                            <div style={{fontSize:10,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase"}}>Urgences</div>
+                          </div>
+                        </div>
+                        {/* Barres contexte */}
+                        {sel.nbRaps>0&&<div style={{display:"flex",gap:4,height:8,borderRadius:4,overflow:"hidden"}}>
+                          <div style={{flex:sel.rapsOk,background:"#10B981",borderRadius:4}}/>
+                          <div style={{flex:sel.rapsRevoir,background:"#F59E0B"}}/>
+                          <div style={{flex:sel.rapsUrgence,background:"#EF4444",borderRadius:4}}/>
+                        </div>}
+                        {sel.nbRaps>0&&<div style={{display:"flex",gap:12,marginTop:6,fontSize:10,color:"#4A6A9E"}}>
+                          <span>✅ OK : {sel.rapsOk}</span>
+                          <span>⚠️ À revoir : {sel.rapsRevoir}</span>
+                          <span>🚨 Urgences : {sel.rapsUrgence}</span>
+                        </div>}
+                      </div>
+
+                      {/* ── Listing des problèmes ── */}
+                      <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"}}>
+                        <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📋 Historique des incidents</h3>
+                        {sel.problemes.length===0
+                          ?<div style={{textAlign:"center",padding:"30px 0",color:"#2E4D82"}}>
+                            <div style={{fontSize:40,marginBottom:8}}>✅</div>
+                            <div style={{fontWeight:700,color:"#10B981"}}>Aucun incident signalé</div>
+                            <div style={{fontSize:12,marginTop:4}}>Excellent bilan pour cet installateur</div>
+                          </div>
+                          :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            {sel.problemes.map((p,i)=>(
+                              <div key={i} style={{background:p.urgence?"#EF444408":p.type==="sav"?"#3B82F608":"#F59E0B08",border:`1px solid ${p.urgence?"#EF444430":p.type==="sav"?"#3B82F620":"#F59E0B20"}`,borderRadius:10,padding:"10px 14px"}}>
+                                <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                                  <span style={{fontSize:16,flexShrink:0}}>{p.type==="sav"?"🛠️":p.urgence?"🚨":"⚠️"}</span>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF",lineHeight:1.4}}>{p.desc}</div>
+                                    {p.date&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:3}}>📅 {p.date}</div>}
+                                  </div>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:p.urgence?"#EF444420":p.statut==="ouvert"?"#F59E0B20":"#10B98120",color:p.urgence?"#EF4444":p.statut==="ouvert"?"#F59E0B":"#10B981",flexShrink:0}}>
+                                    {p.urgence?"Urgence":p.statut==="ouvert"?"Ouvert":p.statut==="a_revoir"?"À revoir":"Résolu"}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        }
+                      </div>
+                    </>}
+                  </>);
+                })()}
 
                 {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
                 {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role} onDeleteTicket={async(id)=>{
