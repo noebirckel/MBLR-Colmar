@@ -5395,6 +5395,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[eSVal,setESVal]=React.useState("");
       const[pSearch,setPSearch]=React.useState("");
       const[pCat,setPCat]=React.useState("Toutes");
+      const[stockCompact,setStockCompact]=React.useState(false);
+      const[stockSearch,setStockSearch]=React.useState("");
+      const[collapsedCats,setCollapsedCats]=React.useState({});
+      const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
       const firstLoad=React.useRef(true);
       const[notifs,setNotifs]=React.useState([]);
       const[notifPanel,setNotifPanel]=React.useState(false);
@@ -6294,110 +6298,268 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </>}
 
           
-{view==="stock"&&<>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                    <h2 style={{margin:0,fontSize:18,fontWeight:800}}>📦 Stock</h2>
-                    {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}} style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"9px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Ajouter</button>}
-                  </div>
-                  <div style={{display:"flex",gap:5,marginBottom:12,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
-                    {cats.map(cat=><button key={cat} onClick={()=>setFCat(cat)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${fCat===cat?"#3B82F6":"#1B2D4F"}`,background:fCat===cat?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#070D1A",color:fCat===cat?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:600,flexShrink:0,whiteSpace:"nowrap",fontFamily:'"Outfit",sans-serif'}}>{cat}</button>)}
-                  </div>
-                  {isMobile?(
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      {fil.map(item=>{
-                        const hasO=aOIds.has(item.id);
-                        const st=gS(item.stock,item.seuil,item.rupture,hasO);
-                        const s=SC[st];
-                        const aCmd=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:0;
-                        return(
-                          <div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO&&aCmd>0?"#0A1628":"#0D1828",borderRadius:14,border:`1px solid ${item.rupture?"#A855F740":st==="alert"&&!hasO?"#EF444440":hasO&&aCmd>0?"#1D4ED860":"#1B2D4F"}`,padding:14}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                              <div style={{flex:1,paddingRight:8}}>
-                                <span style={{background:CC[item.cat]||"#1B2D4F22",color:CC[item.cat]||"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{item.cat}</span>
-                                <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF",marginTop:5}}>{item.article}</div>
-                                {hasO&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:600,marginTop:3}}>🚚 {aOByA[item.id]?.reduce((a,o)=>a+o.qty,0)} commandé(s)</div>}
-                              </div>
-                              <span style={{background:s.bg,color:s.color,padding:"4px 9px",borderRadius:8,fontSize:11,fontWeight:700,flexShrink:0}}>{s.label}</span>
-                            </div>
-                            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-                              {[["STOCK",item.stock,st==="alert"&&!hasO?"#EF4444":st==="warn"?"#F59E0B":"#E8F0FF"],["SEUIL",item.seuil,"#4A6A9E"],["PRIX",item.prix?`${item.prix}€`:"—","#10B981"],["UNITÉ",item.unite,"#7B96C8"]].map(([l,v,c])=>(
-                                <div key={l} style={{background:"#070D1A",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
-                                  <div style={{fontSize:13,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                                  <div style={{fontSize:9,color:"#4A6A9E",fontWeight:600,marginTop:3}}>{l}</div>
-                                </div>
-                              ))}
-                            </div>
-                            {eSId===item.id&&(
-                              <div style={{display:"flex",gap:6,marginBottom:8}}>
-                                <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{flex:1,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:8,padding:"9px 12px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif'}}/>
-                                <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:8,padding:"9px 14px",color:"#fff",fontWeight:700,cursor:"pointer"}}>✓</button>
-                                <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px 14px",color:"#7B96C8",cursor:"pointer"}}>✕</button>
-                              </div>
-                            )}
-                            <div style={{display:"flex",gap:6}}>
-                              {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} style={{background:item.rupture?"#A855F720":"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:item.rupture?"#A855F7":"#7B96C8",cursor:"pointer",fontSize:12}}>⛔</button>}
-                              {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>📝</button>}
-                              {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{flex:1,background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:8,padding:"9px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>🛒 Commander</button>}
-                              {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"9px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>✏️</button>}
-                              {canEditStock(role)&&<button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,padding:"9px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ):(
-                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflowX:"auto"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                        <thead>
-                          <tr style={{borderBottom:"1px solid #1B2D4F"}}>
-                            {["Catégorie","Article","Stock","Seuil","Prix","Statut","Actions"].map(h=>(
-                              <th key={h} style={{padding:"12px 14px",textAlign:"left",fontSize:11,color:"#4A6A9E",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap"}}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fil.map(item=>{
-                            const hasO=aOIds.has(item.id);
-                            const st=gS(item.stock,item.seuil,item.rupture,hasO);
-                            const s=SC[st];
-                            return(
-                              <tr key={item.id} style={{borderBottom:"1px solid #0D182866",background:item.rupture?"#1A0A2A08":"transparent"}}>
-                                <td style={{padding:"11px 14px"}}><span style={{background:CC[item.cat]||"#1B2D4F22",color:CC[item.cat]||"#7B96C8",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:700}}>{item.cat}</span></td>
-                                <td style={{padding:"11px 14px",fontWeight:700,color:"#F0F6FF"}}>{item.article}{hasO&&<span style={{marginLeft:6,fontSize:10,color:"#3B82F6"}}>🚚</span>}</td>
-                                <td style={{padding:"11px 14px"}}>
-                                  {eSId===item.id?(
-                                    <div style={{display:"flex",gap:4}}>
-                                      <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{width:70,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:6,padding:"5px 8px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif'}}/>
-                                      <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:6,padding:"5px 8px",color:"#fff",cursor:"pointer"}}>✓</button>
-                                      <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:6,padding:"5px 8px",color:"#7B96C8",cursor:"pointer"}}>✕</button>
-                                    </div>
-                                  ):(
-                                    <span style={{color:s.color,fontWeight:700}}>{item.stock} {item.unite}</span>
-                                  )}
-                                </td>
-                                <td style={{padding:"11px 14px",color:"#4A6A9E"}}>{item.seuil||"—"}</td>
-                                <td style={{padding:"11px 14px",color:"#10B981",fontWeight:600}}>{item.prix?`${item.prix}€`:"—"}</td>
-                                <td style={{padding:"11px 14px"}}><span style={{background:s.bg,color:s.color,padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:700}}>{s.label}</span></td>
-                                <td style={{padding:"11px 14px"}}>
-                                  <div style={{display:"flex",gap:4}}>
-                                    {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} title="Toggle rupture" style={{background:item.rupture?"#A855F720":"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:item.rupture?"#A855F7":"#4A6A9E",cursor:"pointer",fontSize:12}}>⛔</button>}
-                                    {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:"#4A6A9E",cursor:"pointer",fontSize:12}}>📝</button>}
-                                    {canOrder(role)&&<button onClick={()=>openO(item.id)} style={{background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:6,padding:"5px 10px",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>🛒</button>}
-                                    {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:6,padding:"5px 8px",color:"#4A6A9E",cursor:"pointer",fontSize:12}}>✏️</button>}
-                                    {canEditStock(role)&&<button onClick={()=>setDelConf(item)} style={{background:"#EF444410",border:"1px solid #EF444430",borderRadius:6,padding:"5px 8px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                      <div style={{display:"flex",gap:4,justifyContent:"center",padding:"10px",flexWrap:"wrap"}}>
-                        {fil.length===0&&<div style={{color:"#2E4D82",fontSize:12,padding:"20px"}}>Aucun article</div>}
-                      </div>
-                    </div>
-                  )}
-                </>}
+{view==="stock"&&(()=>{
+  // ── computed ─────────────────────────────────────
+  const stockFil=React.useMemo(()=>stock.filter(s=>{
+    if(!stockSearch)return true;
+    const q=stockSearch.toLowerCase();
+    return (s.article||"").toLowerCase().includes(q)||(s.cat||"").toLowerCase().includes(q);
+  }),[stock,stockSearch]);
+
+  const allCats=[...new Set(stock.map(s=>s.cat).filter(Boolean))].sort();
+
+  const alertItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";});
+  const warnItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="warn";});
+  const okItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="ok"||st==="ordered"||st==="vide";});
+
+  // KPI totals
+  const kpiOk=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="ok").length;
+  const kpiAlert=stock.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert";}).length;
+  const kpiRupture=stock.filter(s=>s.rupture).length;
+  const kpiOrdered=stock.filter(s=>aOIds.has(s.id)).length;
+
+  const displayItems=stockSubView==="alertes"?[...alertItems,...warnItems]:stockFil;
+  const byCategory=allCats.reduce((acc,cat)=>{
+    const items=displayItems.filter(s=>s.cat===cat);
+    if(items.length)acc[cat]=items;
+    return acc;
+  },{});
+  const noCatItems=displayItems.filter(s=>!s.cat);
+
+  const toggleCat=cat=>setCollapsedCats(p=>({...p,[cat]:!p[cat]}));
+
+  // ── Article card ────────────────────────────────
+  const ArticleRow=({item,compact})=>{
+    const hasO=aOIds.has(item.id);
+    const st=gS(item.stock,item.seuil,item.rupture,hasO);
+    const s=SC[st];
+    const pct=item.seuil>0?Math.min(100,Math.round((item.stock/item.seuil)*100)):item.stock>0?100:0;
+    const barColor=st==="rupture"?"#A855F7":st==="alert"?"#EF4444":st==="warn"?"#F59E0B":st==="ordered"?"#3B82F6":"#10B981";
+    const suggestQty=item.seuil>0&&item.stock<item.seuil?item.seuil-item.stock:1;
+
+    if(compact)return(
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderBottom:"1px solid #0D182888",background:eSId===item.id?"#0A1628":"transparent"}}
+        onMouseOver={e=>e.currentTarget.style.background="#0A1628"} onMouseOut={e=>e.currentTarget.style.background=eSId===item.id?"#0A1628":"transparent"}>
+        {/* Status dot */}
+        <div style={{width:8,height:8,borderRadius:"50%",background:barColor,flexShrink:0}}/>
+        {/* Article */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:13,color:"#E8F0FF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.article}</div>
+        </div>
+        {/* Stock / progress */}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {eSId===item.id?(
+            <div style={{display:"flex",gap:4}}>
+              <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{width:60,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:6,padding:"4px 7px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif',fontSize:12}}/>
+              <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:6,padding:"4px 8px",color:"#fff",cursor:"pointer",fontSize:12}}>✓</button>
+              <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:6,padding:"4px 8px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>✕</button>
+            </div>
+          ):(
+            <>
+              <span style={{fontWeight:800,fontSize:13,color:barColor,minWidth:32,textAlign:"right"}}>{item.stock}</span>
+              {item.seuil>0&&<div style={{width:50,height:4,background:"#1B2D4F",borderRadius:2,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${pct}%`,background:barColor,borderRadius:2,transition:"width 0.3s"}}/>
+              </div>}
+              <span style={{fontSize:10,color:"#4A6A9E",minWidth:22}}>{item.unite||"pce"}</span>
+            </>
+          )}
+          {/* Actions compactes */}
+          <div style={{display:"flex",gap:3}}>
+            {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"transparent",border:"none",borderRadius:5,color:"#4A6A9E",padding:"4px 6px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>📝</button>}
+            {canOrder(role)&&(st==="alert"||st==="warn")&&<button onClick={()=>{setOModal(item.id);setOForm({qty:suggestQty,notes:"Réapprovisionnement"});}} style={{background:"#3B82F620",border:"none",borderRadius:5,color:"#60A5FA",padding:"4px 6px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>🛒</button>}
+            {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"transparent",border:"none",borderRadius:5,color:"#4A6A9E",padding:"4px 6px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✏️</button>}
+          </div>
+        </div>
+      </div>
+    );
+
+    return(
+      <div style={{background:"#0D1828",borderRadius:12,border:`1px solid ${st==="rupture"?"#A855F740":st==="alert"?"#EF444430":st==="warn"?"#F59E0B30":"#1B2D4F"}`,padding:"14px",marginBottom:8,transition:"border-color 0.2s"}}>
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:4}}>{item.article}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              {item.rupture&&<span style={{background:"#A855F720",color:"#A855F7",padding:"2px 7px",borderRadius:10,fontSize:10,fontWeight:700}}>⛔ Rupture fournisseur</span>}
+              {hasO&&<span style={{background:"#3B82F620",color:"#3B82F6",padding:"2px 7px",borderRadius:10,fontSize:10,fontWeight:700}}>🚚 {aOByA[item.id]?.reduce((a,o)=>a+o.qty,0)} en commande</span>}
+              <span style={{background:s.bg,color:s.color,padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700}}>{s.icon} {s.label}</span>
+            </div>
+          </div>
+          {item.prix>0&&<div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#10B981"}}>{item.prix}€</div>
+            <div style={{fontSize:10,color:"#4A6A9E"}}>/ {item.unite||"pce"}</div>
+          </div>}
+        </div>
+
+        {/* Barre de progression */}
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+            <span style={{fontSize:11,color:"#4A6A9E",fontWeight:600}}>Stock actuel</span>
+            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+              {eSId===item.id?(
+                <div style={{display:"flex",gap:4}}>
+                  <input type="number" value={eSVal} onChange={e=>setESVal(e.target.value)} style={{width:70,background:"#070D1A",border:"1px solid #3B82F6",borderRadius:6,padding:"5px 8px",color:"#E8F0FF",fontFamily:'"Outfit",sans-serif'}}/>
+                  <button onClick={()=>{upd(item.id,"stock",Math.max(0,Number(eSVal)));setESId(null);}} style={{background:"#10B981",border:"none",borderRadius:6,padding:"5px 8px",color:"#fff",cursor:"pointer"}}>✓</button>
+                  <button onClick={()=>setESId(null)} style={{background:"#1B2D4F",border:"none",borderRadius:6,padding:"5px 8px",color:"#7B96C8",cursor:"pointer"}}>✕</button>
+                </div>
+              ):(
+                <>
+                  <span style={{fontWeight:900,fontSize:20,color:barColor,lineHeight:1}}>{item.stock}</span>
+                  <span style={{fontSize:11,color:"#4A6A9E"}}>{item.unite||"pce"}{item.seuil>0&&` / seuil ${item.seuil}`}</span>
+                </>
+              )}
+            </div>
+          </div>
+          {item.seuil>0&&<div style={{height:6,background:"#1B2D4F",borderRadius:3,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${barColor}CC,${barColor})`,borderRadius:3,transition:"width 0.5s ease"}}/>
+          </div>}
+          {item.seuil>0&&<div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
+            <span style={{fontSize:9,color:"#2E4D82"}}>0</span>
+            <span style={{fontSize:9,color:pct>=100?"#10B981":"#4A6A9E",fontWeight:pct>=100?700:400}}>{pct}%</span>
+            <span style={{fontSize:9,color:"#2E4D82"}}>{item.seuil}</span>
+          </div>}
+        </div>
+
+        {/* Suggestion commande si alerte */}
+        {(st==="alert"||st==="warn")&&!item.rupture&&canOrder(role)&&(
+          <div style={{background:"#3B82F610",border:"1px solid #3B82F630",borderRadius:8,padding:"8px 10px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,color:"#60A5FA"}}>💡 Commander {suggestQty} {item.unite||"pce"} pour atteindre le seuil</span>
+            <button onClick={()=>{setOModal(item.id);setOForm({qty:suggestQty,notes:"Réapprovisionnement auto"});}}
+              style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:7,color:"#FFF",padding:"5px 12px",cursor:"pointer",fontWeight:700,fontSize:11,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>
+              🛒 Commander
+            </button>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:6}}>
+          {canRupture(role)&&<button onClick={()=>upd(item.id,"rupture",!item.rupture)} title={item.rupture?"Retirer rupture":"Marquer en rupture"} style={{background:item.rupture?"#A855F720":"#1B2D4F",border:"none",borderRadius:8,padding:"8px 10px",color:item.rupture?"#A855F7":"#7B96C8",cursor:"pointer",fontSize:12}}>⛔</button>}
+          {canEditStock(role)&&<button onClick={()=>{setESId(item.id);setESVal(String(item.stock));}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"8px 10px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>📝 Stock</button>}
+          {canOrder(role)&&!item.rupture&&<button onClick={()=>{setOModal(item.id);setOForm({qty:suggestQty,notes:"Réapprovisionnement"});}} style={{flex:1,background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",border:"none",borderRadius:8,padding:"8px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>🛒 Commander</button>}
+          {canEditStock(role)&&<button onClick={()=>{setEComp(item.id);setCForm({...item});}} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"8px 10px",color:"#7B96C8",cursor:"pointer",fontSize:12}}>✏️</button>}
+          {canEditStock(role)&&<button onClick={()=>setDelConf(item)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,padding:"8px 10px",color:"#EF4444",cursor:"pointer",fontSize:12}}>🗑️</button>}
+        </div>
+      </div>
+    );
+  };
+
+  return(<>
+    {/* ── EN-TÊTE ───────────────────────────────── */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"}}>
+      <div>
+        <h2 style={{margin:"0 0 2px",fontSize:18,fontWeight:800}}>📦 Stock</h2>
+        <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{stock.length} référence{stock.length>1?"s":""}</p>
+      </div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        {/* Vue compact toggle */}
+        <button onClick={()=>setStockCompact(p=>!p)}
+          style={{background:stockCompact?"rgba(59,130,246,0.15)":"#0D1828",border:`1px solid ${stockCompact?"#3B82F6":"#1B2D4F"}`,borderRadius:8,color:stockCompact?"#60A5FA":"#4A6A9E",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+          {stockCompact?"☰ Détaillé":"▤ Compact"}
+        </button>
+        {canEditStock(role)&&<button onClick={()=>{setEComp(-1);setCForm({...EC});}}
+          style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,padding:"8px 16px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+          ➕ Ajouter
+        </button>}
+      </div>
+    </div>
+
+    {/* ── KPIs ──────────────────────────────────── */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+      {[
+        {label:"En stock",val:kpiOk,color:"#10B981",bg:"#10B98115",icon:"✅",sub:"tout va bien"},
+        {label:"À commander",val:kpiAlert,color:"#EF4444",bg:"#EF444415",icon:"🔴",sub:"stock critique"},
+        {label:"À surveiller",val:warnItems.length,color:"#F59E0B",bg:"#F59E0B15",icon:"🟡",sub:"seuil approché"},
+        {label:"En commande",val:kpiOrdered,color:"#3B82F6",bg:"#3B82F615",icon:"🚚",sub:"livraison attendue"},
+      ].map(k=>(
+        <button key={k.label} onClick={()=>setStockSubView(k.val===0?"tout":stockSubView==="alertes"&&k.label==="À commander"?"tout":"alertes")}
+          style={{background:k.bg,border:`1px solid ${k.color}30`,borderRadius:12,padding:"10px 8px",textAlign:"center",cursor:"pointer",fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"}}>
+          <div style={{fontSize:k.val>0?20:16,fontWeight:900,color:k.color,lineHeight:1,marginBottom:3}}>{k.val}</div>
+          <div style={{fontSize:9,fontWeight:700,color:k.color,textTransform:"uppercase",letterSpacing:"0.05em",lineHeight:1.2}}>{k.label}</div>
+        </button>
+      ))}
+    </div>
+
+    {/* ── ALERTES PRIORITAIRES ──────────────────── */}
+    {alertItems.length>0&&stockSubView==="tout"&&(
+      <div style={{background:"#EF444410",border:"1px solid #EF444430",borderRadius:12,padding:"10px 14px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontWeight:800,color:"#EF4444",fontSize:13}}>🔴 {alertItems.length} article{alertItems.length>1?"s":""} à commander en urgence</div>
+          <button onClick={()=>setStockSubView("alertes")} style={{background:"#EF444420",border:"1px solid #EF444440",borderRadius:7,color:"#EF4444",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Voir tout</button>
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
+          {alertItems.slice(0,6).map(item=>(
+            <div key={item.id} style={{background:"#070D1A",borderRadius:8,padding:"5px 10px",display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:12,color:"#E8F0FF",fontWeight:600}}>{item.article}</span>
+              <span style={{fontSize:11,color:"#EF4444",fontWeight:800}}>{item.stock}/{item.seuil}</span>
+              {canOrder(role)&&<button onClick={()=>{const sq=item.seuil-item.stock;setOModal(item.id);setOForm({qty:sq,notes:"Urgent"});}}
+                style={{background:"#EF444430",border:"none",borderRadius:5,color:"#EF4444",padding:"2px 7px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🛒</button>}
+            </div>
+          ))}
+          {alertItems.length>6&&<div style={{background:"#070D1A",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#4A6A9E"}}>+{alertItems.length-6}</div>}
+        </div>
+      </div>
+    )}
+
+    {/* ── SOUS-VUE TABS ─────────────────────────── */}
+    <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
+      {[["tout","Tout le stock"],["alertes","Alertes seul."]].map(([v,l])=>(
+        <button key={v} onClick={()=>setStockSubView(v)} style={{padding:"5px 14px",borderRadius:20,border:"none",background:stockSubView===v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0D1828",color:stockSubView===v?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+          {l}{v==="alertes"&&alertItems.length+warnItems.length>0?` (${alertItems.length+warnItems.length})`:""}
+        </button>
+      ))}
+      {/* Recherche */}
+      <div style={{flex:1,position:"relative"}}>
+        <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:12,color:"#4A6A9E",pointerEvents:"none"}}>🔍</span>
+        <input value={stockSearch} onChange={e=>setStockSearch(e.target.value)}
+          placeholder="Rechercher…"
+          style={{width:"100%",boxSizing:"border-box",background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:20,padding:"5px 12px 5px 28px",color:"#E8F0FF",fontSize:12,fontFamily:'"Outfit",sans-serif',outline:"none"}}/>
+        {stockSearch&&<button onClick={()=>setStockSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:14,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>✕</button>}
+      </div>
+    </div>
+
+    {/* ── LISTE PAR CATÉGORIE AVEC ACCORDÉON ────── */}
+    {displayItems.length===0&&(
+      <div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}>
+        <div style={{fontSize:40,marginBottom:8}}>📦</div>
+        <div style={{fontWeight:700}}>{stockSearch?"Aucun article trouvé":"Stock vide"}</div>
+      </div>
+    )}
+
+    {stockCompact?(
+      // ── VUE COMPACTE ──
+      <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflow:"hidden"}}>
+        {Object.entries(byCategory).map(([cat,items])=>(
+          <div key={cat}>
+            <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#070D1A",border:"none",borderBottom:"1px solid #1B2D4F",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif'}}>
+              <span style={BDG(cat)}>{cat}</span>
+              <span style={{fontSize:11,color:"#4A6A9E",marginLeft:4}}>{items.length}</span>
+              <span style={{marginLeft:"auto",fontSize:11,color:"#4A6A9E"}}>{collapsedCats[cat]?"▶":"▼"}</span>
+            </button>
+            {!collapsedCats[cat]&&items.map(item=><ArticleRow key={item.id} item={item} compact/>)}
+          </div>
+        ))}
+        {noCatItems.length>0&&noCatItems.map(item=><ArticleRow key={item.id} item={item} compact/>)}
+      </div>
+    ):(
+      // ── VUE DÉTAILLÉE ──
+      <div>
+        {Object.entries(byCategory).map(([cat,items])=>(
+          <div key={cat} style={{marginBottom:16}}>
+            {/* Header catégorie */}
+            <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,marginBottom:collapsedCats[cat]?0:10,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 0",fontFamily:'"Outfit",sans-serif'}}>
+              <span style={BDG(cat)}>{cat}</span>
+              <div style={{flex:1,height:1,background:"#1B2D4F"}}/>
+              <span style={{fontSize:11,color:"#4A6A9E"}}>{items.length} article{items.length>1?"s":""}</span>
+              <span style={{fontSize:12,color:"#4A6A9E",marginLeft:4}}>{collapsedCats[cat]?"▶":"▼"}</span>
+            </button>
+            {!collapsedCats[cat]&&items.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
+          </div>
+        ))}
+        {noCatItems.length>0&&noCatItems.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
+      </div>
+    )}
+  </>);
+})()}
 
                 {view==="commandes"&&<>
                   {/* Modal commande groupée */}
