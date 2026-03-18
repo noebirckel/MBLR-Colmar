@@ -5396,6 +5396,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[pSearch,setPSearch]=React.useState("");
       const[pCat,setPCat]=React.useState("Toutes");
       const[stockCompact,setStockCompact]=React.useState(false);
+      const[selectedTech,setSelectedTech]=React.useState("");
       const[stockSearch,setStockSearch]=React.useState("");
       const[collapsedCats,setCollapsedCats]=React.useState({});
       const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
@@ -6187,8 +6188,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     return{tech,termines:termines.length,enCours:enCours.length,nbRaps:raps.length,rapsOk,rapsRevoir,rapsUrgence,tauxSAV,tauxPb,problemes,savCount:savTech.length};
                   });
 
-                  const[selectedTech,setSelectedTech]=React.useState(techs[0]||"");
-                  const sel=techStats.find(t=>t.tech===selectedTech)||techStats[0];
+                  const sel=techStats.find(t=>t.tech===(selectedTech||techs[0]))||techStats[0];
 
                   const ScoreBadge=({pct,label,color})=>(
                     <div style={{textAlign:"center"}}>
