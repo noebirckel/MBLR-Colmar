@@ -117,7 +117,7 @@
       if(s<seuil*1.3) return "warn";
       return "ok";
     };
-    const EC = {cat:"",article:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false};
+    const EC = {cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false};
     const BDG=cat=>({background:(CC[cat]||'#1B2D4F')+'22',color:CC[cat]||'#7B96C8',padding:'2px 8px',borderRadius:5,fontSize:11,fontWeight:700});
 
     function useIsMobile(){ const[m,setM]=useState(window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m; }
@@ -5389,7 +5389,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[oEditForm,setOEditForm]=React.useState({});
       const[oDelConf,setODelConf]=React.useState(null);
       const[eComp,setEComp]=React.useState(null);
-      const[cForm,setCForm]=React.useState({cat:"",article:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false});
+      const[cForm,setCForm]=React.useState({cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false});
       const[delConf,setDelConf]=React.useState(null);
       const[eSId,setESId]=React.useState(null);
       const[eSVal,setESVal]=React.useState("");
@@ -5946,14 +5946,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:17}}>{eComp===-1?"➕ Nouveau composant":"✏️ Modifier"}</h3>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
               <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>NOM</label><input value={cForm.article} onChange={e=>setCForm(p=>({...p,article:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
-              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>UNITÉ</label><input value={cForm.unite} onChange={e=>setCForm(p=>({...p,unite:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>MARQUE</label>
+                <input value={cForm.marque||""} onChange={e=>setCForm(p=>({...p,marque:e.target.value}))} placeholder="Easee, Ohme, Legrand…"
+                  list="marque-list" style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+                <datalist id="marque-list">{[...new Set(stock.map(s=>s.marque).filter(Boolean))].map(m=><option key={m} value={m}/>)}</datalist>
+              </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:8}}>
               <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>STOCK</label><input type="number" value={cForm.stock} onChange={e=>setCForm(p=>({...p,stock:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
               <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>SEUIL</label><input type="number" value={cForm.seuil} onChange={e=>setCForm(p=>({...p,seuil:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
-              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>PRIX D'ACHAT (€)</label><input type="number" step="0.01" min="0" value={cForm.prix} onChange={e=>setCForm(p=>({...p,prix:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>PRIX ACHAT (€)</label><input type="number" step="0.01" min="0" value={cForm.prix} onChange={e=>setCForm(p=>({...p,prix:Number(e.target.value)}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+              <div><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>UNITÉ</label><input value={cForm.unite} onChange={e=>setCForm(p=>({...p,unite:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
             </div>
-            <div style={{marginBottom:12}}><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>CATÉGORIE</label><input value={cForm.cat} onChange={e=>setCForm(p=>({...p,cat:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div style={{marginBottom:12}}><label style={{fontSize:11,color:"#4A6A9E",display:"block",marginBottom:3}}>CATÉGORIE</label>
+              <input value={cForm.cat} onChange={e=>setCForm(p=>({...p,cat:e.target.value}))} placeholder="Borne, Câble, Protection…"
+                list="cat-list" style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+              <datalist id="cat-list">{[...new Set(stock.map(s=>s.cat).filter(Boolean))].map(c=><option key={c} value={c}/>)}</datalist>
+            </div>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
               <input type="checkbox" checked={cForm.rupture} onChange={e=>setCForm(p=>({...p,rupture:e.target.checked}))} id="rupt_cb" style={{width:16,height:16}}/>
               <label htmlFor="rupt_cb" style={{fontSize:13,color:"#E8F0FF",cursor:"pointer"}}>Rupture centrale fournisseur</label>
@@ -6307,10 +6316,24 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
   // ── computed ─────────────────────────────────────
 
   const allCats=[...new Set(stock.map(s=>s.cat).filter(Boolean))].sort();
+  const getMarque=s=>s.marque||(()=>{
+    const n=(s.article||"").toLowerCase();
+    if(n.includes("easee"))return"Easee";
+    if(n.includes("ohme"))return"Ohme";
+    if(n.includes("zaptec"))return"Zaptec";
+    if(n.includes("v2c"))return"V2C";
+    if(n.includes("schneider"))return"Schneider";
+    if(n.includes("legrand"))return"Legrand";
+    if(n.includes("hager"))return"Hager";
+    if(n.includes("siemens"))return"Siemens";
+    if(n.includes("abb"))return"ABB";
+    if(n.includes("wago"))return"Wago";
+    if(n.includes("gewiss"))return"Gewiss";
+    return"Autre";
+  })();
 
   const alertItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";});
   const warnItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="warn";});
-  const okItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="ok"||st==="ordered"||st==="vide";});
 
   // KPI totals
   const kpiOk=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="ok").length;
@@ -6319,14 +6342,24 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
   const kpiOrdered=stock.filter(s=>aOIds.has(s.id)).length;
 
   const displayItems=stockSubView==="alertes"?[...alertItems,...warnItems]:stockFil;
+
+  // Double groupement : catégorie → marque
   const byCategory=allCats.reduce((acc,cat)=>{
-    const items=displayItems.filter(s=>s.cat===cat);
-    if(items.length)acc[cat]=items;
+    const catItems=displayItems.filter(s=>s.cat===cat);
+    if(!catItems.length)return acc;
+    const byBrand={};
+    catItems.forEach(item=>{
+      const m=getMarque(item);
+      if(!byBrand[m])byBrand[m]=[];
+      byBrand[m].push(item);
+    });
+    acc[cat]=byBrand;
     return acc;
   },{});
   const noCatItems=displayItems.filter(s=>!s.cat);
 
   const toggleCat=cat=>setCollapsedCats(p=>({...p,[cat]:!p[cat]}));
+  const toggleBrand=(cat,brand)=>setCollapsedCats(p=>({...p,[`${cat}__${brand}`]:!p[`${cat}__${brand}`]}));
 
   // ── Article card ────────────────────────────────
   const ArticleRow=({item,compact})=>{
@@ -6526,35 +6559,80 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     )}
 
     {stockCompact?(
-      // ── VUE COMPACTE ──
+      // ── VUE COMPACTE : Catégorie > Marque ──
       <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflow:"hidden"}}>
-        {Object.entries(byCategory).map(([cat,items])=>(
-          <div key={cat}>
-            <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#070D1A",border:"none",borderBottom:"1px solid #1B2D4F",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif'}}>
-              <span style={BDG(cat)}>{cat}</span>
-              <span style={{fontSize:11,color:"#4A6A9E",marginLeft:4}}>{items.length}</span>
-              <span style={{marginLeft:"auto",fontSize:11,color:"#4A6A9E"}}>{collapsedCats[cat]?"▶":"▼"}</span>
-            </button>
-            {!collapsedCats[cat]&&items.map(item=><ArticleRow key={item.id} item={item} compact/>)}
-          </div>
-        ))}
+        {Object.entries(byCategory).map(([cat,byBrand])=>{
+          const catTotal=Object.values(byBrand).flat().length;
+          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+          return(
+            <div key={cat}>
+              {/* Header catégorie */}
+              <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"9px 12px",background:"#070D1A",border:"none",borderBottom:"1px solid #1B2D4F",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif'}}>
+                <span style={BDG(cat)}>{cat}</span>
+                <span style={{fontSize:11,color:"#4A6A9E"}}>{catTotal}</span>
+                {catAlerts>0&&<span style={{background:"#EF444420",color:"#EF4444",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>🔴 {catAlerts}</span>}
+                <span style={{marginLeft:"auto",fontSize:11,color:"#4A6A9E"}}>{collapsedCats[cat]?"▶":"▼"}</span>
+              </button>
+              {!collapsedCats[cat]&&Object.entries(byBrand).map(([brand,items])=>{
+                const bKey=`${cat}__${brand}`;
+                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+                return(
+                  <div key={brand}>
+                    {/* Header marque */}
+                    <button onClick={()=>toggleBrand(cat,brand)} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"6px 14px 6px 20px",background:"#08101F",border:"none",borderBottom:"1px solid #0D182866",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif'}}>
+                      <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>● {brand}</span>
+                      <span style={{fontSize:10,color:"#2E4D82"}}>{items.length}</span>
+                      {brandAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 5px"}}>🔴 {brandAlerts}</span>}
+                      <span style={{marginLeft:"auto",fontSize:10,color:"#2E4D82"}}>{collapsedCats[bKey]?"▶":"▼"}</span>
+                    </button>
+                    {!collapsedCats[bKey]&&items.map(item=><ArticleRow key={item.id} item={item} compact/>)}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
         {noCatItems.length>0&&noCatItems.map(item=><ArticleRow key={item.id} item={item} compact/>)}
       </div>
     ):(
-      // ── VUE DÉTAILLÉE ──
+      // ── VUE DÉTAILLÉE : Catégorie > Marque ──
       <div>
-        {Object.entries(byCategory).map(([cat,items])=>(
-          <div key={cat} style={{marginBottom:16}}>
-            {/* Header catégorie */}
-            <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,marginBottom:collapsedCats[cat]?0:10,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 0",fontFamily:'"Outfit",sans-serif'}}>
-              <span style={BDG(cat)}>{cat}</span>
-              <div style={{flex:1,height:1,background:"#1B2D4F"}}/>
-              <span style={{fontSize:11,color:"#4A6A9E"}}>{items.length} article{items.length>1?"s":""}</span>
-              <span style={{fontSize:12,color:"#4A6A9E",marginLeft:4}}>{collapsedCats[cat]?"▶":"▼"}</span>
-            </button>
-            {!collapsedCats[cat]&&items.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
-          </div>
-        ))}
+        {Object.entries(byCategory).map(([cat,byBrand])=>{
+          const catTotal=Object.values(byBrand).flat().length;
+          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+          return(
+            <div key={cat} style={{marginBottom:14}}>
+              {/* Header catégorie */}
+              <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,marginBottom:collapsedCats[cat]?0:8,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 0",fontFamily:'"Outfit",sans-serif'}}>
+                <span style={BDG(cat)}>{cat}</span>
+                {catAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:10,fontWeight:800,padding:"2px 8px"}}>🔴 {catAlerts} alerte{catAlerts>1?"s":""}</span>}
+                <div style={{flex:1,height:1,background:"#1B2D4F"}}/>
+                <span style={{fontSize:11,color:"#4A6A9E"}}>{catTotal} article{catTotal>1?"s":""}</span>
+                <span style={{fontSize:12,color:"#4A6A9E",marginLeft:4}}>{collapsedCats[cat]?"▶":"▼"}</span>
+              </button>
+              {!collapsedCats[cat]&&Object.entries(byBrand).map(([brand,items])=>{
+                const bKey=`${cat}__${brand}`;
+                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+                return(
+                  <div key={brand} style={{marginLeft:8,marginBottom:8}}>
+                    {/* Header marque */}
+                    <button onClick={()=>toggleBrand(cat,brand)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:"#07101E",border:"1px solid #1B2D4F",borderRadius:collapsedCats[bKey]?8:"8px 8px 0 0",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',marginBottom:0}}>
+                      <span style={{fontSize:14}}>🏷️</span>
+                      <span style={{fontSize:12,fontWeight:700,color:"#A8C4E8"}}>{brand}</span>
+                      {brandAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 7px"}}>🔴 {brandAlerts}</span>}
+                      <div style={{flex:1}}/>
+                      <span style={{fontSize:11,color:"#4A6A9E"}}>{items.length} art.</span>
+                      <span style={{fontSize:11,color:"#4A6A9E",marginLeft:6}}>{collapsedCats[bKey]?"▶":"▼"}</span>
+                    </button>
+                    {!collapsedCats[bKey]&&<div style={{border:"1px solid #1B2D4F",borderTop:"none",borderRadius:"0 0 8px 8px",overflow:"hidden"}}>
+                      {items.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
+                    </div>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
         {noCatItems.length>0&&noCatItems.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
       </div>
     )}
