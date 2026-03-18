@@ -6571,9 +6571,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <span style={BDG(cat)}>{cat}</span>
                 <span style={{fontSize:11,color:"#4A6A9E"}}>{catTotal}</span>
                 {catAlerts>0&&<span style={{background:"#EF444420",color:"#EF4444",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>🔴 {catAlerts}</span>}
-                <span style={{marginLeft:"auto",fontSize:11,color:"#4A6A9E"}}>{collapsedCats[cat]?"▶":"▼"}</span>
+                <span style={{marginLeft:"auto",fontSize:11,color:"#4A6A9E"}}>{collapsedCats[cat]===true?"▼":"▶"}</span>
               </button>
-              {!collapsedCats[cat]&&Object.entries(byBrand).map(([brand,items])=>{
+              {collapsedCats[cat]===true&&Object.entries(byBrand).map(([brand,items])=>{
                 const bKey=`${cat}__${brand}`;
                 const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
                 return(
@@ -6583,9 +6583,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>● {brand}</span>
                       <span style={{fontSize:10,color:"#2E4D82"}}>{items.length}</span>
                       {brandAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 5px"}}>🔴 {brandAlerts}</span>}
-                      <span style={{marginLeft:"auto",fontSize:10,color:"#2E4D82"}}>{collapsedCats[bKey]?"▶":"▼"}</span>
+                      <span style={{marginLeft:"auto",fontSize:10,color:"#2E4D82"}}>{collapsedCats[bKey]===true?"▼":"▶"}</span>
                     </button>
-                    {!collapsedCats[bKey]&&items.map(item=><ArticleRow key={item.id} item={item} compact/>)}
+                    {collapsedCats[bKey]===true&&items.map(item=><ArticleRow key={item.id} item={item} compact/>)}
                   </div>
                 );
               })}
@@ -6603,28 +6603,28 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           return(
             <div key={cat} style={{marginBottom:14}}>
               {/* Header catégorie */}
-              <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,marginBottom:collapsedCats[cat]?0:8,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 0",fontFamily:'"Outfit",sans-serif'}}>
+              <button onClick={()=>toggleCat(cat)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,marginBottom:collapsedCats[cat]===true?8:0,background:"transparent",border:"none",cursor:"pointer",textAlign:"left",padding:"4px 0",fontFamily:'"Outfit",sans-serif'}}>
                 <span style={BDG(cat)}>{cat}</span>
                 {catAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:10,fontWeight:800,padding:"2px 8px"}}>🔴 {catAlerts} alerte{catAlerts>1?"s":""}</span>}
                 <div style={{flex:1,height:1,background:"#1B2D4F"}}/>
                 <span style={{fontSize:11,color:"#4A6A9E"}}>{catTotal} article{catTotal>1?"s":""}</span>
-                <span style={{fontSize:12,color:"#4A6A9E",marginLeft:4}}>{collapsedCats[cat]?"▶":"▼"}</span>
+                <span style={{fontSize:12,color:"#4A6A9E",marginLeft:4}}>{collapsedCats[cat]===true?"▼":"▶"}</span>
               </button>
-              {!collapsedCats[cat]&&Object.entries(byBrand).map(([brand,items])=>{
+              {collapsedCats[cat]===true&&Object.entries(byBrand).map(([brand,items])=>{
                 const bKey=`${cat}__${brand}`;
                 const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
                 return(
                   <div key={brand} style={{marginLeft:8,marginBottom:8}}>
                     {/* Header marque */}
-                    <button onClick={()=>toggleBrand(cat,brand)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:"#07101E",border:"1px solid #1B2D4F",borderRadius:collapsedCats[bKey]?8:"8px 8px 0 0",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',marginBottom:0}}>
+                    <button onClick={()=>toggleBrand(cat,brand)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:"#07101E",border:"1px solid #1B2D4F",borderRadius:collapsedCats[bKey]===true?"8px 8px 0 0":8,cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',marginBottom:0}}>
                       <span style={{fontSize:14}}>🏷️</span>
                       <span style={{fontSize:12,fontWeight:700,color:"#A8C4E8"}}>{brand}</span>
                       {brandAlerts>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 7px"}}>🔴 {brandAlerts}</span>}
                       <div style={{flex:1}}/>
                       <span style={{fontSize:11,color:"#4A6A9E"}}>{items.length} art.</span>
-                      <span style={{fontSize:11,color:"#4A6A9E",marginLeft:6}}>{collapsedCats[bKey]?"▶":"▼"}</span>
+                      <span style={{fontSize:11,color:"#4A6A9E",marginLeft:6}}>{collapsedCats[bKey]===true?"▼":"▶"}</span>
                     </button>
-                    {!collapsedCats[bKey]&&<div style={{border:"1px solid #1B2D4F",borderTop:"none",borderRadius:"0 0 8px 8px",overflow:"hidden"}}>
+                    {collapsedCats[bKey]===true&&<div style={{border:"1px solid #1B2D4F",borderTop:"none",borderRadius:"0 0 8px 8px",overflow:"hidden"}}>
                       {items.map(item=><ArticleRow key={item.id} item={item} compact={false}/>)}
                     </div>}
                   </div>
