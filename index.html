@@ -2701,8 +2701,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={()=>setDelConf(null)}
                       style={{...BTN("#1B2D4F"),flex:1,padding:"11px"}}>Annuler</button>
-                    <button onClick={()=>{setRapports(p=>p.filter(r=>r.id!==detail.id));setView("liste");setDelConf(null);}}
-                      style={{...BTN("#EF4444"),flex:1,padding:"11px"}}>Supprimer</button>
+                    <button onClick={()=>{
+                      const id=detail.id;
+                      setRapports(p=>p.filter(r=>r.id!==id));
+                      sb.from("rapports").delete().eq("id",id).then(({error})=>{if(error)console.error("delete rapport:",error.message);});
+                      setView("liste");setDelConf(null);
+                    }} style={{...BTN("#EF4444"),flex:1,padding:"11px"}}>Supprimer</button>
                   </div>
                 </div>
               </div>
