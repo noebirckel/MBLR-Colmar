@@ -5672,8 +5672,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const allowedTabs=ROLE_TABS[role]||["accueil"];
       const uCats=[...new Set(stock.map(s=>s.cat))];
       const cats=["Toutes",...uCats];
-      const aOIds=React.useMemo(()=>new Set(orders.filter(o=>o.statut==="en_cours").map(o=>o.articleId)),[orders]);
-      const aOByA=React.useMemo(()=>{const m={};orders.filter(o=>o.statut==="en_cours").forEach(o=>{if(!m[o.articleId])m[o.articleId]=[];m[o.articleId].push(o);});return m;},[orders]);
+      const aOIds=React.useMemo(()=>new Set(orders.filter(o=>o.statut==="en_cours").map(o=>o.article_id)),[orders]);
+      const aOByA=React.useMemo(()=>{const m={};orders.filter(o=>o.statut==="en_cours").forEach(o=>{if(!m[o.article_id])m[o.article_id]=[];m[o.article_id].push(o);});return m;},[orders]);
       const fil=React.useMemo(()=>stock.filter(s=>fCat==="Toutes"||s.cat===fCat),[stock,fCat]);
       const pFil=React.useMemo(()=>stock.filter(s=>{const matchCat=pCat==="Toutes"||s.cat===pCat;const matchSearch=!pSearch||s.article.toLowerCase().includes(pSearch.toLowerCase());return matchCat&&matchSearch;}),[stock,pCat,pSearch]);
       const rCfg=ROLES[role]||ROLES.installateur;
@@ -5842,7 +5842,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Quantité</label><input type="number" value={oForm.qty} onChange={e=>setOForm(p=>({...p,qty:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
             <div style={{marginBottom:16}}><label style={{fontSize:12,color:"#4A6A9E",display:"block",marginBottom:4}}>Notes</label><input value={oForm.notes} onChange={e=>setOForm(p=>({...p,notes:e.target.value}))} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"10px 12px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{if(Number(oForm.qty)<=0)return;const o={id:Date.now(),articleId:oModal,article:oArt.article,qty:Number(oForm.qty),notes:oForm.notes,statut:"en_cours",created_at:new Date().toISOString()};const n=[o,...orders];setOrders(n);saveDB(null,n,null,null,null,null,null,null,null);setOModal(null);}} style={{flex:1,background:"#3B82F6",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Commander</button>
+              <button onClick={()=>{if(Number(oForm.qty)<=0)return;const o={id:Date.now(),article_id:oModal,article:oArt.article,qty:Number(oForm.qty),notes:oForm.notes,statut:"en_cours",created_at:new Date().toISOString()};const n=[o,...orders];setOrders(n);saveDB(null,n,null,null,null,null,null,null,null);setOModal(null);}} style={{flex:1,background:"#3B82F6",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer"}}>Commander</button>
               <button onClick={()=>setOModal(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,padding:"11px 16px",color:"#7B96C8",cursor:"pointer"}}>Annuler</button>
             </div>
           </div></div>}
@@ -6299,7 +6299,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   {isMobile?(
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       {(fCat==="Toutes"?orders:orders.filter(o=>o.statut===fCat)).map(o=>{
-                        const item=stock.find(s=>s.id===o.articleId);
+                        const item=stock.find(s=>s.id===o.article_id);
                         return(
                           <div key={o.id} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:14}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -6330,7 +6330,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         </thead>
                         <tbody>
                           {(fCat==="Toutes"?orders:orders.filter(o=>o.statut===fCat)).map(o=>{
-                            const item=stock.find(s=>s.id===o.articleId);
+                            const item=stock.find(s=>s.id===o.article_id);
                             return(
                               <tr key={o.id} style={{borderBottom:"1px solid #0D182866"}}>
                                 <td style={{padding:"11px 14px",fontWeight:700,color:"#F0F6FF"}}>{o.article}</td>
