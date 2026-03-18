@@ -4812,7 +4812,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[rapportModal,setRapportModal]=useState(null);
       const[lightbox,setLightbox]=useState(null);
       const[uploading,setUploading]=useState(false);
-      const[planifModal,setPlanifModal]=useState(null); // {ch, dateStr, mode:"planifier"|"redate"}
+      const[planifModal,setPlanifModal]=useState(null);
+      const[showStockWarn,setShowStockWarn]=useState(false); // {ch, dateStr, mode:"planifier"|"redate"}
 
       const uploadPhotos=async(ch,files)=>{
         if(!files||files.length===0)return;
@@ -5124,9 +5125,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div>
 
-          {insufficientChantiers.length>0&&<div style={{background:"#EF444415",border:"1px solid #EF444440",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-            <div style={{fontWeight:800,color:"#EF4444",marginBottom:4,fontSize:13}}>⚠️ Stock insuffisant pour {insufficientChantiers.length} chantier(s)</div>
-            {insufficientChantiers.map(ch=><div key={ch.id} style={{fontSize:12,color:"#FCA5A5"}}>• {ch.client} : {(ch.materiels||[]).filter(m=>stockDispo(Number(m.id))<Number(m.qty)).map(m=>`${m.article} (dispo:${stockDispo(Number(m.id))}/${m.qty})`).join(", ")}</div>)}
+          {insufficientChantiers.length>0&&<div style={{marginBottom:14}}>
+            <button onClick={()=>setShowStockWarn(p=>!p)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:"#EF444415",border:"1px solid #EF444440",borderRadius:10,padding:"9px 14px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif'}}>
+              <span style={{fontSize:14}}>⚠️</span>
+              <span style={{fontWeight:700,color:"#EF4444",fontSize:13,flex:1}}>Stock insuffisant pour {insufficientChantiers.length} chantier(s)</span>
+              <span style={{fontSize:12,color:"#EF4444",fontWeight:600}}>{showStockWarn?"▲":"▼"}</span>
+            </button>
+            {showStockWarn&&<div style={{background:"#EF444408",border:"1px solid #EF444430",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"10px 14px"}}>
+              {insufficientChantiers.map(ch=><div key={ch.id} style={{fontSize:12,color:"#FCA5A5",padding:"3px 0",borderBottom:"1px solid #EF444415"}}>
+                <span style={{fontWeight:700,color:"#F87171"}}>• {ch.client}</span> — {(ch.materiels||[]).filter(m=>stockDispo(Number(m.id))<Number(m.qty)).map(m=>`${m.article} (dispo: ${stockDispo(Number(m.id))}/${m.qty})`).join(", ")}
+              </div>)}
+            </div>}
           </div>}
 
           {/* Barre de recherche */}
