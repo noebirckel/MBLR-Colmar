@@ -4796,6 +4796,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       ];
 
       const[tabView,setTabView]=useState("pipeline");
+      const[search,setSearch]=useState("");
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newForm,setNewForm]=useState(null);
@@ -4902,7 +4903,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         const p=ch.date_installation.split("/");
         return p.length===3&&Number(p[1])-1===calMonth&&Number(p[2])===calYear;
       });
-      const pipeline=s=>chantiers.filter(ch=>ch.statut===s);
+      const pipeline=s=>chantiers.filter(ch=>{
+        if(ch.statut!==s) return false;
+        if(!search) return true;
+        const q=search.toLowerCase();
+        return (ch.client||"").toLowerCase().includes(q)||(ch.technicien||"").toLowerCase().includes(q)||(ch.adresse||"").toLowerCase().includes(q);
+      });
       const statOrder=["a_planifier","planifie","en_cours"];
       const insufficientChantiers=chantiers.filter(ch=>ch.statut!=="termine"&&(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty)));
 
@@ -5097,6 +5103,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{fontWeight:800,color:"#EF4444",marginBottom:4,fontSize:13}}>⚠️ Stock insuffisant pour {insufficientChantiers.length} chantier(s)</div>
             {insufficientChantiers.map(ch=><div key={ch.id} style={{fontSize:12,color:"#FCA5A5"}}>• {ch.client} : {(ch.materiels||[]).filter(m=>stockDispo(Number(m.id))<Number(m.qty)).map(m=>`${m.article} (dispo:${stockDispo(Number(m.id))}/${m.qty})`).join(", ")}</div>)}
           </div>}
+
+          {/* Barre de recherche */}
+          <div style={{position:"relative",marginBottom:14}}>
+            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"#4A6A9E",pointerEvents:"none"}}>🔍</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Rechercher client, technicien, adresse…"
+              style={{...INP(),paddingLeft:36,fontSize:13}}/>
+            {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:16,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>✕</button>}
+          </div>
 
           {tabView==="pipeline"&&<>
             {newForm&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #3B82F640",padding:"14px 16px",marginBottom:16}}>
