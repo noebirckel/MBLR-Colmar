@@ -3823,7 +3823,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET VENTES
     // ══════════════════════════════════════
-    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, onVenteSaved}) {
+    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, onVenteSaved, onDeleteVente}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
@@ -4242,7 +4242,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E8F0FF"}}>{delConf.client}</strong> — {fmt(delConf.prix_ht)}</p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-            <button onClick={()=>{const id=delConf.id;setVentes(p=>p.filter(v=>v.id!==id));sb.from("ventes").delete().eq("id",id).then(({error})=>{if(error)console.error("delete ventes:",error.message);});setDelConf(null);}} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
+            <button onClick={()=>{
+              const id=delConf.id;
+              setVentes(p=>p.filter(v=>v.id!==id));
+              if(onDeleteVente) onDeleteVente(id);
+              else sb.from("ventes").delete().eq("id",id).then(({error})=>{if(error)console.error("delete ventes:",error.message);});
+              setDelConf(null);
+            }} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
           </div>
         </div></div>
       );
@@ -5993,10 +5999,22 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 
 
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} onVenteSaved={v=>{
-                  SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:""},...p]);
-                  SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
-                }}/>}
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role}
+                  onVenteSaved={v=>{
+                    SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:""},...p]);
+                    SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
+                  }}
+                  onDeleteVente={async(id)=>{
+                    // Supprimer la vente
+                    await sb.from("ventes").delete().eq("id",id);
+                    // Supprimer les acomptes liés
+                    SA(p=>p.filter(a=>a.vente_id!==id));
+                    await sb.from("acomptes").delete().eq("vente_id",id);
+                    // Supprimer les chantiers liés
+                    SC2(p=>p.filter(c=>c.vente_id!==id));
+                    await sb.from("chantiers").delete().eq("vente_id",id);
+                  }}
+                />}
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role}/>}
