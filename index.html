@@ -5764,6 +5764,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const openOEdit=o=>{setOEditModal(o);setOEditForm({qty:o.qty,notes:o.notes||""});};
       const oArt=stock.find(s=>s.id===oModal);
       const aOByAModal=oModal&&oArt?aOByA[oModal]:null;
+      const[groupOrderModal,setGroupOrderModal]=React.useState(false);
+      const[groupOrderLines,setGroupOrderLines]=React.useState([{article_id:"",qty:1,notes:""}]);
+      const[groupOrderSearch,setGroupOrderSearch]=React.useState("");
 
 
       // ── NOTIFICATION PANEL ──────────────────────────────────────
@@ -5891,6 +5894,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       // Modal helpers
       const OVL={position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16};
       const MBX={background:"#0D1828",borderRadius:16,padding:"20px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"};
+      const INP_S={background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",padding:"9px 12px",width:"100%",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',outline:"none"};
 
 
       return(
@@ -6396,8 +6400,104 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 </>}
 
                 {view==="commandes"&&<>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  {/* Modal commande groupée */}
+                  {groupOrderModal&&<div style={OVL} onClick={()=>setGroupOrderModal(false)}><div style={{...MBX,maxWidth:520}} onClick={e=>e.stopPropagation()}>
+                    <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:17}}>📦 Commande groupée</h3>
+                    <p style={{margin:"0 0 14px",fontSize:12,color:"#4A6A9E"}}>Ajoutez plusieurs articles en une seule commande</p>
+
+                    {/* Recherche article */}
+                    <div style={{position:"relative",marginBottom:10}}>
+                      <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4A6A9E"}}>🔍</span>
+                      <input value={groupOrderSearch} onChange={e=>setGroupOrderSearch(e.target.value)}
+                        placeholder="Filtrer les articles du stock…"
+                        style={{...INP_S,paddingLeft:32,fontSize:13}}/>
+                    </div>
+
+                    {/* Lignes de commande */}
+                    <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12,maxHeight:340,overflowY:"auto"}}>
+                      {groupOrderLines.map((line,i)=>{
+                        const filteredStock=stock.filter(s=>!groupOrderSearch||(s.article||"").toLowerCase().includes(groupOrderSearch.toLowerCase())||(s.cat||"").toLowerCase().includes(groupOrderSearch.toLowerCase()));
+                        const art=stock.find(s=>s.id===Number(line.article_id));
+                        return(
+                          <div key={i} style={{background:"#0A1628",borderRadius:12,border:"1px solid #1B2D4F",padding:"12px 14px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                              <span style={{fontWeight:700,fontSize:11,color:"#4A6A9E",minWidth:20}}>#{i+1}</span>
+                              <select value={line.article_id} onChange={e=>setGroupOrderLines(p=>p.map((l,j)=>j===i?{...l,article_id:e.target.value}:l))}
+                                style={{...INP_S,flex:1,fontSize:13,appearance:"none"}}>
+                                <option value="">— Choisir un article —</option>
+                                {filteredStock.map(s=>(
+                                  <option key={s.id} value={s.id}>{s.cat?`[${s.cat}] `:""}{s.article} (stock: {s.stock} {s.unite||"pce"})</option>
+                                ))}
+                              </select>
+                              <button onClick={()=>setGroupOrderLines(p=>p.filter((_,j)=>j!==i))}
+                                style={{background:"#EF444420",border:"1px solid #EF444440",borderRadius:8,color:"#EF4444",padding:"8px 10px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>✕</button>
+                            </div>
+                            {art&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                              <div>
+                                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:4,textTransform:"uppercase"}}>Quantité</label>
+                                <input type="number" min="1" value={line.qty}
+                                  onChange={e=>setGroupOrderLines(p=>p.map((l,j)=>j===i?{...l,qty:Number(e.target.value)||1}:l))}
+                                  style={INP_S}/>
+                              </div>
+                              <div>
+                                <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:4,textTransform:"uppercase"}}>Notes</label>
+                                <input value={line.notes||""} placeholder="Optionnel…"
+                                  onChange={e=>setGroupOrderLines(p=>p.map((l,j)=>j===i?{...l,notes:e.target.value}:l))}
+                                  style={INP_S}/>
+                              </div>
+                            </div>}
+                            {art&&<div style={{fontSize:11,color:"#4A6A9E",marginTop:6}}>📦 Stock actuel : {art.stock} {art.unite||"pce"}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bouton ajouter ligne */}
+                    <button onClick={()=>{setGroupOrderSearch("");setGroupOrderLines(p=>[...p,{article_id:"",qty:1,notes:""}]);}}
+                      style={{width:"100%",background:"rgba(59,130,246,0.08)",border:"1px dashed #1B2D4F",borderRadius:10,color:"#3B82F6",padding:"10px",cursor:"pointer",fontWeight:700,fontSize:13,marginBottom:14,fontFamily:'"Outfit",sans-serif'}}>
+                      ➕ Ajouter un article
+                    </button>
+
+                    {/* Résumé */}
+                    {groupOrderLines.filter(l=>l.article_id).length>0&&<div style={{background:"#070D1A",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:"#7B96C8"}}>
+                      <div style={{fontWeight:700,color:"#E8F0FF",marginBottom:6}}>📋 Récapitulatif</div>
+                      {groupOrderLines.filter(l=>l.article_id).map((l,i)=>{
+                        const art=stock.find(s=>s.id===Number(l.article_id));
+                        return art?<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"2px 0"}}>
+                          <span>{art.article}</span><span style={{fontWeight:700,color:"#3B82F6"}}>{l.qty}×</span>
+                        </div>:null;
+                      })}
+                    </div>}
+
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>{setGroupOrderModal(false);setGroupOrderLines([{article_id:"",qty:1,notes:""}]);}} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:8,padding:"11px",color:"#7B96C8",fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                      <button onClick={()=>{
+                        const valid=groupOrderLines.filter(l=>l.article_id&&l.qty>0);
+                        if(!valid.length)return;
+                        const now=Date.now();
+                        const newOrders=valid.map((l,i)=>{
+                          const art=stock.find(s=>s.id===Number(l.article_id));
+                          return{id:now+i,article_id:Number(l.article_id),article:art?.article||"",qty:Number(l.qty),notes:l.notes||"",statut:"en_cours",created_at:new Date().toISOString()};
+                        });
+                        const n=[...newOrders,...orders];
+                        setOrders(n);
+                        saveDB(null,n,null,null,null,null,null,null,null);
+                        setGroupOrderModal(false);
+                        setGroupOrderLines([{article_id:"",qty:1,notes:""}]);
+                        setGroupOrderSearch("");
+                      }} disabled={!groupOrderLines.some(l=>l.article_id)}
+                        style={{flex:2,background:groupOrderLines.some(l=>l.article_id)?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#1B2D4F",border:"none",borderRadius:8,padding:"11px",color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                        🛒 Passer la commande ({groupOrderLines.filter(l=>l.article_id).length} article{groupOrderLines.filter(l=>l.article_id).length>1?"s":""})
+                      </button>
+                    </div>
+                  </div></div>}
+
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"}}>
                     <h2 style={{margin:0,fontSize:18,fontWeight:800}}>🛒 Commandes</h2>
+                    {canOrder(role)&&<button onClick={()=>{setGroupOrderModal(true);setGroupOrderLines([{article_id:"",qty:1,notes:""}]);setGroupOrderSearch("");}}
+                      style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:10,color:"#FFF",padding:"9px 16px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+                      📦 Commande groupée
+                    </button>}
                   </div>
                   <div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
                     {["Toutes","en_cours","livrée partielle","livré"].map(s=>(
