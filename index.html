@@ -97,10 +97,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","messagerie","stats","marges","perf_installateurs","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","messagerie","cartes","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
-      installateur:["accueil","messagerie","cartes","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","messagerie","cartes","ventes","administratif","factures","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","messagerie","stats","marges","perf_installateurs","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","messagerie","cartes","clients","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      installateur:["accueil","messagerie","cartes","clients","chantier","sav","rapports","stock","commandes"],
+      secretaire:["accueil","messagerie","cartes","clients","ventes","administratif","factures","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -3019,6 +3019,244 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET CARTES
     // ══════════════════════════════════════
+    // ══════════════════════════════════════════
+    // ONGLET LISTE CLIENTS
+    // ══════════════════════════════════════════
+    function ClientsTab({isMobile, ventes, chantiers, savTickets, rapports, acomptes, fmt, role}) {
+      const[search,setSearch]=useState("");
+      const[selected,setSelected]=useState(null); // nom client sélectionné
+      const[lightbox,setLightbox]=useState(null);
+
+      // Regrouper tous les clients uniques depuis ventes + chantiers
+      const allClients=useMemo(()=>{
+        const names=new Set([
+          ...ventes.map(v=>v.client).filter(Boolean),
+          ...chantiers.map(c=>c.client).filter(Boolean),
+        ]);
+        return [...names].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+      },[ventes,chantiers]);
+
+      const filtered=search?allClients.filter(n=>n.toLowerCase().includes(search.toLowerCase())):allClients;
+
+      // Données d'un client
+      const getClientData=(nom)=>{
+        const norm=n=>(n||"").toLowerCase().trim();
+        const nNom=norm(nom);
+        const cVentes=ventes.filter(v=>norm(v.client)===nNom);
+        const cChantiers=chantiers.filter(c=>norm(c.client)===nNom);
+        const cSav=savTickets.filter(t=>norm(t.client)===nNom);
+        const cRapports=rapports.filter(r=>norm(r.chantier_nom)===nNom);
+        const cAcomptes=acomptes.filter(a=>norm(a.client)===nNom);
+        const cProblemes=cChantiers.flatMap(ch=>(ch.problemes_admin||[]).map(pb=>({...pb,chantier:ch.client,date_fin:ch.date_fin})));
+        const allPhotos=[
+          ...cVentes.flatMap(v=>(v.photos_vente||[]).map(url=>({url,label:"Photo visite — "+v.client,date:v.date||""}))),
+          ...cChantiers.flatMap(ch=>(ch.photos||[]).map(url=>({url,label:"Chantier — "+(ch.date_fin||ch.date_installation||""),date:ch.date_fin||""}))),
+        ];
+        const caTot=cVentes.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+        return{cVentes,cChantiers,cSav,cRapports,cAcomptes,cProblemes,allPhotos,caTot};
+      };
+
+      const sel=selected?getClientData(selected):null;
+
+      const INP=(e={})=>({background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",outline:"none",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+      const Section=({icon,title,count,children})=>count>0?<div style={{background:"#070D1A",borderRadius:12,border:"1px solid #1B2D4F",marginBottom:12,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #1B2D4F"}}>
+          <span style={{fontSize:15}}>{icon}</span>
+          <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{title}</span>
+          <span style={{marginLeft:"auto",background:"#1B2D4F",color:"#7B96C8",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{count}</span>
+        </div>
+        <div style={{padding:"10px 14px"}}>{children}</div>
+      </div>:null;
+
+      // Lightbox
+      if(lightbox)return(
+        <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
+          <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain"}}/>
+          <button onClick={()=>setLightbox(null)} style={{position:"fixed",top:16,right:20,background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",padding:"8px 14px",cursor:"pointer",fontSize:16,fontWeight:700,zIndex:3001}}>✕</button>
+        </div>
+      );
+
+      // VUE DÉTAIL CLIENT
+      if(selected&&sel)return(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+            <button onClick={()=>setSelected(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+            <div>
+              <h2 style={{margin:0,fontSize:18,fontWeight:800,color:"#F0F6FF"}}>{selected}</h2>
+              <div style={{fontSize:12,color:"#4A6A9E",marginTop:2}}>{sel.cVentes.length} vente(s) · CA total : <span style={{color:"#10B981",fontWeight:700}}>{fmt(sel.caTot)}</span></div>
+            </div>
+          </div>
+
+          {/* KPIs client */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:16}}>
+            {[
+              {v:sel.cVentes.length,l:"Ventes",i:"💰",c:"#10B981"},
+              {v:sel.cChantiers.length,l:"Chantiers",i:"🔧",c:"#3B82F6"},
+              {v:sel.cSav.length,l:"Tickets SAV",i:"🛠️",c:sel.cSav.length>0?"#EF4444":"#4A6A9E"},
+              {v:sel.cProblemes.length,l:"Incidents",i:"⚠️",c:sel.cProblemes.length>0?"#F59E0B":"#4A6A9E"},
+            ].map(k=>(
+              <div key={k.l} style={{background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F",padding:"12px",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>{k.i}</span>
+                <div><div style={{fontSize:20,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div><div style={{fontSize:10,color:"#4A6A9E",fontWeight:600}}>{k.l}</div></div>
+              </div>
+            ))}
+          </div>
+
+          {/* Ventes */}
+          <Section icon="💰" title="Ventes" count={sel.cVentes.length}>
+            {sel.cVentes.map(v=>(
+              <div key={v.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.description||"Vente"}</div>
+                  <div style={{fontSize:11,color:"#4A6A9E"}}>📅 {v.date} · 👤 {v.par||"—"}</div>
+                </div>
+                <div style={{fontWeight:800,color:"#10B981",fontSize:14}}>{fmt(v.prix_ht)}</div>
+              </div>
+            ))}
+          </Section>
+
+          {/* Chantiers */}
+          <Section icon="🔧" title="Chantiers" count={sel.cChantiers.length}>
+            {sel.cChantiers.map(ch=>(
+              <div key={ch.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.adresse||ch.client}</div>
+                  <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ch.statut==="termine"?"#10B98120":ch.statut==="en_cours"?"#A855F720":"#3B82F620",color:ch.statut==="termine"?"#10B981":ch.statut==="en_cours"?"#A855F7":"#3B82F6"}}>{ch.statut}</span>
+                </div>
+                <div style={{fontSize:11,color:"#4A6A9E"}}>👤 {ch.technicien||"—"} · {ch.date_fin?"✅ "+ch.date_fin:ch.date_installation?"📅 "+ch.date_installation:"—"}</div>
+              </div>
+            ))}
+          </Section>
+
+          {/* Acomptes */}
+          <Section icon="📄" title="Acomptes" count={sel.cAcomptes.length}>
+            {sel.cAcomptes.map(a=>(
+              <div key={a.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:12,color:"#4A6A9E"}}>📅 {a.date_creation}</div>
+                  {a.mode_paiement&&<div style={{fontSize:11,color:"#10B981"}}>💳 {a.mode_paiement}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontWeight:800,color:"#3B82F6",fontSize:13}}>{fmt(a.montant_acompte)}</div>
+                  <div style={{fontSize:10,fontWeight:700,color:a.statut==="paye"?"#10B981":a.statut==="envoye"?"#3B82F6":"#F59E0B"}}>{a.statut}</div>
+                </div>
+              </div>
+            ))}
+          </Section>
+
+          {/* SAV */}
+          <Section icon="🛠️" title="Tickets SAV" count={sel.cSav.length}>
+            {sel.cSav.map(t=>(
+              <div key={t.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <div style={{fontSize:12,fontWeight:700,color:t.statut==="ouvert"?"#EF4444":"#10B981"}}>{t.statut==="ouvert"?"🔴 Ouvert":"✅ Résolu"}</div>
+                  <div style={{fontSize:11,color:"#4A6A9E"}}>{t.date_ouverture||"—"}</div>
+                </div>
+                <div style={{fontSize:12,color:"#E8F0FF"}}>{t.description||"—"}</div>
+                {t.num_serie&&<div style={{fontSize:10,color:"#4A6A9E"}}>N° série : {t.num_serie}</div>}
+              </div>
+            ))}
+          </Section>
+
+          {/* Incidents admin */}
+          <Section icon="⚠️" title="Incidents signalés" count={sel.cProblemes.length}>
+            {sel.cProblemes.map((pb,i)=>(
+              <div key={i} style={{padding:"7px 8px",background:pb.type==="urgence"?"#EF444408":"#F59E0B08",border:`1px solid ${pb.type==="urgence"?"#EF444430":"#F59E0B20"}`,borderRadius:8,marginBottom:6}}>
+                <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
+                  <span>{pb.type==="urgence"?"🚨":pb.type==="sav"?"🛠️":pb.type==="qualite"?"📋":"⚠️"}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,color:"#E8F0FF"}}>{pb.desc}</div>
+                    <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{pb.date} · par {pb.par||"Admin"}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </Section>
+
+          {/* Rapports */}
+          <Section icon="📋" title="Rapports d'intervention" count={sel.cRapports.length}>
+            {sel.cRapports.map(r=>(
+              <div key={r.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{r.date}</div>
+                  <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:r.etat_final==="ok"?"#10B98120":r.etat_final==="urgence"?"#EF444420":"#F59E0B20",color:r.etat_final==="ok"?"#10B981":r.etat_final==="urgence"?"#EF4444":"#F59E0B"}}>{r.etat_final==="ok"?"✅ OK":r.etat_final==="urgence"?"🚨 Urgence":"⚠️ À revoir"}</span>
+                </div>
+                <div style={{fontSize:11,color:"#4A6A9E"}}>👤 {r.technicien||"—"}</div>
+                {r.observations&&<div style={{fontSize:11,color:"#7B96C8",marginTop:3,fontStyle:"italic"}}>"{r.observations.slice(0,100)}{r.observations.length>100?"…":""}"</div>}
+              </div>
+            ))}
+          </Section>
+
+          {/* Photos */}
+          {sel.allPhotos.length>0&&<div style={{background:"#070D1A",borderRadius:12,border:"1px solid #1B2D4F",overflow:"hidden",marginBottom:12}}>
+            <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #1B2D4F"}}>
+              <span style={{fontSize:15}}>📸</span>
+              <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>Photos</span>
+              <span style={{marginLeft:"auto",background:"#1B2D4F",color:"#7B96C8",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{sel.allPhotos.length}</span>
+            </div>
+            <div style={{padding:"10px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6}}>
+              {sel.allPhotos.map((p,i)=>(
+                <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1",cursor:"zoom-in"}} onClick={()=>setLightbox(p.url)}>
+                  <img src={p.url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                  <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",padding:"2px 4px",fontSize:8,color:"#fff"}}>{p.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>}
+        </div>
+      );
+
+      // VUE LISTE
+      return(
+        <div>
+          <div style={{marginBottom:16}}>
+            <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>👤 Liste clients</h2>
+            <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{allClients.length} client{allClients.length>1?"s":""} — ventes, chantiers, SAV, incidents, photos</p>
+          </div>
+
+          <div style={{position:"relative",marginBottom:14}}>
+            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"#4A6A9E",pointerEvents:"none"}}>🔍</span>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un client…" style={{...INP(),paddingLeft:36}}/>
+            {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:16,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>✕</button>}
+          </div>
+
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}><div style={{fontSize:40,marginBottom:8}}>👤</div><div style={{fontWeight:700}}>Aucun client trouvé</div></div>
+            :<div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {filtered.map(nom=>{
+                const d=getClientData(nom);
+                const hasAlert=d.cSav.some(t=>t.statut==="ouvert")||d.cProblemes.length>0;
+                return(
+                  <button key={nom} onClick={()=>setSelected(nom)}
+                    style={{background:"#0D1828",border:`1px solid ${hasAlert?"#F59E0B40":"#1B2D4F"}`,borderRadius:12,padding:"13px 16px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,transition:"all 0.15s"}}
+                    onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
+                    onMouseOut={e=>e.currentTarget.style.borderColor=hasAlert?"#F59E0B40":"#1B2D4F"}>
+                    <div style={{width:40,height:40,borderRadius:12,background:"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                      {hasAlert?"⚠️":"👤"}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,color:"#F0F6FF",marginBottom:2}}>{nom}</div>
+                      <div style={{display:"flex",gap:8,fontSize:11,color:"#4A6A9E",flexWrap:"wrap"}}>
+                        {d.cVentes.length>0&&<span>💰 {d.cVentes.length} vente{d.cVentes.length>1?"s":""}</span>}
+                        {d.cChantiers.length>0&&<span>🔧 {d.cChantiers.length} chantier{d.cChantiers.length>1?"s":""}</span>}
+                        {d.cSav.length>0&&<span style={{color:d.cSav.some(t=>t.statut==="ouvert")?"#EF4444":"#4A6A9E"}}>🛠️ {d.cSav.length} SAV</span>}
+                        {d.cProblemes.length>0&&<span style={{color:"#F59E0B"}}>⚠️ {d.cProblemes.length} incident{d.cProblemes.length>1?"s":""}</span>}
+                        {d.allPhotos.length>0&&<span>📸 {d.allPhotos.length}</span>}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontWeight:800,color:"#10B981",fontSize:13}}>{fmt(d.caTot)}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>›</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          }
+        </div>
+      );
+    }
+
     function CarteTab({isMobile, ventes, setVentes, chantiers, fmt, role, allProfiles}) {
       const mapRef = useRef(null);
       const mapInstanceRef = useRef(null);
@@ -6220,7 +6458,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const NAV_GROUPS=[
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
-        {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
+        {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes","clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","perf_installateurs"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
@@ -6228,8 +6466,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",perf_installateurs:"Perf. Installateurs"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",perf_installateurs:"Perf. Installateurs"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -6491,6 +6729,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
+                {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
