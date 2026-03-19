@@ -426,17 +426,18 @@
     function FacturesTab({isMobile, chantiers, setChantiers, profile, role}){
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
-        a_facturer:  {label:"À facturer",    color:"#EF4444", icon:"🔴"},
-        en_cours:    {label:"En cours",      color:"#F59E0B", icon:"🟡"},
-        facture:     {label:"Facturé",       color:"#3B82F6", icon:"📄"},
-        paye:        {label:"Payé",          color:"#10B981", icon:"✅"},
+        a_facturer: {label:"En attente",  color:"#EF4444", icon:"🔴"},
+        facture:    {label:"Facturé",     color:"#3B82F6", icon:"📄"},
+        paye:       {label:"Payé",        color:"#10B981", icon:"✅"},
       };
+      const MODES_PAIEMENT=["Virement","Carte","Chèque","Espèces","Financement"];
 
       const [filtre, setFiltre]   = useState("tous");
       const [search, setSearch]   = useState("");
       const [detail, setDetail]   = useState(null);
       const [copied, setCopied]   = useState(false);
       const [delConf, setDelConf]   = useState(false);
+      const [payModal, setPayModal] = useState(null); // chantier id
 
       const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
 
@@ -490,12 +491,13 @@
 
                   {/* Barre de progression visuelle */}
                   {(()=>{
-                    const steps=["a_facturer","en_cours","facture","paye"];
+                    const steps=["a_facturer","facture","paye"];
                     const idx=steps.indexOf(etat);
                     const nextKey=steps[idx+1]||null;
-                    const nextLabel={a_facturer:"En cours",en_cours:"Facturé",facture:"Payé"}[etat];
-                    const nextIcon={a_facturer:"🟡",en_cours:"📄",facture:"✅"}[etat];
-                    const nextColor={a_facturer:"#F59E0B",en_cours:"#3B82F6",facture:"#10B981"}[etat];
+                    const nextLabel={a_facturer:"Facturé",facture:"Payé"}[etat];
+                    const nextIcon={a_facturer:"📄",facture:"✅"}[etat];
+                    const nextColor={a_facturer:"#3B82F6",facture:"#10B981"}[etat];
+                    const prevKey=steps[idx-1]||null;
                     return(
                       <>
                         {/* Steps visuels */}
@@ -524,19 +526,29 @@
 
                         {/* Bouton avancer */}
                         {nextKey&&canEdit(role)&&(
-                          <button onClick={()=>updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""})}
+                          <button onClick={()=>{
+                            if(nextKey==="paye"){setPayModal(ch.id);}
+                            else{updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}
+                          }}
                             style={{width:"100%",background:`linear-gradient(135deg,${nextColor},${nextColor}CC)`,
                               border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",
                               fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif',
-                              boxShadow:`0 4px 14px ${nextColor}40`,marginBottom:10,
+                              boxShadow:`0 4px 14px ${nextColor}40`,marginBottom:8,
                               display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                             {nextIcon} Passer à : {nextLabel} →
+                          </button>
+                        )}
+                        {/* Bouton retour en arrière */}
+                        {prevKey&&canEdit(role)&&(
+                          <button onClick={()=>updateFacture(ch.id,{statut:prevKey,mode_paiement:null,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""})}
+                            style={{width:"100%",background:"transparent",border:"1px solid #1B2D4F",borderRadius:10,color:"#4A6A9E",padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:'"Outfit",sans-serif',marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                            ← Revenir à : {STATUTS_FACT[prevKey].label}
                           </button>
                         )}
                         {etat==="paye"&&(
                           <div style={{background:"#10B98115",border:"1px solid #10B98140",borderRadius:10,
                             padding:"10px 14px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
-                            ✅ Facture payée — rien à faire
+                            ✅ Payé{fact.mode_paiement?` — ${fact.mode_paiement}`:""}
                           </div>
                         )}
                         {fact.date_maj&&<div style={{fontSize:11,color:"#2E4D82",textAlign:"center",marginTop:6}}>
@@ -677,27 +689,35 @@
                     </div>
                     {/* Bouton avancement direct — sans ouvrir le détail */}
                     {(()=>{
-                      const steps=["a_facturer","en_cours","facture","paye"];
-                      const nextKey=steps[steps.indexOf(etat)+1]||null;
+                      const steps=["a_facturer","facture","paye"];
+                      const idx=steps.indexOf(etat);
+                      const nextKey=steps[idx+1]||null;
+                      const prevKey=steps[idx-1]||null;
                       const cfg={
-                        a_facturer:{label:"Passer En cours",icon:"🟡",color:"#F59E0B",grad:"linear-gradient(135deg,#F59E0B,#D97706)"},
-                        en_cours:  {label:"Marquer Facturé",icon:"📄",color:"#3B82F6",grad:"linear-gradient(135deg,#3B82F6,#1D4ED8)"},
+                        a_facturer:{label:"Marquer Facturé",icon:"📄",color:"#3B82F6",grad:"linear-gradient(135deg,#3B82F6,#1D4ED8)"},
                         facture:   {label:"Marquer Payé",   icon:"✅",color:"#10B981",grad:"linear-gradient(135deg,#10B981,#059669)"},
                       }[etat];
                       if(!nextKey||!cfg) return(
                         <div style={{background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"8px 12px",textAlign:"center",fontSize:12,color:"#10B981",fontWeight:700}}>
-                          ✅ Facture payée
+                          ✅ Payé{fact.mode_paiement?` — ${fact.mode_paiement}`:""}
                         </div>
                       );
                       return(
-                        <button
-                          onClick={e=>{e.stopPropagation();updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}}
-                          style={{width:"100%",background:cfg.grad,border:"none",borderRadius:9,color:"#FFF",
-                            padding:"9px 14px",cursor:"pointer",fontWeight:800,fontSize:13,
-                            fontFamily:'"Outfit",sans-serif',boxShadow:`0 3px 12px ${cfg.color}40`,
-                            display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                          {cfg.icon} {cfg.label} →
-                        </button>
+                        <div style={{display:"flex",gap:6}}>
+                          {prevKey&&canEdit(role)&&(
+                            <button onClick={e=>{e.stopPropagation();updateFacture(ch.id,{statut:prevKey,mode_paiement:null,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}}
+                              style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:9,color:"#4A6A9E",padding:"9px 12px",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>
+                              ← {STATUTS_FACT[prevKey].label}
+                            </button>
+                          )}
+                          <button onClick={e=>{e.stopPropagation();if(nextKey==="paye"){setPayModal(ch.id);}else{updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}}}
+                            style={{flex:1,background:cfg.grad,border:"none",borderRadius:9,color:"#FFF",
+                              padding:"9px 14px",cursor:"pointer",fontWeight:800,fontSize:13,
+                              fontFamily:'"Outfit",sans-serif',boxShadow:`0 3px 12px ${cfg.color}40`,
+                              display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                            {cfg.icon} {cfg.label} →
+                          </button>
+                        </div>
                       );
                     })()}
                   </div>
@@ -705,6 +725,38 @@
               })}
             </div>
           }
+
+          {/* Modal choix du mode de paiement */}
+          {payModal&&(()=>{
+            const pCh=termines.find(c=>c.id===payModal);
+            return pCh?(
+              <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setPayModal(null)}>
+                <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"24px",width:isMobile?"100%":"100%",maxWidth:380,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
+                  {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                    <div style={{width:40,height:40,borderRadius:12,background:"#10B98115",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>💳</div>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Mode de paiement</div>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{pCh.client}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                    {MODES_PAIEMENT.map(m=>(
+                      <button key={m} onClick={()=>{
+                        updateFacture(payModal,{statut:"paye",mode_paiement:m,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});
+                        setPayModal(null);
+                      }} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"12px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center",transition:"all 0.15s"}}
+                        onMouseOver={e=>{e.currentTarget.style.borderColor="#10B981";e.currentTarget.style.background="#10B98110";}}
+                        onMouseOut={e=>{e.currentTarget.style.borderColor="#1B2D4F";e.currentTarget.style.background="#070D1A";}}>
+                        {m==="Virement"?"🏦":m==="Carte"?"💳":m==="Chèque"?"📝":m==="Espèces"?"💵":"🏛️"} {m}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={()=>setPayModal(null)} style={{width:"100%",background:"transparent",border:"1px solid #1B2D4F",borderRadius:10,color:"#4A6A9E",padding:"10px",cursor:"pointer",fontSize:13,fontWeight:600,marginTop:4,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                </div>
+              </div>
+            ):null;
+          })()}
         </div>
       );
     }
