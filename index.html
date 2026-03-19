@@ -3777,17 +3777,21 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET ÉQUIPE (admin)
     // ══════════════════════════════════════
-    function EquipeTab({isMobile}) {
+    function EquipeTab({isMobile, chantiers, setChantiers, rapports, setRapports}) {
       const[users,setUsers]=useState([]);
       const[loading,setLoading]=useState(true);
       const[modal,setModal]=useState(false);
       const[form,setForm]=useState({nom:"",email:"",role:"installateur",pass:""});
       const[err,setErr]=useState("");
       const[saving,setSaving]=useState(false);
-      const[editUser,setEditUser]=useState(null); // user complet en édition
+      const[editUser,setEditUser]=useState(null);
       const[editForm,setEditForm]=useState({nom:"",email:"",role:"installateur",newPass:""});
       const[editErr,setEditErr]=useState("");
       const[editSaving,setEditSaving]=useState(false);
+      const[mergeModal,setMergeModal]=useState(false);
+      const[mergeFrom,setMergeFrom]=useState("");
+      const[mergeTo,setMergeTo]=useState("");
+      const[mergeResult,setMergeResult]=useState(null);
 
       const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:9,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',...e});
@@ -3854,6 +3858,38 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const toggleActif = async (uid,actif) => {
         await sb.from("profiles").update({actif:!actif}).eq("id",uid);
         setUsers(p=>p.map(u=>u.id===uid?{...u,actif:!actif}:u));
+      };
+
+      // Tous les noms uniques utilisés dans chantiers + rapports
+      const allTechNames=React.useMemo(()=>[...new Set([
+        ...(chantiers||[]).map(c=>c.technicien).filter(Boolean),
+        ...(rapports||[]).map(r=>r.technicien).filter(Boolean),
+      ])].sort(),[chantiers,rapports]);
+
+      const doMerge=async()=>{
+        if(!mergeFrom||!mergeTo||mergeFrom===mergeTo)return;
+        let chCount=0, rapCount=0;
+        // Remplacer dans chantiers localement + Supabase
+        const newChantiers=(chantiers||[]).map(c=>{
+          if((c.technicien||"").toLowerCase()===mergeFrom.toLowerCase()){chCount++;return{...c,technicien:mergeTo};}
+          return c;
+        });
+        if(chCount>0){
+          setChantiers(newChantiers);
+          // Mettre à jour dans Supabase
+          await sb.from("chantiers").update({technicien:mergeTo}).eq("technicien",mergeFrom);
+        }
+        // Remplacer dans rapports
+        const newRapports=(rapports||[]).map(r=>{
+          if((r.technicien||"").toLowerCase()===mergeFrom.toLowerCase()){rapCount++;return{...r,technicien:mergeTo};}
+          return r;
+        });
+        if(rapCount>0){
+          setRapports(newRapports);
+          await sb.from("rapports").update({technicien:mergeTo}).eq("technicien",mergeFrom);
+        }
+        setMergeResult({chCount,rapCount,from:mergeFrom,to:mergeTo});
+        setMergeFrom("");
       };
 
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
@@ -3937,12 +3973,72 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div></div>}
 
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          {/* Modal fusion noms */}
+          {mergeModal&&<div style={OVL} onClick={()=>{setMergeModal(false);setMergeResult(null);}}><div style={{...MBX,maxWidth:420}} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"8px auto 16px"}}/>}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+              <span style={{fontSize:28}}>🔀</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Fusionner des noms d'installateur</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>Remplace un nom par un autre dans tous les chantiers et rapports</div>
+              </div>
+            </div>
+
+            {mergeResult
+              ?<>
+                <div style={{background:"#10B98115",border:"1px solid #10B98140",borderRadius:12,padding:"14px",marginBottom:16,textAlign:"center"}}>
+                  <div style={{fontSize:20,marginBottom:8}}>✅</div>
+                  <div style={{fontWeight:700,color:"#10B981",marginBottom:4}}>Fusion effectuée !</div>
+                  <div style={{fontSize:12,color:"#7B96C8"}}>
+                    <span style={{color:"#EF4444"}}>{mergeResult.from}</span> → <span style={{color:"#10B981"}}>{mergeResult.to}</span>
+                  </div>
+                  <div style={{fontSize:12,color:"#4A6A9E",marginTop:6}}>
+                    {mergeResult.chCount} chantier{mergeResult.chCount>1?"s":""} · {mergeResult.rapCount} rapport{mergeResult.rapCount>1?"s":""} mis à jour
+                  </div>
+                </div>
+                <button onClick={()=>{setMergeModal(false);setMergeResult(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{width:"100%"})}>Fermer</button>
+              </>
+              :<>
+                <div style={{marginBottom:12}}>
+                  <L c="NOM À REMPLACER (l'ancien)"/>
+                  <select value={mergeFrom} onChange={e=>setMergeFrom(e.target.value)} style={{...INP(),appearance:"none"}}>
+                    <option value="">— Choisir le nom erroné —</option>
+                    {allTechNames.map(n=><option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div style={{marginBottom:20}}>
+                  <L c="REMPLACER PAR (le bon nom)"/>
+                  <select value={mergeTo} onChange={e=>setMergeTo(e.target.value)} style={{...INP(),appearance:"none"}}>
+                    <option value="">— Choisir le nom correct —</option>
+                    {allTechNames.filter(n=>n!==mergeFrom).map(n=><option key={n} value={n}>{n}</option>)}
+                    {users.filter(u=>u.role==="installateur"||u.role==="administrateur").map(u=>(
+                      allTechNames.includes(u.nom)?null:<option key={u.id} value={u.nom}>{u.nom} (profil)</option>
+                    ))}
+                  </select>
+                </div>
+                {mergeFrom&&mergeTo&&<div style={{background:"#F59E0B10",border:"1px solid #F59E0B30",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#F59E0B"}}>
+                  ⚠️ Toutes les occurrences de <strong>"{mergeFrom}"</strong> seront remplacées par <strong>"{mergeTo}"</strong>. Action irréversible.
+                </div>}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setMergeModal(false)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+                  <button onClick={doMerge} disabled={!mergeFrom||!mergeTo||mergeFrom===mergeTo}
+                    style={BTN(!mergeFrom||!mergeTo?"#1B2D4F":"linear-gradient(135deg,#F59E0B,#D97706)",{flex:2})}>
+                    🔀 Fusionner
+                  </button>
+                </div>
+              </>
+            }
+          </div></div>}
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8}}>
             <div>
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>👥 Équipe</h2>
               <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{users.length} utilisateur{users.length>1?"s":""}</p>
             </div>
-            <button onClick={()=>setModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel utilisateur</button>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setMergeModal(true);setMergeResult(null);setMergeFrom("");setMergeTo("");}} style={BTN("#1B2D4F",{padding:"9px 14px",fontSize:12,border:"1px solid #1B2D4F"})}>🔀 Fusionner noms</button>
+              <button onClick={()=>setModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel utilisateur</button>
+            </div>
           </div>
 
           {loading?<div style={{textAlign:"center",padding:40,color:"#4A6A9E"}}>Chargement…</div>
@@ -6531,7 +6627,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
                 }}/>}
                 {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} ventes={ventes} allProfiles={allProfiles}/>}
-                {view==="equipe"&&<EquipeTab isMobile={isMobile}/>}
+                {view==="equipe"&&<EquipeTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} setRapports={SR}/>}
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} allProfiles={allProfiles} installerName={installerName} fmt={fmt} role={role} goTo={goTo} BDG={BDG} setRapports={SR} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
 {view==="accueil"&&<>
