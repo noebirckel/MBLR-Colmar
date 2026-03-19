@@ -6396,6 +6396,31 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const SOBJ=React.useCallback(v=>{const n=typeof v==="function"?v(objectifs):v;setObjectifs(n);saveDB(null,null,null,null,null,null,null,n,null);},[objectifs]);
       const SR=React.useCallback(v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(null,null,null,null,null,null,null,null,n);},[rapports]);
 
+      // ── AUTO-PASSAGE PLANIFIÉ → EN COURS quand c'est le jour de l'installation ──
+      React.useEffect(()=>{
+        if(firstLoad.current||!chantiersPipeline.length)return;
+        const today=new Date().toLocaleDateString("fr-FR"); // format JJ/MM/AAAA
+        const toUpdate=chantiersPipeline.filter(ch=>
+          ch.statut==="planifie" &&
+          ch.date_installation &&
+          ch.date_installation===today
+        );
+        if(!toUpdate.length)return;
+        const updated=chantiersPipeline.map(ch=>
+          toUpdate.find(u=>u.id===ch.id)
+            ?{...ch,statut:"en_cours"}
+            :ch
+        );
+        setChantiersPipeline(updated);
+        saveDB(null,null,null,null,updated,null,null,null,null);
+        // Aussi mettre à jour dans Supabase directement
+        toUpdate.forEach(ch=>{
+          sb.from("chantiers").update({statut:"en_cours"}).eq("id",ch.id).then(({error})=>{
+            if(error)console.error("auto en_cours:",error.message);
+          });
+        });
+      },[chantiersPipeline.length]); // Se ré-exécute quand les chantiers se chargent
+
       // Sauvegarde forcée avant fermeture/actualisation
       React.useEffect(()=>{
         const handleUnload = ()=>{
