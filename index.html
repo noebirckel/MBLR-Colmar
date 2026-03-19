@@ -3504,6 +3504,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newModal,setNewModal]=useState(false);
+      const[payAcompteModal,setPayAcompteModal]=useState(null); // acompte id
+      const MODES_PAY=["Virement","Carte","Chèque","Espèces","Financement"];
       const[editPct,setEditPct]=useState("");
       const[newPct,setNewPct]=useState("");
       const[newForm,setNewForm]=useState({client:"",montant_vente:"",montant_acompte:"",date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_envoyer",notes:"",par:profile?.nom||""});
@@ -3582,6 +3584,36 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <button onClick={()=>{updateAcompte(editModal.id,editModal);setEditModal(null);}} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,padding:"12px"})}>💾 Enregistrer</button>
             </div>
           </div></div>}
+
+          {/* MODAL PAIEMENT ACOMPTE */}
+          {payAcompteModal&&(()=>{
+            const pa=acomptes.find(a=>a.id===payAcompteModal);
+            return pa?(
+              <div style={OVL} onClick={()=>setPayAcompteModal(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
+                <Handle/>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                  <div style={{width:40,height:40,borderRadius:12,background:"#10B98115",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>💳</div>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Mode de paiement</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{pa.client} — {fmt(pa.montant_acompte)}</div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  {MODES_PAY.map(m=>(
+                    <button key={m} onClick={()=>{
+                      updateAcompte(payAcompteModal,{statut:"paye",mode_paiement:m,date_paiement:new Date().toLocaleDateString("fr-FR")});
+                      setPayAcompteModal(null);
+                    }} style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"12px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}
+                      onMouseOver={e=>{e.currentTarget.style.borderColor="#10B981";e.currentTarget.style.background="#10B98110";}}
+                      onMouseOut={e=>{e.currentTarget.style.borderColor="#1B2D4F";e.currentTarget.style.background="#070D1A";}}>
+                      {m==="Virement"?"🏦":m==="Carte"?"💳":m==="Chèque"?"📝":m==="Espèces"?"💵":"🏛️"} {m}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={()=>setPayAcompteModal(null)} style={{width:"100%",background:"transparent",border:"1px solid #1B2D4F",borderRadius:10,color:"#4A6A9E",padding:"10px",cursor:"pointer",fontSize:13,fontWeight:600,marginTop:4,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+              </div></div>
+            ):null;
+          })()}
 
           {/* MODAL NOUVEL ACOMPTE MANUEL */}
           {newModal&&<div style={OVL} onClick={()=>setNewModal(false)}><div style={MBX} onClick={e=>e.stopPropagation()}>
@@ -3738,11 +3770,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                           {/* Bouton avancer / état final */}
                           <div style={{display:"flex",gap:6}}>
                             {nextKey&&cfg&&canEdit(role)
-                              ? <button onClick={()=>updateAcompte(a.id,{
-                                    statut:nextKey,
-                                    ...(nextKey==="envoye"?{date_envoi:new Date().toLocaleDateString("fr-FR")}:{}),
-                                    ...(nextKey==="paye"?{date_paiement:new Date().toLocaleDateString("fr-FR")}:{}),
-                                  })}
+                              ? <button onClick={()=>{
+                                    if(nextKey==="paye"){setPayAcompteModal(a.id);}
+                                    else{updateAcompte(a.id,{
+                                      statut:nextKey,
+                                      ...(nextKey==="envoye"?{date_envoi:new Date().toLocaleDateString("fr-FR")}:{}),
+                                    });}
+                                  }}
                                   style={{flex:1,background:cfg.grad,border:"none",borderRadius:9,color:"#FFF",
                                     padding:"9px 14px",cursor:"pointer",fontWeight:800,fontSize:13,
                                     fontFamily:'"Outfit",sans-serif',boxShadow:`0 3px 12px ${cfg.color}40`,
@@ -3751,7 +3785,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                                 </button>
                               : a.statut==="paye"
                                 ? <div style={{flex:1,background:"#10B98115",border:"1px solid #10B98140",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#10B981",fontWeight:700}}>
-                                    ✅ Encaissé le {a.date_paiement}
+                                    ✅ Encaissé le {a.date_paiement}{a.mode_paiement?` — ${a.mode_paiement}`:""}
                                   </div>
                                 : a.statut==="annule"
                                   ? <div style={{flex:1,background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,padding:"9px 12px",textAlign:"center",fontSize:13,color:"#EF4444",fontWeight:700}}>❌ Annulé</div>
