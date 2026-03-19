@@ -3784,10 +3784,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[form,setForm]=useState({nom:"",email:"",role:"installateur",pass:""});
       const[err,setErr]=useState("");
       const[saving,setSaving]=useState(false);
-      const[editUser,setEditUser]=useState(null);
+      const[editUser,setEditUser]=useState(null); // user complet en édition
+      const[editForm,setEditForm]=useState({nom:"",email:"",role:"installateur",newPass:""});
+      const[editErr,setEditErr]=useState("");
+      const[editSaving,setEditSaving]=useState(false);
 
-      const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...e});
-      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:9,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,...e});
+      const INP=(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"11px 13px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:9,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',...e});
       const L=({c})=><label style={{fontSize:11,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:5,letterSpacing:"0.05em"}}>{c}</label>;
 
       const loadUsers = async () => {
@@ -3813,10 +3816,39 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         setSaving(false);
       };
 
-      const updateRole = async (uid,role) => {
-        await sb.from("profiles").update({role}).eq("id",uid);
-        setUsers(p=>p.map(u=>u.id===uid?{...u,role}:u));
-        setEditUser(null);
+      const openEdit=(u)=>{
+        setEditUser(u);
+        setEditForm({nom:u.nom||"",email:u.email||"",role:u.role||"installateur",newPass:""});
+        setEditErr("");
+      };
+
+      const saveEdit = async () => {
+        if(!editForm.nom.trim()||!editForm.email.trim()){setEditErr("Nom et email requis.");return;}
+        setEditSaving(true); setEditErr("");
+        try{
+          // Mettre à jour le profil (nom + rôle)
+          const{error:pErr}=await sb.from("profiles").update({nom:editForm.nom.trim(),email:editForm.email.trim(),role:editForm.role}).eq("id",editUser.id);
+          if(pErr){setEditErr("Erreur profil : "+pErr.message);setEditSaving(false);return;}
+
+          // Changer le mot de passe via admin API si renseigné
+          if(editForm.newPass.trim()){
+            if(editForm.newPass.length<6){setEditErr("Mot de passe min. 6 caractères.");setEditSaving(false);return;}
+            // Utiliser updateUser (fonctionne seulement pour le compte connecté) ou admin
+            // Solution : appel à l'API admin via la fonction edge si dispo, sinon info
+            const{error:pwErr}=await sb.auth.admin?.updateUserById(editUser.id,{password:editForm.newPass}).catch(()=>({error:{message:"API admin non disponible"}}));
+            if(pwErr){
+              // Fallback : signaler mais continuer le reste
+              setEditErr("⚠️ Profil mis à jour, mais le mot de passe n'a pas pu être changé (nécessite les droits service_role). Nom et rôle sauvegardés.");
+              setUsers(p=>p.map(u=>u.id===editUser.id?{...u,nom:editForm.nom,email:editForm.email,role:editForm.role}:u));
+              setEditSaving(false);
+              return;
+            }
+          }
+
+          setUsers(p=>p.map(u=>u.id===editUser.id?{...u,nom:editForm.nom,email:editForm.email,role:editForm.role}:u));
+          setEditUser(null);
+        }catch(e){setEditErr("Erreur : "+e.message);}
+        setEditSaving(false);
       };
 
       const toggleActif = async (uid,actif) => {
@@ -3825,7 +3857,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       };
 
       const OVL={position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"};
-      const MBX=isMobile?{background:"#0D1828",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"}:{background:"#0D1828",borderRadius:16,padding:24,width:420,maxWidth:"95vw",border:"1px solid #1B2D4F"};
+      const MBX=isMobile?{background:"#0D1828",borderRadius:"20px 20px 0 0",padding:"8px 16px 32px",width:"100%",border:"1px solid #1B2D4F",maxHeight:"92vh",overflowY:"auto"}:{background:"#0D1828",borderRadius:16,padding:24,width:440,maxWidth:"95vw",border:"1px solid #1B2D4F",maxHeight:"90vh",overflowY:"auto"};
 
       return(
         <div>
@@ -3858,20 +3890,51 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div></div>}
 
-          {/* Modal changement de rôle */}
-          {editUser&&<div style={OVL} onClick={()=>setEditUser(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
+          {/* Modal édition profil */}
+          {editUser&&<div style={OVL} onClick={()=>setEditUser(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
             {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"8px auto 16px"}}/>}
-            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:15}}>🔄 Changer le rôle</h3>
-            <p style={{color:"#4A6A9E",fontSize:13,marginBottom:16}}>{editUser.nom}</p>
-            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-              {Object.entries(ROLES).map(([k,r])=>(
-                <button key={k} onClick={()=>updateRole(editUser.id,k)} style={{background:editUser.role===k?r.bg:"#070D1A",border:`2px solid ${editUser.role===k?r.color:"#1B2D4F"}`,borderRadius:10,color:editUser.role===k?r.color:"#7B96C8",padding:"11px 14px",cursor:"pointer",fontWeight:700,fontSize:13,textAlign:"left",display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>{r.icon}</span><span>{r.label}</span>
-                  {editUser.role===k&&<span style={{marginLeft:"auto",fontSize:11}}>✓ Actuel</span>}
-                </button>
-              ))}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+              <div style={{width:44,height:44,borderRadius:12,background:(ROLES[editForm.role]||ROLES.installateur).bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>
+                {(ROLES[editForm.role]||ROLES.installateur).icon}
+              </div>
+              <div>
+                <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF"}}>Modifier le profil</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{editUser.email}</div>
+              </div>
             </div>
-            <button onClick={()=>setEditUser(null)} style={BTN("#1B2D4F",{width:"100%"})}>Fermer</button>
+
+            <div style={{marginBottom:12}}><L c="NOM COMPLET"/>
+              <input value={editForm.nom} onChange={e=>setEditForm(p=>({...p,nom:e.target.value}))} placeholder="Nom complet" style={INP()}/>
+            </div>
+            <div style={{marginBottom:12}}><L c="ADRESSE EMAIL"/>
+              <input type="email" value={editForm.email} onChange={e=>setEditForm(p=>({...p,email:e.target.value}))} placeholder="email@societe.fr" style={INP()}/>
+            </div>
+            <div style={{marginBottom:16}}><L c="NOUVEAU MOT DE PASSE (optionnel)"/>
+              <input type="password" value={editForm.newPass} onChange={e=>setEditForm(p=>({...p,newPass:e.target.value}))} placeholder="Laisser vide pour ne pas changer" style={INP()}/>
+              <div style={{fontSize:10,color:"#2E4D82",marginTop:4}}>⚠️ Nécessite les droits service_role sur Supabase</div>
+            </div>
+
+            <div style={{marginBottom:18}}><L c="RÔLE"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {Object.entries(ROLES).map(([k,r])=>(
+                  <button key={k} onClick={()=>setEditForm(p=>({...p,role:k}))}
+                    style={{background:editForm.role===k?r.bg:"#070D1A",border:`2px solid ${editForm.role===k?r.color:"#1B2D4F"}`,borderRadius:10,color:editForm.role===k?r.color:"#7B96C8",padding:"10px 8px",cursor:"pointer",fontWeight:700,fontSize:12,textAlign:"left",display:"flex",alignItems:"center",gap:6,fontFamily:'"Outfit",sans-serif'}}>
+                    <span style={{fontSize:16}}>{r.icon}</span><span>{r.label}</span>
+                    {editForm.role===k&&<span style={{marginLeft:"auto",fontSize:10}}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {editErr&&<div style={{background:editErr.startsWith("⚠️")?"#F59E0B18":"#EF444418",border:`1px solid ${editErr.startsWith("⚠️")?"#F59E0B40":"#EF444440"}`,borderRadius:8,padding:"9px 12px",marginBottom:12,color:editErr.startsWith("⚠️")?"#F59E0B":"#EF4444",fontSize:12}}>{editErr}</div>}
+
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setEditUser(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
+              <button onClick={saveEdit} disabled={editSaving}
+                style={BTN(editSaving?"#1B2D4F":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2})}>
+                {editSaving?"Sauvegarde…":"💾 Enregistrer"}
+              </button>
+            </div>
           </div></div>}
 
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
@@ -3888,10 +3951,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 const r=ROLES[u.role]||ROLES.installateur;
                 return(
                   <div key={u.id} style={{background:u.actif?"#0D1828":"#141E2D",borderRadius:12,border:`1px solid ${u.actif?r.color+"40":"#1B2D4F"}`,padding:"14px 16px",opacity:u.actif?1:0.6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                      <div>
-                        <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:4}}>{u.nom}</div>
-                        <div style={{fontSize:12,color:"#4A6A9E"}}>{u.email}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:3}}>{u.nom}</div>
+                        <div style={{fontSize:12,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.email}</div>
                       </div>
                       <span style={{background:r.bg,color:r.color,padding:"3px 9px",borderRadius:20,fontSize:10,fontWeight:700,flexShrink:0,marginLeft:8}}>{r.icon} {r.label}</span>
                     </div>
@@ -3899,8 +3962,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       Créé le {new Date(u.created_at).toLocaleDateString("fr-FR")} · {u.actif?"✅ Actif":"⛔ Désactivé"}
                     </div>
                     <div style={{display:"flex",gap:6}}>
-                      <button onClick={()=>setEditUser(u)} style={BTN("#1B2D4F",{flex:1,fontSize:12})}>🔄 Rôle</button>
-                      <button onClick={()=>toggleActif(u.id,u.actif)} style={{background:u.actif?"#EF444415":"#10B98115",border:`1px solid ${u.actif?"#EF444440":"#10B98140"}`,borderRadius:9,color:u.actif?"#EF4444":"#10B981",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,flex:1}}>
+                      <button onClick={()=>openEdit(u)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,fontSize:12})}>✏️ Modifier</button>
+                      <button onClick={()=>toggleActif(u.id,u.actif)} style={{background:u.actif?"#EF444415":"#10B98115",border:`1px solid ${u.actif?"#EF444440":"#10B98140"}`,borderRadius:9,color:u.actif?"#EF4444":"#10B981",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:12,flex:1,fontFamily:'"Outfit",sans-serif'}}>
                         {u.actif?"Désactiver":"Réactiver"}
                       </button>
                     </div>
