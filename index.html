@@ -6195,7 +6195,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
       const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",perf_installateurs:"Perf. Installateurs"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
