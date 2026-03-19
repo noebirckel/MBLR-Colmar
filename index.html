@@ -3022,10 +3022,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════════
     // ONGLET LISTE CLIENTS
     // ══════════════════════════════════════════
-    function ClientsTab({isMobile, ventes, chantiers, savTickets, rapports, acomptes, fmt, role}) {
+    function ClientsTab({isMobile, ventes, chantiers, savTickets, rapports, acomptes, fmt, role, goTo}) {
       const[search,setSearch]=useState("");
-      const[selected,setSelected]=useState(null); // nom client sélectionné
+      const[selected,setSelected]=useState(null);
       const[lightbox,setLightbox]=useState(null);
+      const[rapportDetail,setRapportDetail]=useState(null); // rapport complet à afficher
+
+      const ETAT_FACT={
+        a_facturer:{label:"En attente",color:"#EF4444",icon:"🔴"},
+        facture:{label:"Facturé",color:"#3B82F6",icon:"📄"},
+        paye:{label:"Payé",color:"#10B981",icon:"✅"},
+      };
 
       // Regrouper tous les clients uniques depuis ventes + chantiers
       const allClients=useMemo(()=>{
@@ -3047,28 +3054,83 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         const cSav=savTickets.filter(t=>norm(t.client)===nNom);
         const cRapports=rapports.filter(r=>norm(r.chantier_nom)===nNom);
         const cAcomptes=acomptes.filter(a=>norm(a.client)===nNom);
+        const cFactures=cChantiers.filter(ch=>ch.statut==="termine"&&ch.facture);
         const cProblemes=cChantiers.flatMap(ch=>(ch.problemes_admin||[]).map(pb=>({...pb,chantier:ch.client,date_fin:ch.date_fin})));
         const allPhotos=[
           ...cVentes.flatMap(v=>(v.photos_vente||[]).map(url=>({url,label:"Photo visite — "+v.client,date:v.date||""}))),
           ...cChantiers.flatMap(ch=>(ch.photos||[]).map(url=>({url,label:"Chantier — "+(ch.date_fin||ch.date_installation||""),date:ch.date_fin||""}))),
         ];
         const caTot=cVentes.reduce((s,v)=>s+Number(v.prix_ht||0),0);
-        return{cVentes,cChantiers,cSav,cRapports,cAcomptes,cProblemes,allPhotos,caTot};
+        return{cVentes,cChantiers,cSav,cRapports,cAcomptes,cFactures,cProblemes,allPhotos,caTot};
       };
 
       const sel=selected?getClientData(selected):null;
 
       const INP=(e={})=>({background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",outline:"none",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
-      const Section=({icon,title,count,children})=>count>0?<div style={{background:"#070D1A",borderRadius:12,border:"1px solid #1B2D4F",marginBottom:12,overflow:"hidden"}}>
+
+      const SectionHeader=({icon,title,count,linkLabel,onLink})=>(
         <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #1B2D4F"}}>
           <span style={{fontSize:15}}>{icon}</span>
           <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{title}</span>
           <span style={{marginLeft:"auto",background:"#1B2D4F",color:"#7B96C8",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 7px"}}>{count}</span>
+          {onLink&&<button onClick={onLink} style={{background:"rgba(59,130,246,0.1)",border:"1px solid #3B82F640",borderRadius:8,color:"#60A5FA",padding:"3px 9px",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:'"Outfit",sans-serif',marginLeft:6}}>
+            {linkLabel||"Voir →"}
+          </button>}
         </div>
+      );
+
+      const Section=({icon,title,count,children,linkLabel,onLink})=>count>0?<div style={{background:"#070D1A",borderRadius:12,border:"1px solid #1B2D4F",marginBottom:12,overflow:"hidden"}}>
+        <SectionHeader icon={icon} title={title} count={count} linkLabel={linkLabel} onLink={onLink}/>
         <div style={{padding:"10px 14px"}}>{children}</div>
       </div>:null;
 
-      // Lightbox
+      // Rapport detail modal
+      if(rapportDetail)return(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+            <button onClick={()=>setRapportDetail(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour client</button>
+            <div>
+              <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#F0F6FF"}}>📋 Rapport — {rapportDetail.chantier_nom||rapportDetail.technicien}</h2>
+              <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{rapportDetail.date} · 👤 {rapportDetail.technicien||"—"}</div>
+            </div>
+          </div>
+          {(()=>{
+            const ETAT_R={ok:{label:"Installation OK",color:"#10B981",icon:"✅"},a_revoir:{label:"À revoir",color:"#F59E0B",icon:"⚠️"},urgence:{label:"Urgence",color:"#EF4444",icon:"🚨"}};
+            const E=ETAT_R[rapportDetail.etat_final]||ETAT_R.ok;
+            return(<>
+              <div style={{background:"#0D1828",borderRadius:12,border:`1px solid ${E.color}30`,padding:"14px",marginBottom:12}}>
+                <span style={{background:E.color+"20",color:E.color,borderRadius:20,padding:"4px 12px",fontSize:13,fontWeight:700}}>{E.icon} {E.label}</span>
+              </div>
+              {rapportDetail.heure_debut&&rapportDetail.heure_fin&&<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase"}}>⏱️ Heures</div>
+                <div style={{fontSize:13,color:"#E8F0FF"}}>{rapportDetail.heure_debut} → {rapportDetail.heure_fin}</div>
+              </div>}
+              {rapportDetail.type_travaux?.length>0&&<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",marginBottom:8,textTransform:"uppercase"}}>🔧 Travaux réalisés</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{rapportDetail.type_travaux.map((t,i)=><span key={i} style={{background:"#1B2D4F",borderRadius:20,padding:"3px 10px",fontSize:12,color:"#A8C4E8"}}>{t}</span>)}</div>
+              </div>}
+              {rapportDetail.materiels_poses?.length>0&&<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",marginBottom:8,textTransform:"uppercase"}}>📦 Matériels posés</div>
+                {rapportDetail.materiels_poses.map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:12,color:"#E8F0FF"}}><span>{m.nom}</span><span style={{color:"#7B96C8"}}>{m.qty}×</span></div>)}
+              </div>}
+              {rapportDetail.observations&&<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase"}}>📝 Observations</div>
+                <div style={{fontSize:13,color:"#E8F0FF",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{rapportDetail.observations}</div>
+              </div>}
+              {rapportDetail.problemes&&<div style={{background:"#EF444408",borderRadius:12,border:"1px solid #EF444430",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#EF4444",marginBottom:6,textTransform:"uppercase"}}>⚠️ Problèmes signalés</div>
+                <div style={{fontSize:13,color:"#E8F0FF",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{rapportDetail.problemes}</div>
+              </div>}
+              {(rapportDetail.photos||[]).length>0&&<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",marginBottom:8,textTransform:"uppercase"}}>📸 Photos ({(rapportDetail.photos||[]).length})</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6}}>
+                  {(rapportDetail.photos||[]).map((url,i)=><img key={i} src={url} onClick={()=>setLightbox(url)} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,cursor:"zoom-in"}}/>)}
+                </div>
+              </div>}
+            </>);
+          })()}
+        </div>
+      );
       if(lightbox)return(
         <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,background:"#000000EE",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
           <img src={lightbox} style={{maxWidth:"95vw",maxHeight:"92vh",borderRadius:12,objectFit:"contain"}}/>
@@ -3087,12 +3149,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div>
 
-          {/* KPIs client */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:16}}>
             {[
               {v:sel.cVentes.length,l:"Ventes",i:"💰",c:"#10B981"},
               {v:sel.cChantiers.length,l:"Chantiers",i:"🔧",c:"#3B82F6"},
-              {v:sel.cSav.length,l:"Tickets SAV",i:"🛠️",c:sel.cSav.length>0?"#EF4444":"#4A6A9E"},
+              {v:sel.cSav.length,l:"SAV",i:"🛠️",c:sel.cSav.length>0?"#EF4444":"#4A6A9E"},
               {v:sel.cProblemes.length,l:"Incidents",i:"⚠️",c:sel.cProblemes.length>0?"#F59E0B":"#4A6A9E"},
             ].map(k=>(
               <div key={k.l} style={{background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F",padding:"12px",display:"flex",alignItems:"center",gap:10}}>
@@ -3102,21 +3163,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             ))}
           </div>
 
-          {/* Ventes */}
-          <Section icon="💰" title="Ventes" count={sel.cVentes.length}>
+          <Section icon="💰" title="Ventes" count={sel.cVentes.length} linkLabel="Onglet Ventes" onLink={()=>goTo("ventes")}>
             {sel.cVentes.map(v=>(
               <div key={v.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.description||"Vente"}</div>
-                  <div style={{fontSize:11,color:"#4A6A9E"}}>📅 {v.date} · 👤 {v.par||"—"}</div>
-                </div>
+                <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.description||"Vente"}</div><div style={{fontSize:11,color:"#4A6A9E"}}>📅 {v.date} · 👤 {v.par||"—"}</div></div>
                 <div style={{fontWeight:800,color:"#10B981",fontSize:14}}>{fmt(v.prix_ht)}</div>
               </div>
             ))}
           </Section>
 
-          {/* Chantiers */}
-          <Section icon="🔧" title="Chantiers" count={sel.cChantiers.length}>
+          <Section icon="🔧" title="Chantiers" count={sel.cChantiers.length} linkLabel="Onglet Chantier" onLink={()=>goTo("chantier")}>
             {sel.cChantiers.map(ch=>(
               <div key={ch.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
@@ -3128,8 +3184,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             ))}
           </Section>
 
-          {/* Acomptes */}
-          <Section icon="📄" title="Acomptes" count={sel.cAcomptes.length}>
+          <Section icon="🧾" title="Factures" count={sel.cFactures.length} linkLabel="Onglet Factures" onLink={()=>goTo("factures")}>
+            {sel.cFactures.map(ch=>{
+              const fact=ch.facture||{};
+              const E=ETAT_FACT[fact.statut||"a_facturer"]||ETAT_FACT.a_facturer;
+              return(
+                <div key={ch.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#4A6A9E"}}>Terminé le {ch.date_fin||"—"}</div>
+                    {fact.mode_paiement&&<div style={{fontSize:11,color:"#10B981"}}>💳 {fact.mode_paiement}</div>}
+                  </div>
+                  <span style={{background:E.color+"20",color:E.color,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>{E.icon} {E.label}</span>
+                </div>
+              );
+            })}
+          </Section>
+
+          <Section icon="📄" title="Acomptes" count={sel.cAcomptes.length} linkLabel="Onglet Acomptes" onLink={()=>goTo("administratif")}>
             {sel.cAcomptes.map(a=>(
               <div key={a.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
@@ -3144,8 +3215,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             ))}
           </Section>
 
-          {/* SAV */}
-          <Section icon="🛠️" title="Tickets SAV" count={sel.cSav.length}>
+          <Section icon="🛠️" title="Tickets SAV" count={sel.cSav.length} linkLabel="Onglet SAV" onLink={()=>goTo("sav")}>
             {sel.cSav.map(t=>(
               <div key={t.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
@@ -3158,36 +3228,35 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             ))}
           </Section>
 
-          {/* Incidents admin */}
           <Section icon="⚠️" title="Incidents signalés" count={sel.cProblemes.length}>
             {sel.cProblemes.map((pb,i)=>(
               <div key={i} style={{padding:"7px 8px",background:pb.type==="urgence"?"#EF444408":"#F59E0B08",border:`1px solid ${pb.type==="urgence"?"#EF444430":"#F59E0B20"}`,borderRadius:8,marginBottom:6}}>
                 <div style={{display:"flex",gap:6,alignItems:"flex-start"}}>
                   <span>{pb.type==="urgence"?"🚨":pb.type==="sav"?"🛠️":pb.type==="qualite"?"📋":"⚠️"}</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:12,color:"#E8F0FF"}}>{pb.desc}</div>
-                    <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{pb.date} · par {pb.par||"Admin"}</div>
-                  </div>
+                  <div style={{flex:1}}><div style={{fontSize:12,color:"#E8F0FF"}}>{pb.desc}</div><div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{pb.date} · par {pb.par||"Admin"}</div></div>
                 </div>
               </div>
             ))}
           </Section>
 
-          {/* Rapports */}
-          <Section icon="📋" title="Rapports d'intervention" count={sel.cRapports.length}>
+          <Section icon="📋" title="Rapports d'intervention" count={sel.cRapports.length} linkLabel="Onglet Rapports" onLink={()=>goTo("rapports")}>
             {sel.cRapports.map(r=>(
-              <div key={r.id} style={{padding:"8px 0",borderBottom:"1px solid #1B2D4F66"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{r.date}</div>
-                  <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:r.etat_final==="ok"?"#10B98120":r.etat_final==="urgence"?"#EF444420":"#F59E0B20",color:r.etat_final==="ok"?"#10B981":r.etat_final==="urgence"?"#EF4444":"#F59E0B"}}>{r.etat_final==="ok"?"✅ OK":r.etat_final==="urgence"?"🚨 Urgence":"⚠️ À revoir"}</span>
+              <button key={r.id} onClick={()=>setRapportDetail(r)}
+                style={{width:"100%",padding:"9px 0",borderBottom:"1px solid #1B2D4F66",textAlign:"left",background:"transparent",border:"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center"}}
+                onMouseOver={e=>e.currentTarget.style.background="#0A1628"}
+                onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{r.date} · 👤 {r.technicien||"—"}</div>
+                  {r.observations&&<div style={{fontSize:11,color:"#7B96C8",marginTop:2,fontStyle:"italic"}}>"{r.observations.slice(0,80)}{r.observations.length>80?"…":""}"</div>}
                 </div>
-                <div style={{fontSize:11,color:"#4A6A9E"}}>👤 {r.technicien||"—"}</div>
-                {r.observations&&<div style={{fontSize:11,color:"#7B96C8",marginTop:3,fontStyle:"italic"}}>"{r.observations.slice(0,100)}{r.observations.length>100?"…":""}"</div>}
-              </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
+                  <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:r.etat_final==="ok"?"#10B98120":r.etat_final==="urgence"?"#EF444420":"#F59E0B20",color:r.etat_final==="ok"?"#10B981":r.etat_final==="urgence"?"#EF4444":"#F59E0B"}}>{r.etat_final==="ok"?"✅":"⚠️"}</span>
+                  <span style={{color:"#3B82F6",fontSize:11}}>Voir →</span>
+                </div>
+              </button>
             ))}
           </Section>
 
-          {/* Photos */}
           {sel.allPhotos.length>0&&<div style={{background:"#070D1A",borderRadius:12,border:"1px solid #1B2D4F",overflow:"hidden",marginBottom:12}}>
             <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid #1B2D4F"}}>
               <span style={{fontSize:15}}>📸</span>
@@ -3206,7 +3275,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         </div>
       );
 
-      // VUE LISTE
+            // VUE LISTE
       return(
         <div>
           <div style={{marginBottom:16}}>
@@ -6730,7 +6799,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
-                {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role}/>}
+                {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
