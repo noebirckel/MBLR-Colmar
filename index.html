@@ -4435,6 +4435,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         par: profile?.nom||"",
         coords:null,
         photos_vente:[],
+        duree_chantier:"1j",
       });
 
       // viewMode: "list" | "stats" | "form"
@@ -4762,8 +4763,21 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               }
             </div>
 
-            {/* Description */}
+            {/* Durée du chantier */}
             <div style={{marginBottom:14}}>
+              <L c="DURÉE DU CHANTIER"/>
+              <div style={{display:"flex",gap:8}}>
+                {[["demi","🌅 Demi-journée"],["1j","☀️ 1 journée"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setForm(p=>({...p,duree_chantier:v}))}
+                    style={{flex:1,padding:"12px 8px",borderRadius:10,border:`2px solid ${form.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:form.duree_chantier===v?"rgba(59,130,246,0.12)":"#070D1A",color:form.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={{marginBottom:20}}>
               <L c="DESCRIPTION / NOTES"/>
               <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails du projet, conditions particulières…" style={{...INP(),height:90,resize:"none",lineHeight:1.6}}/>
             </div>
@@ -5844,7 +5858,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
                             {ch.vente_id&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔗 Depuis vente</div>}
                             <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
+                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}{ch.duree_chantier&&<span style={{background:ch.duree_chantier==="demi"?"#F59E0B20":"#3B82F620",color:ch.duree_chantier==="demi"?"#F59E0B":"#60A5FA",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>{ch.duree_chantier==="demi"?"½ j":"1 j"}</span>}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
                           </div>
                           <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
                         </div>
@@ -5930,7 +5944,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 const isToday=new Date().toLocaleDateString("fr-FR")===dayStr;
                 return<div key={day} style={{background:isToday?"#3B82F620":dayC.length>0?"#3B82F615":"#070D1A",borderRadius:6,minHeight:50,padding:"4px 5px",border:`1px solid ${isToday?"#3B82F6":dayC.length>0?"#3B82F630":"#0D1828"}`}}>
                   <div style={{fontSize:11,fontWeight:isToday?800:400,color:isToday?"#3B82F6":"#7B96C8",marginBottom:3}}>{day}</div>
-                  {dayC.map(ch=>{const S=STATUTS_CH[ch.statut];return<div key={ch.id} style={{background:S?.bg,borderRadius:4,padding:"2px 4px",marginBottom:2}}><div style={{fontSize:9,color:S?.color,fontWeight:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ch.client}</div></div>;})}
+                  {dayC.map(ch=>{const S=STATUTS_CH[ch.statut];return<div key={ch.id} style={{background:S?.bg,borderRadius:4,padding:"2px 4px",marginBottom:2}}><div style={{fontSize:9,color:S?.color,fontWeight:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{ch.client}{ch.duree_chantier==="demi"?" ½":"" }</div></div>;})}
                 </div>;
               })}
             </div>
@@ -5951,7 +5965,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     <div key={ch.id} style={{background:"#0D1828",borderRadius:12,border:"1px solid #10B98130",padding:"13px 15px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                         <div><div style={{fontWeight:800,fontSize:14}}>{ch.client}</div>{ch.technicien&&<div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>👤 {ch.technicien}</div>}</div>
-                        <div style={{textAlign:"right"}}>{ch.date_fin&&<div style={{fontSize:11,color:"#10B981",fontWeight:700}}>✅ {ch.date_fin}</div>}{ch.date_installation&&<div style={{fontSize:10,color:"#4A6A9E"}}>Prévu: {ch.date_installation}</div>}</div>
+                        <div style={{textAlign:"right"}}>{ch.date_fin&&<div style={{fontSize:11,color:"#10B981",fontWeight:700}}>✅ {ch.date_fin}</div>}{ch.date_installation&&<div style={{fontSize:10,color:"#4A6A9E"}}>Prévu: {ch.date_installation}</div>}{ch.duree_chantier&&<div style={{fontSize:9,fontWeight:800,color:ch.duree_chantier==="demi"?"#F59E0B":"#3B82F6",marginTop:2}}>{ch.duree_chantier==="demi"?"🌅 ½ j":"☀️ 1 j"}</div>}</div>
                       </div>
                       {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6,marginBottom:10}}>
                         {(ch.materiels||[]).map((m,i)=><span key={i} style={{background:"#070D1A",borderRadius:5,padding:"2px 7px",fontSize:10,color:"#7B96C8"}}>{m.qty}× {m.article}</span>)}
@@ -6807,7 +6821,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role}
                   onVenteSaved={v=>{
-                    SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:"",technicien:installerName||""},...p]);
+                    SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:"",technicien:installerName||"",duree_chantier:v.duree_chantier||"1j"},...p]);
                     SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
                   }}
                   onDeleteVente={async(id)=>{
