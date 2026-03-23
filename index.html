@@ -672,32 +672,32 @@
           {terminesBloques.length>0&&canEdit(role)&&(
             <div style={{marginBottom:16}}>
               <button onClick={()=>setShowBloquesList(p=>!p)}
-                style={{width:"100%",background:"linear-gradient(135deg,#EF444415,#EF444408)",
-                  border:"2px solid #EF444450",borderRadius:14,padding:"14px 18px",
+                style={{width:"100%",background:"#0D1828",
+                  border:"1px solid #2E4D82",borderRadius:14,padding:"13px 18px",
                   cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',
                   display:"flex",alignItems:"center",gap:14,transition:"all 0.2s"}}
-                onMouseOver={e=>e.currentTarget.style.borderColor="#EF4444"}
-                onMouseOut={e=>e.currentTarget.style.borderColor="#EF444450"}>
-                <div style={{width:48,height:48,borderRadius:12,background:"#EF444420",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🚫</div>
+                onMouseOver={e=>e.currentTarget.style.borderColor="#4A6A9E"}
+                onMouseOut={e=>e.currentTarget.style.borderColor="#2E4D82"}>
+                <div style={{width:44,height:44,borderRadius:12,background:"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⏸️</div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:800,color:"#EF4444",fontSize:15,marginBottom:3}}>
-                    {terminesBloques.length} intervention{terminesBloques.length>1?"s":""} en attente de validation
+                  <div style={{fontWeight:700,color:"#A8C4E8",fontSize:14,marginBottom:3}}>
+                    {terminesBloques.length} facturation{terminesBloques.length>1?"s":""} en attente de validation
                   </div>
-                  <div style={{fontSize:12,color:"#7B96C8",marginBottom:2}}>
-                    {totalBloques>0&&<span style={{color:"#F87171",fontWeight:700}}>{fmtE(totalBloques)} · </span>}
-                    Rapport problématique — décision requise avant facturation
+                  <div style={{fontSize:12,color:"#4A6A9E",marginBottom:2}}>
+                    {totalBloques>0&&<span style={{color:"#7B96C8",fontWeight:600}}>{fmtE(totalBloques)} · </span>}
+                    À valider avant mise en facturation
                   </div>
-                  <div style={{fontSize:10,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  <div style={{fontSize:10,color:"#2E4D82",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {terminesBloques.map(ch=>`${ch.client} (${ch.date_fin||"—"})`).join(" · ")}
                   </div>
                 </div>
                 <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
-                  <span style={{background:"#EF4444",color:"#fff",borderRadius:20,fontWeight:900,fontSize:14,padding:"3px 12px",minWidth:28,textAlign:"center"}}>{terminesBloques.length}</span>
-                  <span style={{fontSize:11,color:"#EF4444",fontWeight:600}}>{showBloquesList?"Masquer ▲":"Voir liste ▼"}</span>
+                  <span style={{background:"#1B2D4F",color:"#7B96C8",borderRadius:20,fontWeight:700,fontSize:13,padding:"3px 12px",minWidth:28,textAlign:"center"}}>{terminesBloques.length}</span>
+                  <span style={{fontSize:11,color:"#4A6A9E",fontWeight:600}}>{showBloquesList?"Masquer ▲":"Voir liste ▼"}</span>
                 </div>
               </button>
 
-              {showBloquesList&&<div style={{background:"#070D1A",border:"2px solid #EF444430",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
+              {showBloquesList&&<div style={{background:"#070D1A",border:"1px solid #1B2D4F",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
                 {terminesBloques.map((ch,i)=>(
                   <div key={ch.id} style={{padding:"13px 18px",borderBottom:i<terminesBloques.length-1?"1px solid #1B2D4F":"none",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                     <div style={{flex:1,minWidth:0}}>
@@ -707,10 +707,10 @@
                         {ch.technicien&&<span> · 👤 {ch.technicien}</span>}
                         {getMontant(ch)>0&&<span style={{color:"#10B981",marginLeft:6,fontWeight:700}}>· {fmtE(getMontant(ch))}</span>}
                       </div>
-                      {ch.facture?.raison&&<div style={{fontSize:11,color:"#F59E0B",marginTop:3}}>⚠️ {ch.facture.raison}</div>}
+                      {ch.facture?.raison&&<div style={{fontSize:11,color:"#7B96C8",marginTop:3}}>ℹ️ {ch.facture.raison}</div>}
                     </div>
                     <button onClick={()=>debloquerFacture(ch.id)}
-                      style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:9,color:"#fff",padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0,whiteSpace:"nowrap"}}>
+                      style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#fff",padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0,whiteSpace:"nowrap"}}>
                       ✅ Valider et facturer
                     </button>
                   </div>
