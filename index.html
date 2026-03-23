@@ -1151,7 +1151,7 @@
     // ══════════════════════════════════════════
     // ONGLET SUIVI COMMERCIAL
     // ══════════════════════════════════════════
-    function SuiviCommercialTab({isMobile, chantiers, setChantiers, profile, role}){
+    function SuiviCommercialTab({isMobile, chantiers, setChantiers, rapports, profile, role}){
       const GOOGLE_REVIEW = "https://g.page/r/CYKYMv6dsT55EBM/review";
       const ETATS = {
         a_appeler:   {label:"À appeler",      color:"#3B82F6", icon:"📞"},
@@ -1178,6 +1178,15 @@ L'équipe Ma Borne LR`;
       const [search, setSearch]     = useState("");
       const [showArchive, setShowArchive] = useState(false);
       const [confirmDel, setConfirmDel]  = useState(null);
+      const [alertModal, setAlertModal]  = useState(null); // {ch, rapport, problemes}
+
+      // Récupère les alertes d'un chantier (rapport à revoir/urgence + problèmes admin)
+      const getAlertes = (ch) => {
+        const rapport = (rapports||[]).find(r=>r.chantier_id===ch.id||r.chantier_id===String(ch.id));
+        const hasRapportAlert = rapport && (rapport.etat_final==="a_revoir"||rapport.etat_final==="urgence");
+        const problemes = ch.problemes_admin||[];
+        return { rapport: hasRapportAlert?rapport:null, problemes };
+      };
 
       // Chantiers terminés uniquement
       const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
@@ -1305,6 +1314,58 @@ const filteredActifs = actifs.filter(ch => {
 return(
 <div>
 
+  {/* Modal détail alerte chantier */}
+  {alertModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setAlertModal(null)}>
+    <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"22px",width:"100%",maxWidth:440,border:"1px solid #1B2D4F",maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+      {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+        <div style={{width:40,height:40,borderRadius:10,background:"#F59E0B15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⚠️</div>
+        <div>
+          <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Alertes — {alertModal.ch.client}</div>
+          <div style={{fontSize:11,color:"#4A6A9E"}}>Terminé le {alertModal.ch.date_fin||"—"}</div>
+        </div>
+      </div>
+
+      {/* Rapport problématique */}
+      {alertModal.rapport&&(()=>{
+        const r=alertModal.rapport;
+        const isUrgence=r.etat_final==="urgence";
+        return(
+          <div style={{background:isUrgence?"#EF444408":"#F59E0B08",border:`1px solid ${isUrgence?"#EF444430":"#F59E0B30"}`,borderRadius:12,padding:"14px",marginBottom:10}}>
+            <div style={{fontWeight:700,fontSize:13,color:isUrgence?"#EF4444":"#F59E0B",marginBottom:8}}>
+              {isUrgence?"🚨 Intervention urgente":"⚠️ Installation à revoir"} — Rapport du {r.date||"—"}
+            </div>
+            <div style={{fontSize:11,color:"#4A6A9E",marginBottom:4}}>👤 {r.technicien||"—"}</div>
+            {r.observations&&<div style={{marginBottom:6}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:3,textTransform:"uppercase"}}>Observations</div>
+              <div style={{fontSize:12,color:"#E8F0FF",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{r.observations}</div>
+            </div>}
+            {r.problemes&&<div>
+              <div style={{fontSize:10,fontWeight:700,color:"#EF4444",marginBottom:3,textTransform:"uppercase"}}>Problèmes signalés</div>
+              <div style={{fontSize:12,color:"#FCA5A5",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{r.problemes}</div>
+            </div>}
+          </div>
+        );
+      })()}
+
+      {/* Incidents admin */}
+      {alertModal.problemes.length>0&&<div>
+        <div style={{fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:8,textTransform:"uppercase"}}>Incidents signalés par l'admin</div>
+        {alertModal.problemes.map((pb,i)=>(
+          <div key={i} style={{background:pb.type==="urgence"?"#EF444408":"#F59E0B08",border:`1px solid ${pb.type==="urgence"?"#EF444430":"#F59E0B20"}`,borderRadius:9,padding:"9px 12px",marginBottom:6,display:"flex",gap:8,alignItems:"flex-start"}}>
+            <span style={{flexShrink:0}}>{pb.type==="urgence"?"🚨":pb.type==="sav"?"🛠️":pb.type==="qualite"?"📋":"⚠️"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,color:"#E8F0FF"}}>{pb.desc}</div>
+              <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{pb.date} · par {pb.par||"Admin"}</div>
+            </div>
+          </div>
+        ))}
+      </div>}
+
+      <button onClick={()=>setAlertModal(null)} style={{width:"100%",marginTop:14,background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",padding:"11px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Fermer</button>
+    </div>
+  </div>}
+
   {/* Modal confirmation suppression */}
   {confirmDel&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setConfirmDel(null)}>
     <div style={{background:"#0D1828",borderRadius:14,padding:24,width:"100%",maxWidth:380,border:"1px solid #EF444440"}} onClick={e=>e.stopPropagation()}>
@@ -1362,15 +1423,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 const suivi = ch.suivi_comm||{};
                 const etat  = suivi.etat||"a_appeler";
                 const E     = ETATS[etat]||ETATS.a_appeler;
+                const {rapport:alertRap, problemes:alertProbs} = getAlertes(ch);
+                const hasAlert = !!alertRap||alertProbs.length>0;
+                const isUrgence = alertRap?.etat_final==="urgence"||alertProbs.some(p=>p.type==="urgence");
                 return(
                   <div key={ch.id}
-                    style={{background:"#0D1828",borderRadius:13,border:"1px solid #1B2D4F",padding:"14px 18px",transition:"border-color 0.2s",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}
-                    onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
-                    onMouseOut={e=>e.currentTarget.style.borderColor="#1B2D4F"}>
+                    style={{background:"#0D1828",borderRadius:13,border:`1px solid ${hasAlert?isUrgence?"#EF444440":"#F59E0B40":"#1B2D4F"}`,padding:"14px 18px",transition:"border-color 0.2s",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}
+                    onMouseOver={e=>e.currentTarget.style.borderColor=hasAlert?isUrgence?"#EF4444":"#F59E0B":"#3B82F6"}
+                    onMouseOut={e=>e.currentTarget.style.borderColor=hasAlert?isUrgence?"#EF444440":"#F59E0B40":"#1B2D4F"}>
                     <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setSelected(ch.id)}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
                         <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{ch.client||"—"}</span>
                         <span style={{background:`${E.color}15`,color:E.color,border:`1px solid ${E.color}40`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>{E.icon} {E.label}</span>
+                        {/* Badge alerte cliquable */}
+                        {hasAlert&&<button onClick={e=>{e.stopPropagation();setAlertModal({ch,rapport:alertRap,problemes:alertProbs});}}
+                          style={{background:isUrgence?"#EF444415":"#F59E0B15",border:`1px solid ${isUrgence?"#EF444440":"#F59E0B40"}`,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,color:isUrgence?"#EF4444":"#F59E0B",cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                          {isUrgence?"🚨 Urgence":"⚠️ À revoir"} — voir détails
+                        </button>}
                       </div>
                       <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
                         {ch.date_fin&&<span>✅ Terminé le {ch.date_fin}</span>}
@@ -7126,7 +7195,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
-                {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
+                {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} profile={profile} role={role}/>}
 
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} savTickets={savTickets} role={role}/>}
 
