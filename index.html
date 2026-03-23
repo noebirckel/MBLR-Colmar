@@ -3441,7 +3441,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
           {/* Rapports problématiques sans SAV — migration anciens chantiers */}
           {(()=>{
-            const sansS av=rapports.filter(r=>{
+            const sansSav=rapports.filter(r=>{
               if(r.etat_final!=="a_revoir"&&r.etat_final!=="urgence") return false;
               // Pas de SAV déjà lié
               return !(savTickets||[]).some(t=>t.rapport_id===r.id||t.rapport_id===String(r.id));
