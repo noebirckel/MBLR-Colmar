@@ -423,7 +423,7 @@
     // ══════════════════════════════════════════
     // ONGLET FACTURES
     // ══════════════════════════════════════════
-    function FacturesTab({isMobile, chantiers, setChantiers, profile, role}){
+    function FacturesTab({isMobile, chantiers, setChantiers, ventes, profile, role, addNotif}){
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
         a_facturer: {label:"En attente",  color:"#EF4444", icon:"🔴"},
@@ -437,14 +437,40 @@
       const [detail, setDetail]   = useState(null);
       const [copied, setCopied]   = useState(false);
       const [delConf, setDelConf]   = useState(false);
-      const [payModal, setPayModal] = useState(null); // chantier id
+      const [payModal, setPayModal] = useState(null);
+      const [showBloquesList, setShowBloquesList] = useState(false);
 
-      const termines = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
+      // Chantiers terminés : on sépare bloqués des normaux
+      const terminesAll = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
+      const terminesBloques = terminesAll.filter(ch => ch.facture?.statut === "bloque");
+      const termines = terminesAll.filter(ch => ch.facture?.statut !== "bloque");
+
+      // Montant d'une facture bloquée = prix HT de la vente liée si dispo
+      const getMontant = ch => {
+        if(ch.facture?.montant) return Number(ch.facture.montant);
+        const v = (ventes||[]).find(v=>v.id===ch.vente_id);
+        return v ? Number(v.prix_ht||0) : 0;
+      };
+      const totalBloques = terminesBloques.reduce((s,ch)=>s+getMontant(ch),0);
+      const fmtE = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+
+      // Notification quand des factures bloquées existent
+      React.useEffect(()=>{
+        if(terminesBloques.length>0&&addNotif&&canEdit(role)){
+          addNotif("🚫","Facturations en attente",
+            `${terminesBloques.length} chantier${terminesBloques.length>1?"s":""} terminé${terminesBloques.length>1?"s":""} avec problème — facturation en attente de validation`,
+            "factures");
+        }
+      },[terminesBloques.length]);
 
       const updateFacture = (id, patch) => {
         setChantiers(p => p.map(ch =>
           ch.id === id ? {...ch, facture: {...(ch.facture||{}), ...patch}} : ch
         ));
+      };
+
+      const debloquerFacture = (id) => {
+        updateFacture(id, {statut:"a_facturer", raison:null, debloquer_par:profile?.nom||"", date_deblocage:new Date().toLocaleDateString("fr-FR")});
       };
 
       const filtered = termines.filter(ch => {
@@ -641,6 +667,57 @@
               </div>
             ))}
           </div>
+
+          {/* Bouton factures en attente de validation (bloquées) */}
+          {terminesBloques.length>0&&canEdit(role)&&(
+            <div style={{marginBottom:16}}>
+              <button onClick={()=>setShowBloquesList(p=>!p)}
+                style={{width:"100%",background:"linear-gradient(135deg,#EF444415,#EF444408)",
+                  border:"2px solid #EF444450",borderRadius:14,padding:"14px 18px",
+                  cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',
+                  display:"flex",alignItems:"center",gap:14,transition:"all 0.2s"}}
+                onMouseOver={e=>e.currentTarget.style.borderColor="#EF4444"}
+                onMouseOut={e=>e.currentTarget.style.borderColor="#EF444450"}>
+                <div style={{width:48,height:48,borderRadius:12,background:"#EF444420",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🚫</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:800,color:"#EF4444",fontSize:15,marginBottom:3}}>
+                    {terminesBloques.length} intervention{terminesBloques.length>1?"s":""} en attente de validation
+                  </div>
+                  <div style={{fontSize:12,color:"#7B96C8",marginBottom:2}}>
+                    {totalBloques>0&&<span style={{color:"#F87171",fontWeight:700}}>{fmtE(totalBloques)} · </span>}
+                    Rapport problématique — décision requise avant facturation
+                  </div>
+                  <div style={{fontSize:10,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {terminesBloques.map(ch=>`${ch.client} (${ch.date_fin||"—"})`).join(" · ")}
+                  </div>
+                </div>
+                <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+                  <span style={{background:"#EF4444",color:"#fff",borderRadius:20,fontWeight:900,fontSize:14,padding:"3px 12px",minWidth:28,textAlign:"center"}}>{terminesBloques.length}</span>
+                  <span style={{fontSize:11,color:"#EF4444",fontWeight:600}}>{showBloquesList?"Masquer ▲":"Voir liste ▼"}</span>
+                </div>
+              </button>
+
+              {showBloquesList&&<div style={{background:"#070D1A",border:"2px solid #EF444430",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
+                {terminesBloques.map((ch,i)=>(
+                  <div key={ch.id} style={{padding:"13px 18px",borderBottom:i<terminesBloques.length-1?"1px solid #1B2D4F":"none",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
+                      <div style={{fontSize:11,color:"#4A6A9E"}}>
+                        ✅ Terminé le <strong style={{color:"#E8F0FF"}}>{ch.date_fin||"—"}</strong>
+                        {ch.technicien&&<span> · 👤 {ch.technicien}</span>}
+                        {getMontant(ch)>0&&<span style={{color:"#10B981",marginLeft:6,fontWeight:700}}>· {fmtE(getMontant(ch))}</span>}
+                      </div>
+                      {ch.facture?.raison&&<div style={{fontSize:11,color:"#F59E0B",marginTop:3}}>⚠️ {ch.facture.raison}</div>}
+                    </div>
+                    <button onClick={()=>debloquerFacture(ch.id)}
+                      style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:9,color:"#fff",padding:"9px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0,whiteSpace:"nowrap"}}>
+                      ✅ Valider et facturer
+                    </button>
+                  </div>
+                ))}
+              </div>}
+            </div>
+          )}
 
           {/* Recherche */}
           <div style={{marginBottom:14}}>
@@ -1686,7 +1763,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
-    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, savTickets, fmt, objectifs, setObjectifs, role}) {
+    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, savTickets, fmt, objectifs, setObjectifs, role, addNotif}) {
       const[period,setPeriod]=useState(6); // nb de mois à afficher
 
       // Calculs CA par mois
@@ -1767,6 +1844,44 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <Card icon="🔧" label="Chantiers actifs" value={chantiers.filter(c=>c.statut!=="termine").length} sub={`${chantiers.filter(c=>c.statut==="termine").length} terminés`} color="#A855F7"/>
             <Card icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${Math.round(totalAcomptes>0?(totalPaye/totalAcomptes)*100:0)}% du total`} color="#F59E0B"/>
           </div>
+
+          {/* Bouton facturations bloquées — admin */}
+          {(()=>{
+            const bloques=chantiers.filter(ch=>ch.statut==="termine"&&ch.facture?.statut==="bloque");
+            if(!bloques.length||!["administrateur","secretaire"].includes(role)) return null;
+            const[showB,setShowB]=React.useState(false);
+            return(
+              <div style={{marginBottom:16}}>
+                <button onClick={()=>setShowB(p=>!p)}
+                  style={{width:"100%",background:"#EF444410",border:"2px solid #EF444440",borderRadius:14,padding:"14px 18px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:14,transition:"background 0.15s"}}
+                  onMouseOver={e=>e.currentTarget.style.background="#EF444418"}
+                  onMouseOut={e=>e.currentTarget.style.background="#EF444410"}>
+                  <div style={{width:44,height:44,borderRadius:12,background:"#EF444420",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🚫</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:800,color:"#EF4444",fontSize:15,marginBottom:2}}>
+                      {bloques.length} intervention{bloques.length>1?"s":""} en attente de validation
+                    </div>
+                    <div style={{fontSize:12,color:"#7B96C8"}}>Chantiers terminés avec problème — facturation bloquée jusqu'à validation</div>
+                  </div>
+                  <div style={{fontSize:11,color:"#EF4444",fontWeight:700,background:"#EF444420",borderRadius:20,padding:"3px 10px",flexShrink:0}}>
+                    {showB?"Masquer ▲":"Voir ▼"}
+                  </div>
+                </button>
+                {showB&&<div style={{background:"#070D1A",border:"2px solid #EF444430",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
+                  {bloques.map((ch,i)=>(
+                    <div key={ch.id} style={{padding:"10px 18px",borderBottom:i<bloques.length-1?"1px solid #1B2D4F":"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:13,color:"#F0F6FF"}}>{ch.client}</div>
+                        <div style={{fontSize:11,color:"#4A6A9E"}}>✅ {ch.date_fin||"—"} · 👤 {ch.technicien||"—"}</div>
+                        {ch.facture?.raison&&<div style={{fontSize:10,color:"#F59E0B"}}>⚠️ {ch.facture.raison}</div>}
+                      </div>
+                      <span style={{fontSize:10,color:"#4A6A9E",fontStyle:"italic"}}>→ Déblocage dans Factures</span>
+                    </div>
+                  ))}
+                </div>}
+              </div>
+            );
+          })()}
 
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
 
@@ -2544,25 +2659,22 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         const entry = {...form, id: form.id||Date.now()};
         setRapports(p => form.id ? p.map(r=>r.id===form.id?entry:r) : [entry,...p]);
 
-        // Si un chantier est lié, le passer en "terminé" et créer une entrée facture
+        // Si un chantier est lié, le passer en "terminé"
+        // Facturation auto UNIQUEMENT si rapport OK, sinon "bloque" (décision consciente admin/secrétaire)
         if(form.chantier_id){
+          const factureAuto = form.etat_final==="ok"
+            ? {statut:"a_facturer"}
+            : {statut:"bloque", raison:form.etat_final==="urgence"?"Intervention urgente signalée":"Intervention à revoir"};
           setChantiers(p=>p.map(ch=>{
             if(ch.id!==Number(form.chantier_id)&&ch.id!==form.chantier_id) return ch;
-            // Ne pas écraser si déjà terminé
             if(ch.statut==="termine") return ch;
-            return{
-              ...ch,
-              statut:"termine",
-              date_fin: form.date,
-              rapport: entry,
-              facture: ch.facture?.statut ? ch.facture : {statut:"a_facturer"},
-            };
+            return{...ch, statut:"termine", date_fin:form.date, rapport:entry, facture:ch.facture?.statut?ch.facture:factureAuto};
           }));
-          // Persister dans Supabase
+          const factureStatut = form.etat_final==="ok"
+            ? {statut:"a_facturer"}
+            : {statut:"bloque", raison:form.etat_final==="urgence"?"Intervention urgente signalée":"Intervention à revoir"};
           sb.from("chantiers").update({
-            statut:"termine",
-            date_fin:form.date,
-            facture:{statut:"a_facturer"},
+            statut:"termine", date_fin:form.date, facture:factureStatut,
           }).eq("id",form.chantier_id).then(({error})=>{
             if(error)console.error("auto-termine chantier:",error.message);
           });
@@ -2572,6 +2684,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Créer un chantier terminé depuis un rapport orphelin
       const creerChantierDepuisRapport = (r) => {
+        const factureAuto = r.etat_final==="ok"
+          ? {statut:"a_facturer"}
+          : {statut:"bloque", raison:r.etat_final==="urgence"?"Intervention urgente signalée":"Intervention à revoir"};
         const newCh = {
           id: Date.now(),
           client: r.chantier_nom||"",
@@ -2584,15 +2699,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           materiels: r.materiels_poses||[],
           cables: [],
           rapport: r,
-          facture: {statut:"a_facturer"},
+          facture: factureAuto,
           notes: "Créé automatiquement depuis rapport d'intervention",
           checklist: {},
           problemes_admin: [],
         };
         setChantiers(p=>[newCh,...p]);
-        // Lier le rapport au nouveau chantier
         setRapports(p=>p.map(rp=>rp.id===r.id?{...rp,chantier_id:newCh.id}:rp));
-        // Persister dans Supabase
         sb.from("chantiers").insert([{...newCh}]).then(({error})=>{
           if(error)console.error("create chantier from rapport:",error.message);
         });
@@ -6692,6 +6805,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const sc2=syncCfg[sync]||syncCfg.saved;
 
       // ── ACCUEIL COMPUTED ──────────────────────────────────
+      // Notification auto pour les facturations bloquées (admin/secrétaire uniquement)
+      React.useEffect(()=>{
+        if(!profile||!["administrateur","secretaire"].includes(profile.role)) return;
+        const bloques=chantiersPipeline.filter(ch=>ch.statut==="termine"&&ch.facture?.statut==="bloque");
+        if(!bloques.length) return;
+        addNotif("🚫","Facturations bloquées",
+          `${bloques.length} chantier${bloques.length>1?"s":""} terminé${bloques.length>1?"s":""} en attente de validation avant facturation`,
+          "factures");
+      },[chantiersPipeline.filter(ch=>ch.facture?.statut==="bloque").length,profile?.role]);
       const _now=new Date();
       const _hour=_now.getHours();
       const _greeting=_hour<12?"Bonjour":_hour<18?"Bon après-midi":"Bonsoir";
@@ -6996,7 +7118,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
+                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
@@ -7160,7 +7282,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   </>);
                 })()}
 
-                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} savTickets={savTickets} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
+                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} savTickets={savTickets} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role} addNotif={addNotif}/>}
                 {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role} onDeleteTicket={async(id)=>{
                   setSavTickets(p=>p.filter(t=>t.id!==id));
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
