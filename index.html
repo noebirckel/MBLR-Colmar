@@ -2269,13 +2269,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[editForm,setEditForm] = useState(null);
       const[delConf,setDelConf]   = useState(null);
       const[statutPop,setStatutPop] = useState(null);
-      const[tabView,setTabView]   = useState("tickets"); // tickets | contacts
+      const[tabView,setTabView]   = useState("tickets");
+      const[resolModal,setResolModal] = useState(null); // {ticket} — modal clôture SAV
+      const[resolForm,setResolForm]   = useState({par:"nous",borne_changee:false,deplacement:false});
+      const[causeModal,setCauseModal] = useState(null); // {ticket} — analyse cause admin
       const[contacts,setContacts] = useState(()=>{
         try{ const s=localStorage.getItem("sav_contacts"); return s?JSON.parse(s):DEFAULT_SAV_CONTACTS; }
         catch(e){ return DEFAULT_SAV_CONTACTS; }
       });
-      const[editContact,setEditContact] = useState(null);  // {id,marque,tel,site} en cours d'édition
+      const[editContact,setEditContact] = useState(null);
       const[newContact,setNewContact]   = useState(null);
+
+      const CAUSES={
+        marque:       {label:"Défaut marque",      color:"#8B5CF6",icon:"🏭",desc:"Problème d'origine constructeur"},
+        installation: {label:"Erreur installation",color:"#EF4444",icon:"🔧",desc:"Erreur lors de la pose"},
+        direction:    {label:"Décision interne",   color:"#F59E0B",icon:"🏢",desc:"Choix de l'entreprise"},
+        externe:      {label:"Cause externe",      color:"#3B82F6",icon:"🌐",desc:"Client, réseau, environnement"},
+      };
 
       // Persist contacts
       useEffect(()=>{
@@ -2297,7 +2307,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(STATUTS_RESOLUS.includes(statut)) patch.date_resolution = new Date().toLocaleDateString("fr-FR");
         setTickets(p=>p.map(t=>t.id===ticket.id?{...t,...patch}:t));
         setStatutPop(null);
-        // Si SAV résolu et lié à un chantier dont la facture est bloquée → débloquer
         if(STATUTS_RESOLUS.includes(statut)&&ticket.chantier_id&&setChantiers){
           setChantiers(p=>p.map(ch=>{
             if((ch.id!==ticket.chantier_id)&&(ch.id!==Number(ticket.chantier_id))) return ch;
@@ -2305,6 +2314,39 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             return{...ch,facture:{...ch.facture,statut:"a_facturer",raison:null,debloquer_par:`SAV résolu (${statut})`,date_deblocage:new Date().toLocaleDateString("fr-FR")}};
           }));
         }
+      };
+
+      // Clôturer un SAV avec le formulaire de résolution
+      const cloturerSAV = (ticket, form) => {
+        const statut = form.par==="marque" ? "regle_marque" : "regle_nous";
+        const patch = {
+          statut,
+          date_resolution: new Date().toLocaleDateString("fr-FR"),
+          resolu_par: profile?.nom||"",
+          borne_changee: form.borne_changee,
+          deplacement_effectue: form.deplacement,
+          modalite_resolution: form.par==="marque"?"Réglé par la marque":"Réglé par nous",
+        };
+        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,...patch}:t));
+        setResolModal(null);
+        if(ticket.chantier_id&&setChantiers){
+          setChantiers(p=>p.map(ch=>{
+            if((ch.id!==ticket.chantier_id)&&(ch.id!==Number(ticket.chantier_id))) return ch;
+            if(ch.facture?.statut!=="bloque") return ch;
+            return{...ch,facture:{...ch.facture,statut:"a_facturer",raison:null,debloquer_par:`SAV résolu`,date_deblocage:new Date().toLocaleDateString("fr-FR")}};
+          }));
+        }
+      };
+
+      // Réouvrir un SAV terminé
+      const reouvrir = (ticket) => {
+        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,statut:"ouvert",date_resolution:"",resolu_par:null,borne_changee:null,deplacement_effectue:null,cause_origine:null,cause_details:null,reouvert_le:new Date().toLocaleDateString("fr-FR"),reouvert_par:profile?.nom||""}:t));
+      };
+
+      // Enregistrer l'analyse de cause (admin)
+      const saveCause = (ticket, cause, details) => {
+        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,cause_origine:cause,cause_details:details,cause_par:profile?.nom||"",cause_date:new Date().toLocaleDateString("fr-FR")}:t));
+        setCauseModal(null);
       };
 
       const filtered = tickets
@@ -2334,6 +2376,95 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       return (
         <div>
+          {/* MODAL CLÔTURE SAV */}
+          {resolModal&&<div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setResolModal(null)}>
+            <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"22px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
+              {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                <div style={{width:40,height:40,borderRadius:10,background:"#10B98115",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>✅</div>
+                <div>
+                  <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Clôturer le SAV</div>
+                  <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{resolModal.client}</div>
+                </div>
+              </div>
+
+              {/* Réglé par */}
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Réglé par</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[["nous","✅ Réglé par nous","#10B981"],["marque","🏭 Réglé par la marque","#8B5CF6"]].map(([k,l,c])=>(
+                    <button key={k} onClick={()=>setResolForm(p=>({...p,par:k}))}
+                      style={{padding:"12px 8px",borderRadius:10,border:`2px solid ${resolForm.par===k?c:"#1B2D4F"}`,background:resolForm.par===k?c+"20":"#070D1A",color:resolForm.par===k?c:"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Questions */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+                {[["borne_changee","🔄 Borne changée"],["deplacement","🚗 Déplacement effectué"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setResolForm(p=>({...p,[k]:!p[k]}))}
+                    style={{padding:"12px 8px",borderRadius:10,border:`2px solid ${resolForm[k]?"#3B82F6":"#1B2D4F"}`,background:resolForm[k]?"#3B82F620":"#070D1A",color:resolForm[k]?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                    {l}
+                    <div style={{fontSize:10,marginTop:3,fontWeight:600}}>{resolForm[k]?"✓ Oui":"✗ Non"}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setResolModal(null)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                <button onClick={()=>cloturerSAV(resolModal,resolForm)}
+                  style={{flex:2,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,color:"#fff",padding:"11px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                  ✅ Clôturer le SAV
+                </button>
+              </div>
+            </div>
+          </div>}
+
+          {/* MODAL ANALYSE CAUSE (admin) */}
+          {causeModal&&(()=>{
+            const[causeVal,setCauseVal]=React.useState(causeModal.cause_origine||"");
+            const[causeDetails,setCauseDetails]=React.useState(causeModal.cause_details||"");
+            return(
+              <div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setCauseModal(null)}>
+                <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"22px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
+                  {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+                    <div style={{width:40,height:40,borderRadius:10,background:"#3B82F615",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🔍</div>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Analyse de la cause</div>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{causeModal.client}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                    {Object.entries(CAUSES).map(([k,c])=>(
+                      <button key={k} onClick={()=>setCauseVal(k)}
+                        style={{padding:"12px 8px",borderRadius:10,border:`2px solid ${causeVal===k?c.color:"#1B2D4F"}`,background:causeVal===k?c.color+"20":"#070D1A",color:causeVal===k?c.color:"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                        <div style={{fontSize:18,marginBottom:4}}>{c.icon}</div>
+                        <div>{c.label}</div>
+                        <div style={{fontSize:9,marginTop:2,opacity:0.7}}>{c.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{marginBottom:16}}>
+                    <label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:6,textTransform:"uppercase"}}>Détails / explication</label>
+                    <textarea value={causeDetails} onChange={e=>setCauseDetails(e.target.value)} rows={3}
+                      placeholder="Décrivez la cause précise du problème…"
+                      style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",width:"100%",boxSizing:"border-box",resize:"none",fontFamily:'"Outfit",sans-serif',fontSize:13,outline:"none"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setCauseModal(null)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                    <button onClick={()=>saveCause(causeModal,causeVal,causeDetails)} disabled={!causeVal}
+                      style={{flex:2,background:causeVal?`linear-gradient(135deg,${CAUSES[causeVal]?.color},${CAUSES[causeVal]?.color}CC)`:"#1B2D4F",border:"none",borderRadius:10,color:"#fff",padding:"11px",cursor:causeVal?"pointer":"default",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                      🔍 Enregistrer l'analyse
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* MODAL NOUVEAU */}
           {newForm&&(
             <div style={OVL} onClick={()=>setNewForm(null)}>
@@ -2419,85 +2550,146 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           {tabView==="stats"&&(()=>{
             const total=tickets.length;
             const resolus=tickets.filter(t=>STATUTS_RESOLUS.includes(t.statut)).length;
+            const actifs=tickets.filter(t=>!STATUTS_RESOLUS.includes(t.statut)).length;
             const txResol=total>0?Math.round((resolus/total)*100):0;
             const depuisRapport=tickets.filter(t=>t.origine==="rapport").length;
             const urgents=tickets.filter(t=>t.urgence).length;
+            const nbBornesChangees=tickets.filter(t=>t.borne_changee).length;
+            const nbDeplacements=tickets.filter(t=>t.deplacement_effectue).length;
+            const regleNous=tickets.filter(t=>t.statut==="regle_nous").length;
+            const regleMarque=tickets.filter(t=>t.statut==="regle_marque").length;
+            const avecCause=tickets.filter(t=>t.cause_origine).length;
 
             // Par marque
             const parMarque={};
-            tickets.forEach(t=>{const k=t.marque||"Non renseigné";if(!parMarque[k])parMarque[k]={nb:0,resolus:0};parMarque[k].nb++;if(STATUTS_RESOLUS.includes(t.statut))parMarque[k].resolus++;});
+            tickets.forEach(t=>{const k=t.marque||"Non renseigné";if(!parMarque[k])parMarque[k]={nb:0,resolus:0,bornes:0,depla:0};parMarque[k].nb++;if(STATUTS_RESOLUS.includes(t.statut))parMarque[k].resolus++;if(t.borne_changee)parMarque[k].bornes++;if(t.deplacement_effectue)parMarque[k].depla++;});
             const marques=Object.entries(parMarque).sort((a,b)=>b[1].nb-a[1].nb);
 
-            // Par technicien (via chantier lié)
+            // Par technicien
             const parTech={};
             tickets.forEach(t=>{
               const ch=t.chantier_id?(chantiers||[]).find(c=>c.id===t.chantier_id||c.id===Number(t.chantier_id)):null;
-              const tech=ch?.technicien||"Non lié";
-              if(!parTech[tech])parTech[tech]={nb:0,resolus:0};
+              const tech=ch?.technicien||t.par||"Non renseigné";
+              if(!parTech[tech])parTech[tech]={nb:0,resolus:0,urgents:0};
               parTech[tech].nb++;
               if(STATUTS_RESOLUS.includes(t.statut))parTech[tech].resolus++;
+              if(t.urgence)parTech[tech].urgents++;
             });
             const techs=Object.entries(parTech).sort((a,b)=>b[1].nb-a[1].nb);
 
-            const Bar=({val,max,color})=><div style={{flex:1,height:8,background:"#1B2D4F",borderRadius:4,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${max>0?Math.round((val/max)*100):0}%`,background:color,borderRadius:4,transition:"width 0.4s"}}/>
+            // Par cause
+            const parCause={};
+            tickets.filter(t=>t.cause_origine).forEach(t=>{const k=t.cause_origine;if(!parCause[k])parCause[k]=0;parCause[k]++;});
+
+            const Bar=({val,max,color})=><div style={{flex:1,height:6,background:"#1B2D4F",borderRadius:3,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${max>0?Math.round((val/max)*100):0}%`,background:color,borderRadius:3,transition:"width 0.4s"}}/>
             </div>;
 
             return(
               <div>
                 {/* KPIs globaux */}
-                <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:16}}>
                   {[
                     {v:total,l:"Total SAV",i:"🎫",c:"#3B82F6"},
-                    {v:resolus,l:"Résolus",i:"✅",c:"#10B981"},
                     {v:txResol+"%",l:"Taux résolution",i:"📈",c:txResol>=70?"#10B981":txResol>=40?"#F59E0B":"#EF4444"},
-                    {v:depuisRapport,l:"Depuis rapports",i:"📋",c:"#A855F7"},
+                    {v:nbDeplacements,l:"Déplacements",i:"🚗",c:"#F59E0B"},
+                    {v:nbBornesChangees,l:"Bornes changées",i:"🔄",c:"#60A5FA"},
                   ].map(k=>(
-                    <div key={k.l} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"14px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:20,marginBottom:4}}>{k.i}</div>
-                      <div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div>
+                    <div key={k.l} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"12px",textAlign:"center"}}>
+                      <div style={{fontSize:18,marginBottom:3}}>{k.i}</div>
+                      <div style={{fontSize:18,fontWeight:900,color:k.c}}>{k.v}</div>
                       <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
                     </div>
                   ))}
                 </div>
 
+                {/* Répartition résolution */}
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                  <h3 style={{margin:"0 0 12px",fontSize:13,fontWeight:800}}>📊 Répartition des clôtures</h3>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
+                    {[
+                      {v:regleNous,l:"Réglé par nous",c:"#10B981",i:"✅",pct:resolus>0?Math.round((regleNous/resolus)*100):0},
+                      {v:regleMarque,l:"Réglé par marque",c:"#8B5CF6",i:"🏭",pct:resolus>0?Math.round((regleMarque/resolus)*100):0},
+                      {v:depuisRapport,l:"Depuis rapports",c:"#A855F7",i:"📋",pct:total>0?Math.round((depuisRapport/total)*100):0},
+                      {v:urgents,l:"Urgences",c:"#EF4444",i:"🚨",pct:total>0?Math.round((urgents/total)*100):0},
+                    ].map(k=>(
+                      <div key={k.l} style={{background:"#070D1A",borderRadius:10,padding:"10px 12px",display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:16}}>{k.i}</span>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                            <span style={{fontSize:11,color:"#E8F0FF",fontWeight:600}}>{k.l}</span>
+                            <span style={{fontSize:11,fontWeight:800,color:k.c}}>{k.v} <span style={{fontSize:9,color:"#4A6A9E"}}>({k.pct}%)</span></span>
+                          </div>
+                          <Bar val={k.v} max={total} color={k.c}/>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Analyse causes */}
+                {Object.keys(parCause).length>0&&<div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <h3 style={{margin:0,fontSize:13,fontWeight:800}}>🔍 Causes identifiées</h3>
+                    <span style={{fontSize:10,color:"#4A6A9E"}}>{avecCause}/{resolus} SAV analysés</span>
+                  </div>
+                  {Object.entries(parCause).sort((a,b)=>b[1]-a[1]).map(([k,nb])=>{
+                    const C=CAUSES[k];
+                    return C?(
+                      <div key={k} style={{marginBottom:8}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                          <span style={{fontSize:12,fontWeight:700,color:C.color}}>{C.icon} {C.label}</span>
+                          <span style={{fontSize:11,color:"#4A6A9E",fontWeight:700}}>{nb} ({avecCause>0?Math.round((nb/avecCause)*100):0}%)</span>
+                        </div>
+                        <Bar val={nb} max={Math.max(...Object.values(parCause))} color={C.color}/>
+                      </div>
+                    ):null;
+                  })}
+                  {avecCause<resolus&&<div style={{fontSize:10,color:"#2E4D82",marginTop:8}}>⚠️ {resolus-avecCause} SAV résolus sans analyse de cause</div>}
+                </div>}
+
                 {/* Par marque */}
-                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:14}}>
-                  <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ SAV par marque de borne</h3>
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
+                  <h3 style={{margin:"0 0 12px",fontSize:13,fontWeight:800}}>⚡ Par marque de borne</h3>
                   {marques.length===0?<div style={{fontSize:12,color:"#2E4D82"}}>Aucune donnée</div>:
-                  marques.map(([marque,{nb,resolus}])=>(
-                    <div key={marque} style={{marginBottom:10}}>
+                  marques.map(([marque,d])=>(
+                    <div key={marque} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid #1B2D4F66"}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                         <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{marque}</span>
-                        <div style={{display:"flex",gap:8,fontSize:11}}>
-                          <span style={{color:"#4A6A9E"}}>{nb} ticket{nb>1?"s":""}</span>
-                          <span style={{color:"#10B981",fontWeight:700}}>{resolus} résolu{resolus>1?"s":""}</span>
+                        <div style={{display:"flex",gap:8,fontSize:10}}>
+                          <span style={{color:"#4A6A9E"}}>{d.nb} SAV</span>
+                          {d.bornes>0&&<span style={{color:"#60A5FA"}}>🔄 {d.bornes} changée{d.bornes>1?"s":""}</span>}
+                          {d.depla>0&&<span style={{color:"#F59E0B"}}>🚗 {d.depla}</span>}
                         </div>
                       </div>
                       <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <Bar val={nb} max={marques[0]?.[1]?.nb||1} color="#3B82F6"/>
+                        <span style={{fontSize:9,color:"#10B981",minWidth:30}}>{d.resolus}/{d.nb}</span>
+                        <Bar val={d.resolus} max={d.nb} color="#10B981"/>
+                        <span style={{fontSize:9,color:"#10B981"}}>{d.nb>0?Math.round((d.resolus/d.nb)*100):0}%</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Par technicien */}
-                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-                  <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>👤 SAV par installateur</h3>
+                {/* Par installateur */}
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px"}}>
+                  <h3 style={{margin:"0 0 12px",fontSize:13,fontWeight:800}}>👤 Par installateur</h3>
                   {techs.length===0?<div style={{fontSize:12,color:"#2E4D82"}}>Aucune donnée</div>:
-                  techs.map(([tech,{nb,resolus}])=>{
-                    const txR=nb>0?Math.round((resolus/nb)*100):0;
+                  techs.map(([tech,d])=>{
+                    const txR=d.nb>0?Math.round((d.resolus/d.nb)*100):0;
+                    const color=txR>=70?"#10B981":txR>=40?"#F59E0B":"#EF4444";
                     return(
-                      <div key={tech} style={{marginBottom:10}}>
+                      <div key={tech} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid #1B2D4F66"}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                           <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>🔧 {tech}</span>
-                          <div style={{display:"flex",gap:8,fontSize:11}}>
-                            <span style={{color:"#4A6A9E"}}>{nb} SAV</span>
-                            <span style={{color:txR>=70?"#10B981":txR>=40?"#F59E0B":"#EF4444",fontWeight:700}}>{txR}% résolus</span>
+                          <div style={{display:"flex",gap:8,fontSize:10}}>
+                            {d.urgents>0&&<span style={{color:"#EF4444"}}>🚨 {d.urgents} urgent{d.urgents>1?"s":""}</span>}
+                            <span style={{color,fontWeight:700}}>{txR}% résolus</span>
                           </div>
                         </div>
                         <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <Bar val={nb} max={techs[0]?.[1]?.nb||1} color={txR>=70?"#10B981":txR>=40?"#F59E0B":"#EF4444"}/>
+                          <span style={{fontSize:9,color:"#4A6A9E",minWidth:30}}>{d.resolus}/{d.nb}</span>
+                          <Bar val={d.resolus} max={d.nb} color={color}/>
                         </div>
                       </div>
                     );
@@ -2747,15 +2939,46 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             📅 {t.date_ouverture}{t.par&&<span> · {t.par}</span>}
                           </div>
                           {isResolu&&t.date_resolution&&
-                            <div style={{fontSize:10,color:"#10B981"}}>✅ Résolu le {t.date_resolution}</div>}
-                          <div style={{display:"flex",gap:6,marginTop:4}}>
+                            <div style={{fontSize:10,color:"#10B981"}}>✅ Résolu le {t.date_resolution}{t.resolu_par?` · ${t.resolu_par}`:""}</div>}
+                          {/* Résumé résolution */}
+                          {isResolu&&(t.borne_changee!==null||t.deplacement_effectue!==null)&&<div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                            {t.borne_changee&&<span style={{background:"#60A5FA15",color:"#60A5FA",border:"1px solid #60A5FA30",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:700}}>🔄 Borne changée</span>}
+                            {t.deplacement_effectue&&<span style={{background:"#F59E0B15",color:"#F59E0B",border:"1px solid #F59E0B30",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:700}}>🚗 Déplacement</span>}
+                          </div>}
+                          {/* Cause origine */}
+                          {t.cause_origine&&CAUSES[t.cause_origine]&&<span style={{background:CAUSES[t.cause_origine].color+"15",color:CAUSES[t.cause_origine].color,border:`1px solid ${CAUSES[t.cause_origine].color}30`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>
+                            {CAUSES[t.cause_origine].icon} {CAUSES[t.cause_origine].label}
+                          </span>}
+                          {t.reouvert_le&&<div style={{fontSize:9,color:"#F59E0B"}}>🔁 Réouvert le {t.reouvert_le}</div>}
+                          <div style={{display:"flex",gap:5,marginTop:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                            {/* Clôturer — installateur + admin + secrétaire, SAV actif uniquement */}
+                            {!isResolu&&["administrateur","installateur","secretaire"].includes(role)&&(
+                              <button onClick={()=>{setResolModal(t);setResolForm({par:"nous",borne_changee:false,deplacement:false});}}
+                                style={{background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,color:"#fff",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                                ✅ Clôturer
+                              </button>
+                            )}
+                            {/* Réouvrir — SAV résolu : admin + secrétaire + installateur + commercial */}
+                            {isResolu&&["administrateur","secretaire","installateur","commercial"].includes(role)&&(
+                              <button onClick={()=>reouvrir(t)}
+                                style={{background:"#F59E0B15",border:"1px solid #F59E0B40",borderRadius:8,color:"#F59E0B",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                                🔁 Réouvrir
+                              </button>
+                            )}
+                            {/* Analyser cause — admin uniquement, SAV résolu */}
+                            {isResolu&&role==="administrateur"&&(
+                              <button onClick={()=>setCauseModal(t)}
+                                style={{background:t.cause_origine?"#3B82F620":"#1B2D4F",border:`1px solid ${t.cause_origine?"#3B82F640":"#1B2D4F"}`,borderRadius:8,color:t.cause_origine?"#60A5FA":"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                                🔍 {t.cause_origine?"Cause":"Analyser"}
+                              </button>
+                            )}
                             <button onClick={()=>setEditForm({...t})} style={{
                               background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,
-                              color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,
+                              color:"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:12,
                               fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✏️</button>
                             <button onClick={()=>setDelConf(t)} style={{
                               background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",
-                              borderRadius:8,color:"#EF4444",padding:"6px 12px",cursor:"pointer",
+                              borderRadius:8,color:"#EF4444",padding:"6px 10px",cursor:"pointer",
                               fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️</button>
                           </div>
                         </div>
