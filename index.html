@@ -5858,9 +5858,20 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
                             {ch.vente_id&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔗 Depuis vente</div>}
                             <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}{ch.duree_chantier&&<span style={{background:ch.duree_chantier==="demi"?"#F59E0B20":"#3B82F620",color:ch.duree_chantier==="demi"?"#F59E0B":"#60A5FA",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px"}}>{ch.duree_chantier==="demi"?"½ j":"1 j"}</span>}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
+                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
                           </div>
-                          <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
+                          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0,marginLeft:8}}>
+                            <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700}}>{S.icon} {S.label}</span>
+                            {ch.duree_chantier&&<span style={{
+                              background:ch.duree_chantier==="demi"?"#F59E0B":"#3B82F6",
+                              color:"#fff",
+                              borderRadius:8,
+                              fontSize:11,
+                              fontWeight:800,
+                              padding:"4px 9px",
+                              letterSpacing:"0.02em",
+                            }}>{ch.duree_chantier==="demi"?"🌅 ½ journée":"☀️ 1 journée"}</span>}
+                          </div>
                         </div>
                         {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{background:"#070D1A",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
                           {(ch.materiels||[]).map((m,i)=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:ins?"#EF4444":"#7B96C8"}}><span>{m.article}</span><span style={{fontWeight:600}}>{m.qty}×{ins&&<span style={{fontSize:10}}> ⚠️{stockDispo(Number(m.id))}</span>}</span></div>;})}
