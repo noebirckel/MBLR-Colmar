@@ -3439,6 +3439,78 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             );
           })()}
 
+          {/* Rapports problématiques sans SAV — migration anciens chantiers */}
+          {(()=>{
+            const sansS av=rapports.filter(r=>{
+              if(r.etat_final!=="a_revoir"&&r.etat_final!=="urgence") return false;
+              // Pas de SAV déjà lié
+              return !(savTickets||[]).some(t=>t.rapport_id===r.id||t.rapport_id===String(r.id));
+            });
+            if(!sansSav.length) return null;
+            const creerSAVDepuisRapport=(r)=>{
+              const ch=chantiers.find(c=>c.id===r.chantier_id||c.id===Number(r.chantier_id));
+              const vente=null; // pas de ventes passées en prop ici
+              const ticket={
+                id:Date.now()+Math.floor(Math.random()*1000),
+                client:r.chantier_nom||"",
+                num_serie:"",
+                marque:ch?.marque||"",
+                modele:"",
+                description:r.etat_final==="urgence"
+                  ?`🚨 URGENCE — ${r.problemes||r.observations||"Intervention urgente signalée dans le rapport"}`
+                  :`⚠️ À REVOIR — ${r.problemes||r.observations||"Installation à revoir selon le rapport"}`,
+                statut:"ouvert",
+                notes:`Migré depuis rapport du ${r.date}. Technicien : ${r.technicien}`,
+                date_ouverture:r.date||new Date().toLocaleDateString("fr-FR"),
+                date_resolution:"",
+                par:r.technicien||"",
+                rapport_id:r.id,
+                chantier_id:r.chantier_id||null,
+                origine:"rapport",
+                urgence:r.etat_final==="urgence",
+              };
+              if(setSavTickets) setSavTickets(p=>[ticket,...p]);
+            };
+            const creerTous=()=>sansSav.forEach(r=>creerSAVDepuisRapport(r));
+            return(
+              <div style={{background:"#A855F708",border:"1px solid #A855F730",borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:18}}>📋</span>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:13,color:"#A855F7"}}>{sansSav.length} rapport{sansSav.length>1?"s":""} problématique{sansSav.length>1?"s":""} sans ticket SAV</div>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginTop:1}}>Ces anciens rapports "à revoir" ou "urgence" n'ont pas de ticket SAV. Créez-les en un clic.</div>
+                    </div>
+                  </div>
+                  <button onClick={creerTous}
+                    style={{background:"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:9,color:"#fff",padding:"8px 16px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0,whiteSpace:"nowrap"}}>
+                    ✅ Créer tous les SAV manquants
+                  </button>
+                </div>
+                {sansSav.map(r=>{
+                  const ETAT_R={ok:{l:"OK",c:"#10B981"},a_revoir:{l:"À revoir",c:"#F59E0B"},urgence:{l:"Urgence",c:"#EF4444"}};
+                  const E=ETAT_R[r.etat_final]||ETAT_R.ok;
+                  return(
+                    <div key={r.id} style={{background:"#070D1A",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:2}}>
+                          <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{r.chantier_nom||"—"}</span>
+                          <span style={{background:E.c+"20",color:E.c,borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{r.etat_final==="urgence"?"🚨 Urgence":"⚠️ À revoir"}</span>
+                        </div>
+                        <div style={{fontSize:11,color:"#4A6A9E"}}>👤 {r.technicien||"—"} · 📅 {r.date||"—"}</div>
+                        {(r.problemes||r.observations)&&<div style={{fontSize:11,color:"#7B96C8",marginTop:2,fontStyle:"italic"}}>"{(r.problemes||r.observations||"").slice(0,60)}…"</div>}
+                      </div>
+                      <button onClick={()=>creerSAVDepuisRapport(r)}
+                        style={{background:"#A855F720",border:"1px solid #A855F740",borderRadius:9,color:"#A855F7",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>
+                        🎫 Créer le SAV
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* Liste */}
           {filtered.length===0
             ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
