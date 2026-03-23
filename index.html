@@ -787,6 +787,13 @@
                               ← {STATUTS_FACT[prevKey].label}
                             </button>
                           )}
+                          {/* Bouton Bloquer — visible sur les chantiers en attente uniquement */}
+                          {etat==="a_facturer"&&canEdit(role)&&(
+                            <button onClick={e=>{e.stopPropagation();updateFacture(ch.id,{statut:"bloque",raison:"Bloqué manuellement",date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}}
+                              style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:9,color:"#EF4444",padding:"9px 10px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',flexShrink:0}} title="Bloquer la facturation">
+                              🚫
+                            </button>
+                          )}
                           <button onClick={e=>{e.stopPropagation();if(nextKey==="paye"){setPayModal(ch.id);}else{updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}}}
                             style={{flex:1,background:cfg.grad,border:"none",borderRadius:9,color:"#FFF",
                               padding:"9px 14px",cursor:"pointer",fontWeight:800,fontSize:13,
@@ -1849,33 +1856,43 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           {(()=>{
             const bloques=chantiers.filter(ch=>ch.statut==="termine"&&ch.facture?.statut==="bloque");
             if(!bloques.length||!["administrateur","secretaire"].includes(role)) return null;
+            const fmtB=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
             const[showB,setShowB]=React.useState(false);
+            React.useEffect(()=>{
+              if(addNotif&&bloques.length>0){
+                addNotif("🚫","Facturations bloquées",
+                  `${bloques.length} chantier${bloques.length>1?"s":""} terminé${bloques.length>1?"s":""} en attente de validation avant facturation`,
+                  "factures");
+              }
+            },[bloques.length]);
             return(
               <div style={{marginBottom:16}}>
                 <button onClick={()=>setShowB(p=>!p)}
-                  style={{width:"100%",background:"#EF444410",border:"2px solid #EF444440",borderRadius:14,padding:"14px 18px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:14,transition:"background 0.15s"}}
-                  onMouseOver={e=>e.currentTarget.style.background="#EF444418"}
-                  onMouseOut={e=>e.currentTarget.style.background="#EF444410"}>
-                  <div style={{width:44,height:44,borderRadius:12,background:"#EF444420",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>🚫</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:800,color:"#EF4444",fontSize:15,marginBottom:2}}>
+                  style={{width:"100%",background:"linear-gradient(135deg,#EF444415,#EF444408)",border:"2px solid #EF444450",borderRadius:14,padding:"14px 18px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:14,transition:"all 0.2s"}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor="#EF4444"}
+                  onMouseOut={e=>e.currentTarget.style.borderColor="#EF444450"}>
+                  <div style={{width:48,height:48,borderRadius:12,background:"#EF444420",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>🚫</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:800,color:"#EF4444",fontSize:15,marginBottom:3}}>
                       {bloques.length} intervention{bloques.length>1?"s":""} en attente de validation
                     </div>
-                    <div style={{fontSize:12,color:"#7B96C8"}}>Chantiers terminés avec problème — facturation bloquée jusqu'à validation</div>
+                    <div style={{fontSize:12,color:"#7B96C8",marginBottom:2}}>Rapport problématique · Facturation gelée jusqu'à validation dans l'onglet Factures</div>
+                    <div style={{fontSize:10,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bloques.map(ch=>`${ch.client} (${ch.date_fin||"—"})`).join(" · ")}</div>
                   </div>
-                  <div style={{fontSize:11,color:"#EF4444",fontWeight:700,background:"#EF444420",borderRadius:20,padding:"3px 10px",flexShrink:0}}>
-                    {showB?"Masquer ▲":"Voir ▼"}
+                  <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5}}>
+                    <span style={{background:"#EF4444",color:"#fff",borderRadius:20,fontWeight:900,fontSize:14,padding:"3px 12px"}}>{bloques.length}</span>
+                    <span style={{fontSize:11,color:"#EF4444",fontWeight:600}}>{showB?"▲":"▼"}</span>
                   </div>
                 </button>
                 {showB&&<div style={{background:"#070D1A",border:"2px solid #EF444430",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
                   {bloques.map((ch,i)=>(
-                    <div key={ch.id} style={{padding:"10px 18px",borderBottom:i<bloques.length-1?"1px solid #1B2D4F":"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <div key={ch.id} style={{padding:"11px 18px",borderBottom:i<bloques.length-1?"1px solid #1B2D4F":"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:700,fontSize:13,color:"#F0F6FF"}}>{ch.client}</div>
                         <div style={{fontSize:11,color:"#4A6A9E"}}>✅ {ch.date_fin||"—"} · 👤 {ch.technicien||"—"}</div>
                         {ch.facture?.raison&&<div style={{fontSize:10,color:"#F59E0B"}}>⚠️ {ch.facture.raison}</div>}
                       </div>
-                      <span style={{fontSize:10,color:"#4A6A9E",fontStyle:"italic"}}>→ Déblocage dans Factures</span>
+                      <span style={{fontSize:10,color:"#60A5FA",fontWeight:600,flexShrink:0}}>→ Onglet Factures</span>
                     </div>
                   ))}
                 </div>}
