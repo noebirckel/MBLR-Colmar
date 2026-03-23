@@ -2472,7 +2472,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET RAPPORTS D'INTERVENTION
     // ══════════════════════════════════════
-    function RapportsTab({isMobile, rapports, setRapports, chantiers, ventes, profile, role, allProfiles}) {
+    function RapportsTab({isMobile, rapports, setRapports, chantiers, setChantiers, ventes, profile, role, allProfiles}) {
 
       const emptyForm = (ch=null) => ({
         id: null,
@@ -2543,7 +2543,59 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(!form.chantier_nom||!form.technicien||!form.date) return;
         const entry = {...form, id: form.id||Date.now()};
         setRapports(p => form.id ? p.map(r=>r.id===form.id?entry:r) : [entry,...p]);
+
+        // Si un chantier est lié, le passer en "terminé" et créer une entrée facture
+        if(form.chantier_id){
+          setChantiers(p=>p.map(ch=>{
+            if(ch.id!==Number(form.chantier_id)&&ch.id!==form.chantier_id) return ch;
+            // Ne pas écraser si déjà terminé
+            if(ch.statut==="termine") return ch;
+            return{
+              ...ch,
+              statut:"termine",
+              date_fin: form.date,
+              rapport: entry,
+              facture: ch.facture?.statut ? ch.facture : {statut:"a_facturer"},
+            };
+          }));
+          // Persister dans Supabase
+          sb.from("chantiers").update({
+            statut:"termine",
+            date_fin:form.date,
+            facture:{statut:"a_facturer"},
+          }).eq("id",form.chantier_id).then(({error})=>{
+            if(error)console.error("auto-termine chantier:",error.message);
+          });
+        }
         setView("liste"); setForm(null);
+      };
+
+      // Créer un chantier terminé depuis un rapport orphelin
+      const creerChantierDepuisRapport = (r) => {
+        const newCh = {
+          id: Date.now(),
+          client: r.chantier_nom||"",
+          adresse: r.adresse||"",
+          technicien: r.technicien||"",
+          date_fin: r.date||"",
+          date_installation: r.date||"",
+          date_creation: new Date().toLocaleDateString("fr-FR"),
+          statut: "termine",
+          materiels: r.materiels_poses||[],
+          cables: [],
+          rapport: r,
+          facture: {statut:"a_facturer"},
+          notes: "Créé automatiquement depuis rapport d'intervention",
+          checklist: {},
+          problemes_admin: [],
+        };
+        setChantiers(p=>[newCh,...p]);
+        // Lier le rapport au nouveau chantier
+        setRapports(p=>p.map(rp=>rp.id===r.id?{...rp,chantier_id:newCh.id}:rp));
+        // Persister dans Supabase
+        sb.from("chantiers").insert([{...newCh}]).then(({error})=>{
+          if(error)console.error("create chantier from rapport:",error.message);
+        });
       };
 
       const filtered = rapports.filter(r =>
@@ -2801,6 +2853,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>
 
           {/* Bouton sauvegarder */}
+          {form.chantier_id&&(()=>{
+            const ch=chantiers.find(c=>c.id===form.chantier_id||c.id===Number(form.chantier_id));
+            if(!ch||ch.statut==="termine") return null;
+            return(
+              <div style={{background:"#3B82F610",border:"1px solid #3B82F640",borderRadius:10,padding:"10px 14px",marginTop:12,fontSize:12,color:"#60A5FA",display:"flex",gap:8,alignItems:"center"}}>
+                <span>🔗</span>
+                <div>En enregistrant ce rapport, le chantier <strong>{ch.client}</strong> passera automatiquement en <strong>Terminé</strong> et sera ouvert en facturation.</div>
+              </div>
+            );
+          })()}
+
           <div style={{display:"flex",gap:10,marginTop:16}}>
             <button onClick={()=>{setView("liste");setForm(null);}} style={BTN("#1B2D4F",{flex:1,padding:"13px"})}>
               Annuler
@@ -2811,7 +2874,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 ?"#112038":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{
                 flex:3,padding:"13px",fontSize:15,
                 boxShadow:!form.chantier_nom||!form.technicien||!form.date?"none":"0 4px 20px rgba(59,130,246,0.3)"})}>
-              💾 Enregistrer le rapport
+              💾 {form.chantier_id?"Enregistrer et terminer le chantier":"Enregistrer le rapport"}
             </button>
           </div>
         </div>
@@ -3014,6 +3077,38 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               style={{...INP(),background:"#0D1828"}}/>
           </div>
 
+          {/* Rapports orphelins — sans chantier lié */}
+          {(()=>{
+            const orphans=rapports.filter(r=>{
+              if(!r.chantier_id) return true;
+              return !chantiers.find(ch=>ch.id===r.chantier_id||ch.id===Number(r.chantier_id));
+            });
+            if(!orphans.length) return null;
+            return(
+              <div style={{background:"#F59E0B08",border:"1px solid #F59E0B40",borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <span style={{fontSize:18}}>⚠️</span>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:13,color:"#F59E0B"}}>{orphans.length} rapport{orphans.length>1?"s":""} sans chantier lié</div>
+                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:1}}>Ces rapports n'apparaissent pas en facturation. Recréez le chantier pour débloquer la facturation.</div>
+                  </div>
+                </div>
+                {orphans.map(r=>(
+                  <div key={r.id} style={{background:"#070D1A",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{r.chantier_nom||"—"}</div>
+                      <div style={{fontSize:11,color:"#4A6A9E"}}>👤 {r.technicien||"—"} · 📅 {r.date||"—"}</div>
+                    </div>
+                    <button onClick={()=>creerChantierDepuisRapport(r)}
+                      style={{background:"linear-gradient(135deg,#F59E0B,#D97706)",border:"none",borderRadius:9,color:"#fff",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>
+                      🔧 Recréer le chantier + ouvrir facturation
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {/* Liste */}
           {filtered.length===0
             ?<div style={{textAlign:"center",padding:"60px 0",color:"#2E4D82"}}>
@@ -3027,10 +3122,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               {filtered.map(r=>{
                 const S=ETAT[r.etat_final]||ETAT.ok;
                 const duree=heuresTotal(r.heure_debut,r.heure_fin);
+                const linkedCh=r.chantier_id?chantiers.find(c=>c.id===r.chantier_id||c.id===Number(r.chantier_id)):null;
+                const isOrphan=!r.chantier_id||!linkedCh;
                 return(
                   <div key={r.id} onClick={()=>{setDetailId(r.id);setView("detail");}}
                     style={{background:"#0D1828",borderRadius:13,
-                      border:`1px solid ${r.etat_final==="ok"?"#1B2D4F":S.color+"40"}`,
+                      border:`1px solid ${isOrphan?"#F59E0B40":r.etat_final==="ok"?"#1B2D4F":S.color+"40"}`,
                       padding:"14px 18px",cursor:"pointer",transition:"border-color 0.2s,transform 0.15s",
                       display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,
                       flexWrap:"wrap"}}>
@@ -3041,6 +3138,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                           borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>
                           {S.icon} {S.label}
                         </span>
+                        {isOrphan
+                          ?<span style={{background:"#F59E0B15",color:"#F59E0B",border:"1px solid #F59E0B40",borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>⚠️ Sans chantier</span>
+                          :<span style={{background:"#10B98115",color:"#10B981",border:"1px solid #10B98130",borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700}}>🔗 {linkedCh.statut==="termine"?"Facturé":"Chantier lié"}</span>
+                        }
                       </div>
                       <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
                         <span>🔧 {r.technicien}</span>
@@ -7064,7 +7165,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   setSavTickets(p=>p.filter(t=>t.id!==id));
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
                 }}/>}
-                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} ventes={ventes} allProfiles={allProfiles}/>}
+                {view==="rapports"&&<RapportsTab isMobile={isMobile} rapports={rapports} setRapports={SR} profile={profile} role={role} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} allProfiles={allProfiles}/>}
                 {view==="equipe"&&<EquipeTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} setRapports={SR}/>}
                 {view==="chantier"&&<ChantierTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} setChantiers={SC2} stock={stock} hist={hist} profile={profile} allProfiles={allProfiles} installerName={installerName} fmt={fmt} role={role} goTo={goTo} BDG={BDG} setRapports={SR} BTN={v=>({background:v,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontFamily:"'Outfit',sans-serif"})} INP={(e={})=>({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,padding:"10px 14px",color:"#E8F0FF",fontFamily:"'Outfit',sans-serif",width:"100%",boxSizing:"border-box",outline:"none",...e})}/>}
 
