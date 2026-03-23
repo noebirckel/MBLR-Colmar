@@ -423,7 +423,7 @@
     // ══════════════════════════════════════════
     // ONGLET FACTURES
     // ══════════════════════════════════════════
-    function FacturesTab({isMobile, chantiers, setChantiers, ventes, profile, role, addNotif}){
+    function FacturesTab({isMobile, chantiers, setChantiers, ventes, savTickets, profile, role, addNotif}){
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
         a_facturer: {label:"En attente",  color:"#EF4444", icon:"🔴"},
@@ -667,6 +667,45 @@
               </div>
             ))}
           </div>
+
+          {/* SAV à facturer à la marque */}
+          {(()=>{
+            const savMarque=(savTickets||[]).filter(t=>Number(t.montant_facture_marque)>0);
+            if(!savMarque.length) return null;
+            const total=savMarque.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+            return(
+              <div style={{background:"#8B5CF608",border:"1px solid #8B5CF630",borderRadius:14,padding:"12px 16px",marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                  <span style={{fontSize:18}}>🏭</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#A78BFA"}}>{savMarque.length} SAV à facturer à la marque</div>
+                    <div style={{fontSize:11,color:"#4A6A9E"}}>Total : <span style={{color:"#10B981",fontWeight:700}}>{total.toLocaleString("fr-FR",{minimumFractionDigits:2})} € HT</span> — marge 100%</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {savMarque.map(t=>{
+                    const ch=t.chantier_id?(chantiers||[]).find(c=>c.id===t.chantier_id||c.id===Number(t.chantier_id)):null;
+                    return(
+                      <div key={t.id} style={{background:"#070D1A",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:700,fontSize:13,color:"#F0F6FF"}}>{t.client}</div>
+                          <div style={{fontSize:11,color:"#4A6A9E",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                            {t.marque&&<span>⚡ <strong style={{color:"#A78BFA"}}>{t.marque}</strong></span>}
+                            {ch&&<span>🔧 Chantier : {ch.client}{ch.date_fin?" · "+ch.date_fin:""}</span>}
+                            {t.cause_date&&<span>📅 {t.cause_date}</span>}
+                          </div>
+                          {t.cause_details&&<div style={{fontSize:10,color:"#7B96C8",marginTop:2,fontStyle:"italic"}}>"{t.cause_details.slice(0,60)}{t.cause_details.length>60?"…":""}"</div>}
+                        </div>
+                        <div style={{fontWeight:900,fontSize:15,color:"#10B981",flexShrink:0}}>
+                          {Number(t.montant_facture_marque).toLocaleString("fr-FR",{minimumFractionDigits:2})} €
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Bouton factures en attente de validation (bloquées) */}
           {terminesBloques.length>0&&canEdit(role)&&(
@@ -2212,20 +2251,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 style={INP()}/></div>
           </div>
 
-          <div style={{marginBottom:22}}>
-            <L c="Facturation marque (€ HT)"/>
-            <div style={{position:"relative"}}>
-              <input type="number" min="0" step="0.01"
-                value={form.montant_facture_marque||""}
-                onChange={e=>onChange("montant_facture_marque",e.target.value)}
-                placeholder="Montant facturé à la marque pour ce SAV…"
-                style={INP()}/>
-            </div>
-            {Number(form.montant_facture_marque)>0&&<div style={{marginTop:6,fontSize:11,color:"#10B981",fontWeight:600,background:"#10B98112",border:"1px solid #10B98130",borderRadius:8,padding:"5px 10px"}}>
-              💰 {Number(form.montant_facture_marque).toLocaleString("fr-FR",{minimumFractionDigits:2})} € facturés à la marque — marge 100%
-            </div>}
-          </div>
-
           {!valid&&<div style={{fontSize:12,color:"#F59E0B",marginBottom:12,padding:"8px 12px",
             background:"rgba(245,158,11,0.08)",borderRadius:8}}>
             ⚠️ Client, n° de série et description sont obligatoires
@@ -2258,7 +2283,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const emptyForm = () => ({
         client:"", num_serie:"", marque:"", modele:"",
         description:"", statut:"ouvert", notes:"",
-        montant_facture_marque:"",
         date_ouverture: new Date().toLocaleDateString("fr-FR"),
         date_resolution:"", par: profile?.nom||"",
       });
@@ -2275,6 +2299,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[causeModal,setCauseModal] = useState(null);
       const[causeVal,setCauseVal]     = useState("");
       const[causeDetails,setCauseDetails] = useState("");
+      const[facturerMarque,setFacturerMarque] = useState(false);
+      const[montantMarque,setMontantMarque]   = useState("");
       const[contacts,setContacts] = useState(()=>{
         try{ const s=localStorage.getItem("sav_contacts"); return s?JSON.parse(s):DEFAULT_SAV_CONTACTS; }
         catch(e){ return DEFAULT_SAV_CONTACTS; }
@@ -2347,7 +2373,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Enregistrer l'analyse de cause (admin)
       const saveCause = (ticket, cause, details) => {
-        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,cause_origine:cause,cause_details:details,cause_par:profile?.nom||"",cause_date:new Date().toLocaleDateString("fr-FR")}:t));
+        const montant = facturerMarque && cause==="marque" ? Number(montantMarque)||0 : 0;
+        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,cause_origine:cause,cause_details:details,cause_par:profile?.nom||"",cause_date:new Date().toLocaleDateString("fr-FR"),montant_facture_marque:montant}:t));
         setCauseModal(null);
       };
 
@@ -2452,6 +2479,28 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       placeholder="Décrivez la cause précise du problème…"
                       style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",width:"100%",boxSizing:"border-box",resize:"none",fontFamily:'"Outfit",sans-serif',fontSize:13,outline:"none"}}/>
                   </div>
+
+                  {/* Facturation marque — uniquement si cause = marque */}
+                  {causeVal==="marque"&&<div style={{background:"#8B5CF608",border:"1px solid #8B5CF630",borderRadius:12,padding:"14px",marginBottom:16}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#A78BFA",marginBottom:10}}>🏭 Facturation à la marque</div>
+                    <div style={{display:"flex",gap:8,marginBottom:10}}>
+                      {[["oui","✅ Oui, facturer la marque"],["non","✗ Non, ne pas facturer"]].map(([k,l])=>(
+                        <button key={k} onClick={()=>setFacturerMarque(k==="oui")}
+                          style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${(facturerMarque&&k==="oui")||(!facturerMarque&&k==="non")?"#8B5CF6":"#1B2D4F"}`,background:(facturerMarque&&k==="oui")||(!facturerMarque&&k==="non")?"#8B5CF620":"#070D1A",color:(facturerMarque&&k==="oui")||(!facturerMarque&&k==="non")?"#A78BFA":"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {facturerMarque&&<>
+                      <label style={{fontSize:10,fontWeight:700,color:"#8B5CF6",display:"block",marginBottom:6,textTransform:"uppercase"}}>Montant à facturer à la marque (€ HT)</label>
+                      <input type="number" min="0" step="0.01" value={montantMarque} onChange={e=>setMontantMarque(e.target.value)}
+                        placeholder="Ex : 150.00"
+                        style={{background:"#070D1A",border:"1px solid #8B5CF650",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',fontSize:14,outline:"none"}}/>
+                      {Number(montantMarque)>0&&<div style={{marginTop:6,fontSize:11,color:"#10B981",fontWeight:600,background:"#10B98112",border:"1px solid #10B98130",borderRadius:8,padding:"5px 10px"}}>
+                        💰 {Number(montantMarque).toLocaleString("fr-FR",{minimumFractionDigits:2})} € · Marge 100% · Visible en facturation pour la secrétaire
+                      </div>}
+                    </>}
+                  </div>}
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={()=>setCauseModal(null)} style={{flex:1,background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",padding:"11px",cursor:"pointer",fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
                     <button onClick={()=>saveCause(causeModal,causeVal,causeDetails)} disabled={!causeVal}
@@ -2965,7 +3014,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             )}
                             {/* Analyser cause — admin uniquement, SAV résolu */}
                             {isResolu&&role==="administrateur"&&(
-                              <button onClick={()=>{setCauseVal(t.cause_origine||"");setCauseDetails(t.cause_details||"");setCauseModal(t);}}
+                              <button onClick={()=>{setCauseVal(t.cause_origine||"");setCauseDetails(t.cause_details||"");setFacturerMarque(!!t.montant_facture_marque);setMontantMarque(t.montant_facture_marque||"");setCauseModal(t);}}
                                 style={{background:t.cause_origine?"#3B82F620":"#1B2D4F",border:`1px solid ${t.cause_origine?"#3B82F640":"#1B2D4F"}`,borderRadius:8,color:t.cause_origine?"#60A5FA":"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
                                 🔍 {t.cause_origine?"Cause":"Analyser"}
                               </button>
@@ -7628,7 +7677,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} addNotif={addNotif}/>}
+                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} profile={profile} role={role}/>}
