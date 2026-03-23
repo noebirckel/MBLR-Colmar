@@ -2272,7 +2272,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[tabView,setTabView]   = useState("tickets");
       const[resolModal,setResolModal] = useState(null); // {ticket} — modal clôture SAV
       const[resolForm,setResolForm]   = useState({par:"nous",borne_changee:false,deplacement:false});
-      const[causeModal,setCauseModal] = useState(null); // {ticket} — analyse cause admin
+      const[causeModal,setCauseModal] = useState(null);
+      const[causeVal,setCauseVal]     = useState("");
+      const[causeDetails,setCauseDetails] = useState("");
       const[contacts,setContacts] = useState(()=>{
         try{ const s=localStorage.getItem("sav_contacts"); return s?JSON.parse(s):DEFAULT_SAV_CONTACTS; }
         catch(e){ return DEFAULT_SAV_CONTACTS; }
@@ -2423,10 +2425,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>}
 
           {/* MODAL ANALYSE CAUSE (admin) */}
-          {causeModal&&(()=>{
-            const[causeVal,setCauseVal]=React.useState(causeModal.cause_origine||"");
-            const[causeDetails,setCauseDetails]=React.useState(causeModal.cause_details||"");
-            return(
+          {causeModal&&(
               <div style={{position:"fixed",inset:0,background:"#000000BB",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center"}} onClick={()=>setCauseModal(null)}>
                 <div style={{background:"#0D1828",borderRadius:isMobile?"20px 20px 0 0":16,padding:"22px",width:"100%",maxWidth:420,border:"1px solid #1B2D4F"}} onClick={e=>e.stopPropagation()}>
                   {isMobile&&<div style={{width:36,height:4,background:"#1B2D4F",borderRadius:2,margin:"0 auto 16px"}}/>}
@@ -2462,8 +2461,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   </div>
                 </div>
               </div>
-            );
-          })()}
+          )}
 
           {/* MODAL NOUVEAU */}
           {newForm&&(
@@ -2967,7 +2965,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             )}
                             {/* Analyser cause — admin uniquement, SAV résolu */}
                             {isResolu&&role==="administrateur"&&(
-                              <button onClick={()=>setCauseModal(t)}
+                              <button onClick={()=>{setCauseVal(t.cause_origine||"");setCauseDetails(t.cause_details||"");setCauseModal(t);}}
                                 style={{background:t.cause_origine?"#3B82F620":"#1B2D4F",border:`1px solid ${t.cause_origine?"#3B82F640":"#1B2D4F"}`,borderRadius:8,color:t.cause_origine?"#60A5FA":"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
                                 🔍 {t.cause_origine?"Cause":"Analyser"}
                               </button>
