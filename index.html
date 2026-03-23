@@ -1376,7 +1376,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════════
     // ONGLET MARGES (admin only)
     // ══════════════════════════════════════════
-    function MargesTab({isMobile, ventes}){
+    function MargesTab({isMobile, ventes, savTickets}){
       const [periode, setPeriode] = useState(3);
       const [onglet, setOnglet]   = useState("ventes");
       const fmt  = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
@@ -1392,8 +1392,20 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         const vd=new Date(Number(y),Number(mo)-1,Number(d));
         return (now-vd)/(1000*60*60*24*30)<=periode;
       }),[ventes,periode]);
-      const caTotal=ventesFiltered.reduce((s,v)=>s+Number(v.prix_ht||0),0);
-      const coutTotal=ventesFiltered.reduce((s,v)=>s+coutVente(v),0);
+
+      // SAV facturés aux marques dans la même période
+      const savFactures=useMemo(()=>(savTickets||[]).filter(t=>{
+        if(!Number(t.montant_facture_marque)) return false;
+        if(!t.date_ouverture||periode===999) return true;
+        const [d,mo,y]=(t.date_ouverture||"").split("/");
+        if(!y) return true;
+        const td=new Date(Number(y),Number(mo)-1,Number(d));
+        return (now-td)/(1000*60*60*24*30)<=periode;
+      }),[savTickets,periode]);
+      const caSAV=savFactures.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+
+      const caTotal=ventesFiltered.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
+      const coutTotal=ventesFiltered.reduce((s,v)=>s+coutVente(v),0); // SAV = coût 0
       const margeTotal=caTotal-coutTotal;
       const txMarge=pct(margeTotal,caTotal);
       const ventesAvecMarge=useMemo(()=>[...ventesFiltered].map(v=>{
@@ -1418,8 +1430,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(!map[k])map[k]={label:`${mo}/${y}`,ca:0,cout:0,nb:0};
           map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;
         });
+        // Ajouter SAV dans les mois
+        savFactures.forEach(t=>{
+          const [,mo,y]=(t.date_ouverture||"").split("/");
+          if(!mo||!y)return;
+          const k=`${y}-${mo}`;
+          if(!map[k])map[k]={label:`${mo}/${y}`,ca:0,cout:0,nb:0};
+          map[k].ca+=Number(t.montant_facture_marque||0);
+        });
         return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>a.label<b.label?-1:1);
-      },[ventesFiltered]);
+      },[ventesFiltered,savFactures]);
       const parCat=useMemo(()=>{
         const map={};
         ventesFiltered.forEach(v=>{
@@ -1438,7 +1458,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
             <div>
               <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>💰 Analyse des marges</h2>
-              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{ventesFiltered.length} vente(s) · {periode===999?"Toutes périodes":periode+" mois"}</p>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{ventesFiltered.length} vente(s){caSAV>0?` · ${savFactures.length} SAV facturé(s) à la marque`:""} · {periode===999?"Toutes périodes":periode+" mois"}</p>
             </div>
             <select value={periode} onChange={e=>setPeriode(Number(e.target.value))}
               style={{background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"8px 12px",fontSize:13,fontFamily:'"Outfit",sans-serif',cursor:"pointer"}}>
@@ -1447,6 +1467,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <option value={999}>Tout</option>
             </select>
           </div>
+          {caSAV>0&&<div style={{background:"#10B98112",border:"1px solid #10B98130",borderRadius:12,padding:"10px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:18}}>🛠️</span>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,color:"#10B981"}}>SAV facturés aux marques : {fmt(caSAV)} — marge 100%</div>
+              <div style={{fontSize:11,color:"#4A6A9E"}}>{savFactures.length} ticket{savFactures.length>1?"s":""} · {savFactures.map(t=>`${t.marque||t.client} (${Number(t.montant_facture_marque||0).toLocaleString("fr-FR")} €)`).join(" · ")}</div>
+            </div>
+          </div>}
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
             {[
               {icon:"💰",label:"CA total",val:fmt(caTotal),color:"#3B82F6"},
@@ -1659,7 +1686,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
-    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, fmt, objectifs, setObjectifs, role}) {
+    function StatsTab({isMobile, ventes, chantiers, acomptes, stock, savTickets, fmt, objectifs, setObjectifs, role}) {
       const[period,setPeriod]=useState(6); // nb de mois à afficher
 
       // Calculs CA par mois
@@ -1703,10 +1730,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const nbAlerts=stock.filter(s=>s.stock<=s.seuil).length;
 
       // KPIs globaux
-      const caTotal=ventes.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const caSAV=(savTickets||[]).reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+      const caTotal=ventes.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
       const mM=String(new Date().getMonth()+1).padStart(2,"0");
       const mY=String(new Date().getFullYear());
-      const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0)
+        +(savTickets||[]).filter(t=>Number(t.montant_facture_marque)>0&&t.date_ouverture&&t.date_ouverture.split("/")[1]===mM&&t.date_ouverture.split("/")[2]===mY).reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
 
       const Card=({icon,label,value,sub,color})=>(
         <div style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
@@ -1994,6 +2023,20 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 style={INP()}/></div>
           </div>
 
+          <div style={{marginBottom:22}}>
+            <L c="Facturation marque (€ HT)"/>
+            <div style={{position:"relative"}}>
+              <input type="number" min="0" step="0.01"
+                value={form.montant_facture_marque||""}
+                onChange={e=>onChange("montant_facture_marque",e.target.value)}
+                placeholder="Montant facturé à la marque pour ce SAV…"
+                style={INP()}/>
+            </div>
+            {Number(form.montant_facture_marque)>0&&<div style={{marginTop:6,fontSize:11,color:"#10B981",fontWeight:600,background:"#10B98112",border:"1px solid #10B98130",borderRadius:8,padding:"5px 10px"}}>
+              💰 {Number(form.montant_facture_marque).toLocaleString("fr-FR",{minimumFractionDigits:2})} € facturés à la marque — marge 100%
+            </div>}
+          </div>
+
           {!valid&&<div style={{fontSize:12,color:"#F59E0B",marginBottom:12,padding:"8px 12px",
             background:"rgba(245,158,11,0.08)",borderRadius:8}}>
             ⚠️ Client, n° de série et description sont obligatoires
@@ -2026,6 +2069,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const emptyForm = () => ({
         client:"", num_serie:"", marque:"", modele:"",
         description:"", statut:"ouvert", notes:"",
+        montant_facture_marque:"",
         date_ouverture: new Date().toLocaleDateString("fr-FR"),
         date_resolution:"", par: profile?.nom||"",
       });
@@ -6856,7 +6900,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} profile={profile} role={role}/>}
 
-                {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} role={role}/>}
+                {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} savTickets={savTickets} role={role}/>}
 
                 {view==="perf_installateurs"&&(()=>{
                   // ── Données croisées ────────────────────────────────────────
@@ -7015,7 +7059,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   </>);
                 })()}
 
-                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
+                {view==="stats"&&<StatsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} stock={stock} orders={orders} acomptes={acomptes} savTickets={savTickets} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+"\u202f€"} role={role}/>}
                 {view==="sav"&&<SavTab isMobile={isMobile} tickets={savTickets} setTickets={SSAV} profile={profile} role={role} onDeleteTicket={async(id)=>{
                   setSavTickets(p=>p.filter(t=>t.id!==id));
                   try{await sb.from("sav_tickets").delete().eq("id",id);}catch(e){console.error("delete sav_ticket:",e);}
