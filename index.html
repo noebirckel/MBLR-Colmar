@@ -497,6 +497,12 @@
 
       const urgent = termines.filter(ch => (ch.facture?.statut||"a_facturer") === "a_facturer").length;
 
+      // Stats financières
+      const totalMontantFactures=termines.reduce((s,ch)=>s+getMontant(ch),0);
+      const totalMontantPayees=termines.filter(ch=>ch.facture?.statut==="paye").reduce((s,ch)=>s+getMontant(ch),0);
+      const totalMontantEnAttente=termines.filter(ch=>["a_facturer","facture"].includes(ch.facture?.statut||"a_facturer")).reduce((s,ch)=>s+getMontant(ch),0);
+      const tauxEncFact=totalMontantFactures>0?Math.round((totalMontantPayees/totalMontantFactures)*100):0;
+
       const CARD = {background:"#0D1828", borderRadius:14, border:"1px solid #1B2D4F", padding:"18px"};
       const INP  = (e={}) => ({background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 13px",width:"100%",boxSizing:"border-box",fontSize:13,fontFamily:'"Outfit",sans-serif',outline:"none",...e});
 
@@ -666,14 +672,31 @@
             )}
           </div>
 
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:18}}>
+          {/* KPIs statuts */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:10}}>
             {kpis.map(k=>(
               <div key={k.key} onClick={()=>setFiltre(filtre===k.key?"tous":k.key)}
                 style={{background:"#0D1828",borderRadius:10,padding:"14px 12px",border:`1px solid ${filtre===k.key?k.color:"#1B2D4F"}`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}>
                 <div style={{fontSize:22,marginBottom:4}}>{k.icon}</div>
                 <div style={{fontSize:22,fontWeight:800,color:k.color}}>{k.nb}</div>
                 <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* KPIs financiers */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:18}}>
+            {[
+              {l:"Total à facturer",v:fmtE(totalMontantFactures),c:"#3B82F6",i:"💶",sub:`${termines.length} chantier(s)`},
+              {l:"Encaissé",v:fmtE(totalMontantPayees),c:"#10B981",i:"✅",sub:`${termines.filter(ch=>ch.facture?.statut==="paye").length} payé(s)`},
+              {l:"En attente",v:fmtE(totalMontantEnAttente),c:"#F59E0B",i:"⏳",sub:`${termines.filter(ch=>["a_facturer","facture"].includes(ch.facture?.statut||"a_facturer")).length} en cours`},
+              {l:"Taux encaissement",v:tauxEncFact+"%",c:"#A855F7",i:"📊",sub:"du total facturé"},
+            ].map(({l,v,c,i,sub})=>(
+              <div key={l} style={{background:"#0D1828",borderRadius:12,padding:"13px 15px",border:`1px solid ${c}30`}}>
+                <div style={{fontSize:18,marginBottom:4}}>{i}</div>
+                <div style={{fontSize:isMobile?14:17,fontWeight:800,color:c}}>{v}</div>
+                <div style={{fontSize:11,color:"#4A6A9E",marginTop:3}}>{l}</div>
+                <div style={{fontSize:10,color:"#2E4D82",marginTop:1}}>{sub}</div>
               </div>
             ))}
           </div>
