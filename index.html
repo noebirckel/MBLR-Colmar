@@ -3931,8 +3931,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════════
     // ONGLET LISTE CLIENTS
     // ══════════════════════════════════════════
-    function ClientsTab({isMobile, ventes, chantiers, savTickets, rapports, acomptes, fmt, role, goTo}) {
-      const[search,setSearch]=useState("");
+    function ClientsTab({isMobile, ventes, chantiers, savTickets, rapports, acomptes, fmt, role, goTo, initClient, onInitUsed}) {
+      const[search,setSearch]=useState(initClient||"");
       const[selected,setSelected]=useState(null);
       const[lightbox,setLightbox]=useState(null);
       const[rapportDetail,setRapportDetail]=useState(null); // rapport complet à afficher
@@ -3951,6 +3951,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         ]);
         return [...names].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
       },[ventes,chantiers]);
+
+      // Auto-sélectionner si initClient fourni
+      useEffect(()=>{
+        if(initClient&&allClients.length){
+          const match=allClients.find(n=>n.toLowerCase()===initClient.toLowerCase())||allClients.find(n=>n.toLowerCase().includes(initClient.toLowerCase()));
+          if(match){setSelected(match);setSearch("");if(onInitUsed)onInitUsed();}
+        }
+      },[initClient,allClients.length]);
 
       const filtered=search?allClients.filter(n=>n.toLowerCase().includes(search.toLowerCase())):allClients;
 
@@ -6992,6 +7000,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[showMatDem,setShowMatDem]=React.useState({});
       const[showPhotoDem,setShowPhotoDem]=React.useState({});
       const[commAccueilTab,setCommAccueilTab]=React.useState("perso");
+      const[clientInitSearch,setClientInitSearch]=React.useState("");
       const[collapsedCats,setCollapsedCats]=React.useState({});
       const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
       const stockFil=React.useMemo(()=>stock.filter(s=>{
@@ -7794,7 +7803,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="administratif"&&<AdminTab isMobile={isMobile} acomptes={acomptes} setAcomptes={SA} ventes={ventes} profile={profile} fmt={fmt} role={role} acompteDefPct={acompteDefPct} saveAcomptePct={saveAcomptePct}/>}
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
-                {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo}/>}
+                {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
@@ -8407,10 +8416,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             const ventesMonth=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
             const caMonth=ventesMonth.reduce((s,v)=>s+Number(v.prix_ht||0),0);
             const chTerminesMois=chantiersPipeline.filter(ch=>ch.statut==="termine"&&ch.date_fin&&ch.date_fin.split("/")[1]===mM&&ch.date_fin.split("/")[2]===mY);
-            const factPayeesMois=chantiersPipeline.filter(ch=>ch.facture?.statut==="paye"&&ch.facture?.date_paiement?.split("/")[1]===mM);
+            const factPayeesMois=chantiersPipeline.filter(ch=>ch.facture?.statut==="paye");
             const totalFactPayees=factPayeesMois.reduce((s,ch)=>{const v=ventes.find(v=>v.id===ch.vente_id);return s+Number(v?.prix_ht||0);},0);
-            const acomPayesMois=acomptes.filter(a=>a.statut==="paye"&&a.date_paiement&&a.date_paiement.split("/")[1]===mM&&a.date_paiement.split("/")[2]===mY);
-            const totalAcomPayes=acomPayesMois.reduce((s,a)=>s+Number(a.montant||0),0);
+            const acomPayesMois=acomptes.filter(a=>a.statut==="paye");
+            const totalAcomPayes=acomPayesMois.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
 
             // Compteurs onglets
             const nbAcomAEnvoyer=acomptes.filter(a=>a.statut==="a_envoyer").length;
@@ -8451,10 +8460,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     {nb:nbAcomAEnvoyer,l:"Acomptes à envoyer",i:"📤",c:"#F59E0B",t:"administratif",ok:"Aucun acompte en attente"},
                     {nb:nbFactAFacturer,l:"Factures à établir",i:"🧾",c:"#EF4444",t:"factures",ok:"Toutes les factures sont à jour"},
                     {nb:nbChAPlanifier,l:"Chantiers à planifier",i:"📅",c:"#A855F7",t:"chantier",ok:"Tout est planifié"},
-                    {nb:chAujourd.length,l:"Chantiers aujourd'hui",i:"🔧",c:"#3B82F6",t:"chantier",ok:"Aucun chantier aujourd'hui"},
                   ].map(k=>(
                     <button key={k.l} onClick={()=>goTo(k.t)}
-                      style={{width:"100%",background:"#0D1828",border:`1px solid ${k.nb>0?k.c+"40":"#1B2D4F"}`,borderRadius:12,padding:"13px 16px",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left",transition:"border-color 0.15s"}}
+                      style={{width:"100%",background:"#0D1828",border:`1px solid ${k.nb>0?k.c+"40":"#1B2D4F"}`,borderRadius:12,padding:"13px 16px",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left"}}
                       onMouseOver={e=>e.currentTarget.style.borderColor=k.nb>0?k.c:"#3B82F6"}
                       onMouseOut={e=>e.currentTarget.style.borderColor=k.nb>0?k.c+"40":"#1B2D4F"}>
                       <div style={{width:40,height:40,borderRadius:10,background:k.nb>0?k.c+"20":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{k.i}</div>
@@ -8469,6 +8477,45 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <span style={{color:"#2E4D82",fontSize:18,flexShrink:0}}>›</span>
                     </button>
                   ))}
+
+                  {/* Chantiers du jour — dépliable avec liens clients */}
+                  <div style={{background:"#0D1828",border:`1px solid ${chAujourd.length>0?"#3B82F640":"#1B2D4F"}`,borderRadius:12,overflow:"hidden"}}>
+                    <button onClick={()=>goTo("chantier")}
+                      style={{width:"100%",padding:"13px 16px",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left",background:"transparent",border:"none"}}
+                      onMouseOver={e=>e.currentTarget.style.background="#1B2D4F22"}
+                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      <div style={{width:40,height:40,borderRadius:10,background:chAujourd.length>0?"#3B82F620":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🔧</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14,color:chAujourd.length>0?"#60A5FA":"#7B96C8"}}>Chantiers aujourd'hui</div>
+                        <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{chAujourd.length>0?`${chAujourd.length} chantier${chAujourd.length>1?"s":""} ce jour`:"Aucun chantier aujourd'hui"}</div>
+                      </div>
+                      {chAujourd.length>0
+                        ?<span style={{background:"#3B82F620",color:"#60A5FA",borderRadius:20,fontWeight:800,fontSize:18,padding:"3px 14px",flexShrink:0}}>{chAujourd.length}</span>
+                        :<span style={{fontSize:16,color:"#10B981"}}>✅</span>
+                      }
+                    </button>
+                    {chAujourd.length>0&&<div style={{borderTop:"1px solid #1B2D4F"}}>
+                      {chAujourd.map((ch,i)=>(
+                        <button key={ch.id}
+                          onClick={()=>{setClientInitSearch(ch.client||"");goTo("clients");}}
+                          style={{width:"100%",padding:"10px 16px",background:"transparent",border:"none",borderBottom:i<chAujourd.length-1?"1px solid #1B2D4F44":"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:10,textAlign:"left"}}
+                          onMouseOver={e=>e.currentTarget.style.background="#1B2D4F33"}
+                          onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{ch.client}</div>
+                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:1,display:"flex",gap:8,flexWrap:"wrap"}}>
+                              {ch.technicien&&<span>👤 {ch.technicien}</span>}
+                              {ch.adresse&&<span>📍 {ch.adresse}</span>}
+                            </div>
+                          </div>
+                          <span style={{fontSize:10,fontWeight:700,color:ch.statut==="en_cours"?"#A855F7":"#3B82F6",background:ch.statut==="en_cours"?"#A855F720":"#3B82F620",borderRadius:20,padding:"2px 8px",flexShrink:0}}>
+                            {ch.statut==="en_cours"?"🔧 En cours":"📅 Planifié"}
+                          </span>
+                          <span style={{color:"#2E4D82",fontSize:14,flexShrink:0}}>›</span>
+                        </button>
+                      ))}
+                    </div>}
+                  </div>
                 </div>
               </div>
             );
