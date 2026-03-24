@@ -2644,7 +2644,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               {/* Onglets tickets / contacts */}
               <div style={{display:"flex",background:"#0D1828",borderRadius:10,
                 border:"1px solid #1B2D4F",overflow:"hidden"}}>
-                {[["tickets","🎫 Tickets"],["stats","📊 Stats"],["contacts","📞 Contacts SAV"]].map(([k,l])=>(
+                {[["tickets","🎫 Tickets"],["stats","📊 Stats"],["contacts","📞 Contacts SAV"]].filter(([k])=>k!=="stats"||role!=="installateur").map(([k,l])=>(
                   <button key={k} onClick={()=>setTabView(k)} style={{
                     padding:"8px 14px",background:tabView===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"transparent",
                     border:"none",color:tabView===k?"#FFF":"#4A6A9E",cursor:"pointer",
@@ -3083,11 +3083,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             {t.deplacement_effectue&&<span style={{background:"#F59E0B15",color:"#F59E0B",border:"1px solid #F59E0B30",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:700}}>🚗 Déplacement</span>}
                           </div>}
                           {/* Cause origine */}
-                          {t.cause_origine&&CAUSES[t.cause_origine]&&<span style={{background:CAUSES[t.cause_origine].color+"15",color:CAUSES[t.cause_origine].color,border:`1px solid ${CAUSES[t.cause_origine].color}30`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>
+                          {role!=="installateur"&&t.cause_origine&&CAUSES[t.cause_origine]&&<span style={{background:CAUSES[t.cause_origine].color+"15",color:CAUSES[t.cause_origine].color,border:`1px solid ${CAUSES[t.cause_origine].color}30`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>
                             {CAUSES[t.cause_origine].icon} {CAUSES[t.cause_origine].label}
                           </span>}
-                          {Number(t.temps_perdu)>0&&<span style={{background:"#F59E0B12",color:"#F59E0B",border:"1px solid #F59E0B25",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>⏱️ {t.temps_perdu}h perdues</span>}
-                          {Number(t.cout_installation)>0&&<span style={{background:"#EF444412",color:"#EF4444",border:"1px solid #EF444425",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>💸 {Number(t.cout_installation).toLocaleString("fr-FR")} €</span>}
+                          {role!=="installateur"&&Number(t.temps_perdu)>0&&<span style={{background:"#F59E0B12",color:"#F59E0B",border:"1px solid #F59E0B25",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>⏱️ {t.temps_perdu}h perdues</span>}
+                          {role!=="installateur"&&Number(t.cout_installation)>0&&<span style={{background:"#EF444412",color:"#EF4444",border:"1px solid #EF444425",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>💸 {Number(t.cout_installation).toLocaleString("fr-FR")} €</span>}
                           {t.reouvert_le&&<div style={{fontSize:9,color:"#F59E0B"}}>🔁 Réouvert le {t.reouvert_le}</div>}
                           <div style={{display:"flex",gap:5,marginTop:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
                             {/* Clôturer — installateur + admin + secrétaire, SAV actif uniquement */}
@@ -3115,10 +3115,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                               background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,
                               color:"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:12,
                               fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✏️</button>
-                            <button onClick={()=>setDelConf(t)} style={{
+                            {role!=="installateur"&&<button onClick={()=>setDelConf(t)} style={{
                               background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.2)",
                               borderRadius:8,color:"#EF4444",padding:"6px 10px",cursor:"pointer",
-                              fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️</button>
+                              fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>🗑️</button>}
                           </div>
                         </div>
                       </div>
@@ -6767,7 +6767,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
                             {ch.vente_id&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔗 Depuis vente</div>}
                             <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button></div>}
+                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}{role!=="installateur"&&<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button>}</div>}
                           </div>
                           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0,marginLeft:8}}>
                             <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700}}>{S.icon} {S.label}</span>
@@ -6815,10 +6815,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                           </div>
                         );})()}
                         <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>
+                          {role!=="installateur"&&<button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>}
                           {S.next&&<button onClick={()=>{
                             if(S.next==="planifie"){
-                              // Ouvrir modal de planification avec date
+                              if(role==="installateur") return;
                               const today=new Date();
                               const dd=String(today.getDate()).padStart(2,"0");
                               const mm=String(today.getMonth()+1).padStart(2,"0");
@@ -6829,14 +6829,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             } else {
                               nextStatut(ch);
                             }
-                          }} style={BTN(S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11})}>
+                          }} disabled={S.next==="planifie"&&role==="installateur"}
+                            style={BTN(S.next==="planifie"&&role==="installateur"?"#1B2D4F":S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11,opacity:S.next==="planifie"&&role==="installateur"?0.4:1})}>
                             {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
                           </button>}
                           <label style={{background:"#1B2D4F80",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"7px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
                             📷{(ch.photos||[]).length>0&&<span style={{fontSize:10,color:"#3B82F6"}}>{(ch.photos||[]).length}</span>}
                             <input type="file" accept="image/*" multiple onChange={e=>uploadPhotos(ch,e.target.files)} style={{display:"none"}}/>
                           </label>
-                          <button onClick={()=>setDelConf(ch)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>
+                          {role!=="installateur"&&<button onClick={()=>setDelConf(ch)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>}
                         </div>
                       </div>;
                     })}
