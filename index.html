@@ -8076,29 +8076,142 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>
           )}
 
-          {/* KPIs installateur */}
-          {role==="installateur"&&(
-          <div style={{marginBottom:20}}>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
-              {[
-                {v:_myChPlan,l:"Mes planifiés",i:"📅",c:"#3B82F6",t:"chantier"},
-                {v:_myChCours,l:"Mes en cours",i:"🔧",c:"#10B981",t:"chantier"},
-                {v:_stockCrit,l:"Stock critique",i:"📦",c:"#EF4444",t:"stock"},
-                {v:_savOuverts,l:"SAV ouverts",i:"🛠️",c:"#F87171",t:"sav"}
-              ].map(k=>(
-              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,padding:"14px 12px",border:"1px solid #1B2D4F",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div>
-                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
-                    <div style={{fontSize:11,color:"#4A6A9E",marginTop:3,fontWeight:600}}>{k.l}</div>
+          {/* Accueil installateur — optimisé mobile */}
+          {role==="installateur"&&(()=>{
+            const today=new Date().toLocaleDateString("fr-FR");
+            const tomorrow=new Date(Date.now()+86400000).toLocaleDateString("fr-FR");
+            const myName=(profile?.nom||"").toLowerCase();
+            const match=c=>(c.technicien||"").toLowerCase()===myName||(c.technicien||"")===(profile?.nom||"");
+            const chantiersAujourd=chantiersPipeline.filter(c=>match(c)&&c.statut!=="termine"&&c.date_installation===today);
+            const chantiersDemain=chantiersPipeline.filter(c=>match(c)&&c.statut!=="termine"&&c.date_installation===tomorrow);
+            const savOuverts=savTickets.filter(t=>t.statut==="ouvert").length;
+            const[showMatAuj,setShowMatAuj]=React.useState({});
+            const[showPhotoAuj,setShowPhotoAuj]=React.useState({});
+            const[showMatDem,setShowMatDem]=React.useState({});
+            const[showPhotoDem,setShowPhotoDem]=React.useState({});
+
+            const ChantierCard=({ch,showMat,setShowMat,showPhoto,setShowPhoto})=>{
+              const vente=ventes.find(v=>v.id===ch.vente_id);
+              const photos=[...((vente?.photos_vente)||[]),...((ch.photos)||[])];
+              return(
+                <div style={{background:"#0A1628",borderRadius:14,border:"1px solid #1B2D4F",marginBottom:10,overflow:"hidden"}}>
+                  {/* Header */}
+                  <div style={{padding:"14px 16px"}}>
+                    <div style={{fontWeight:800,fontSize:16,color:"#F0F6FF",marginBottom:4}}>{ch.client}</div>
+                    {ch.adresse&&<div style={{fontSize:13,color:"#7B96C8",display:"flex",alignItems:"center",gap:6}}>
+                      <span>📍</span>
+                      <a href={`https://maps.google.com?q=${encodeURIComponent(ch.adresse)}`} target="_blank" rel="noreferrer"
+                        style={{color:"#60A5FA",textDecoration:"none",fontWeight:600}}>{ch.adresse}</a>
+                    </div>}
+                    {ch.duree_chantier&&<div style={{marginTop:6}}>
+                      <span style={{background:ch.duree_chantier==="demi"?"#F59E0B20":"#3B82F620",color:ch.duree_chantier==="demi"?"#F59E0B":"#60A5FA",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:700}}>
+                        {ch.duree_chantier==="demi"?"🌅 Demi-journée":"☀️ 1 journée"}
+                      </span>
+                    </div>}
                   </div>
-                  <span style={{fontSize:20}}>{k.i}</span>
+                  {/* Boutons */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderTop:"1px solid #1B2D4F"}}>
+                    {/* Matériels */}
+                    <button onClick={()=>setShowMat(p=>({...p,[ch.id]:!p[ch.id]}))}
+                      style={{padding:"12px",background:showMat[ch.id]?"#1B2D4F":"transparent",border:"none",borderRight:"1px solid #1B2D4F",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                      <span style={{fontSize:16}}>📦</span>
+                      <span style={{fontSize:12,fontWeight:700,color:showMat[ch.id]?"#E8F0FF":"#7B96C8"}}>
+                        Matériels
+                        {(ch.materiels?.length>0||ch.cables?.length>0)&&<span style={{background:"#3B82F6",color:"#fff",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 6px",marginLeft:4}}>{(ch.materiels||[]).length+(ch.cables||[]).length}</span>}
+                      </span>
+                    </button>
+                    {/* Photos */}
+                    <button onClick={()=>setShowPhoto(p=>({...p,[ch.id]:!p[ch.id]}))}
+                      style={{padding:"12px",background:showPhoto[ch.id]?"#1B2D4F":"transparent",border:"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                      <span style={{fontSize:16}}>📸</span>
+                      <span style={{fontSize:12,fontWeight:700,color:showPhoto[ch.id]?"#E8F0FF":"#7B96C8"}}>
+                        Photos visite
+                        {photos.length>0&&<span style={{background:"#A855F7",color:"#fff",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 6px",marginLeft:4}}>{photos.length}</span>}
+                      </span>
+                    </button>
+                  </div>
+                  {/* Matériels détail */}
+                  {showMat[ch.id]&&<div style={{borderTop:"1px solid #1B2D4F",padding:"12px 16px",background:"#070D1A"}}>
+                    {(ch.materiels||[]).length===0&&(ch.cables||[]).length===0
+                      ?<div style={{fontSize:12,color:"#2E4D82",textAlign:"center",padding:"6px 0"}}>Aucun matériel renseigné</div>
+                      :<>
+                        {(ch.materiels||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1B2D4F44",fontSize:13}}>
+                          <span style={{color:"#E8F0FF"}}>{m.article}</span>
+                          <span style={{fontWeight:700,color:"#60A5FA"}}>{m.qty}×</span>
+                        </div>)}
+                        {(ch.cables||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1B2D4F44",fontSize:13}}>
+                          <span style={{color:"#A3C45A"}}>{m.article}</span>
+                          <span style={{fontWeight:700,color:"#A3C45A"}}>{m.qty}ml</span>
+                        </div>)}
+                      </>
+                    }
+                  </div>}
+                  {/* Photos détail */}
+                  {showPhoto[ch.id]&&<div style={{borderTop:"1px solid #1B2D4F",padding:"12px 16px",background:"#070D1A"}}>
+                    {photos.length===0
+                      ?<div style={{fontSize:12,color:"#2E4D82",textAlign:"center",padding:"6px 0"}}>Aucune photo disponible</div>
+                      :<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                        {photos.map((url,i)=>(
+                          <img key={i} src={url} onClick={()=>{}} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,cursor:"zoom-in"}}/>
+                        ))}
+                      </div>
+                    }
+                  </div>}
+                </div>
+              );
+            };
+
+            return(
+              <div style={{paddingBottom:20}}>
+                {/* Bonjour */}
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:20,fontWeight:800,color:"#F0F6FF",marginBottom:2}}>{_greeting} {_prenom} 🔧</div>
+                  <div style={{fontSize:12,color:"#4A6A9E"}}>{_dateStr}</div>
+                </div>
+
+                {/* SAV ouverts */}
+                <button onClick={()=>goTo("sav")}
+                  style={{width:"100%",background:savOuverts>0?"#EF444410":"#0D1828",border:`1px solid ${savOuverts>0?"#EF444440":"#1B2D4F"}`,borderRadius:12,padding:"12px 16px",marginBottom:14,cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:savOuverts>0?"#EF444420":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🛠️</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:800,fontSize:15,color:savOuverts>0?"#EF4444":"#7B96C8",lineHeight:1}}>{savOuverts}</div>
+                    <div style={{fontSize:12,color:"#4A6A9E",marginTop:2}}>SAV ouvert{savOuverts>1?"s":""}</div>
+                  </div>
+                  <span style={{color:"#4A6A9E",fontSize:18}}>›</span>
+                </button>
+
+                {/* Chantiers aujourd'hui */}
+                <div style={{marginBottom:16}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <span style={{fontSize:16}}>📅</span>
+                    <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Aujourd'hui</span>
+                    <span style={{background:"#3B82F620",color:"#60A5FA",borderRadius:20,fontSize:11,fontWeight:700,padding:"2px 9px"}}>{chantiersAujourd.length}</span>
+                  </div>
+                  {chantiersAujourd.length===0
+                    ?<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"18px",textAlign:"center",color:"#2E4D82",fontSize:13}}>
+                      Aucun chantier prévu aujourd'hui
+                    </div>
+                    :chantiersAujourd.map(ch=><ChantierCard key={ch.id} ch={ch} showMat={showMatAuj} setShowMat={setShowMatAuj} showPhoto={showPhotoAuj} setShowPhoto={setShowPhotoAuj}/>)
+                  }
+                </div>
+
+                {/* Chantiers demain */}
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <span style={{fontSize:16}}>🗓️</span>
+                    <span style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>Demain</span>
+                    <span style={{background:"#A855F720",color:"#C084FC",borderRadius:20,fontSize:11,fontWeight:700,padding:"2px 9px"}}>{chantiersDemain.length}</span>
+                  </div>
+                  {chantiersDemain.length===0
+                    ?<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"18px",textAlign:"center",color:"#2E4D82",fontSize:13}}>
+                      Aucun chantier prévu demain
+                    </div>
+                    :chantiersDemain.map(ch=><ChantierCard key={ch.id} ch={ch} showMat={showMatDem} setShowMat={setShowMatDem} showPhoto={showPhotoDem} setShowPhoto={setShowPhotoDem}/>)
+                  }
                 </div>
               </div>
-              ))}
-            </div>
-          </div>
-          )}
+            );
+          })()}
 
           {/* KPIs secrétaire */}
           {role==="secretaire"&&(
