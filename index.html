@@ -7928,6 +7928,67 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         }
                       </div>
                     </>}
+
+                    {/* ── Stats SAV par installateur ── */}
+                    {sel&&(()=>{
+                      const CAUSES_LABELS={marque:{label:"Défaut marque",color:"#8B5CF6",icon:"🏭"},installation:{label:"Erreur installation",color:"#EF4444",icon:"🔧"},direction:{label:"Décision interne",color:"#F59E0B",icon:"🏢"},externe:{label:"Cause externe",color:"#3B82F6",icon:"🌐"}};
+                      const STATUTS_RESOLUS_SAV=["regle_nous","regle_marque","borne_changee"];
+                      const chantierIds=new Set(chantiersPipeline.filter(c=>(c.technicien||"").toLowerCase()===(sel.tech||"").toLowerCase()).map(c=>c.id));
+                      const savTech=savTickets.filter(t=>chantierIds.has(t.chantier_id)||chantierIds.has(Number(t.chantier_id)));
+                      const resolus=savTech.filter(t=>STATUTS_RESOLUS_SAV.includes(t.statut)).length;
+                      const nbBornes=savTech.filter(t=>t.borne_changee).length;
+                      const nbDepla=savTech.filter(t=>t.deplacement_effectue).length;
+                      const tempsTotal=savTech.reduce((s,t)=>s+Number(t.temps_perdu||0),0);
+                      const coutTotal=savTech.reduce((s,t)=>s+Number(t.cout_installation||0),0);
+                      const avecCause=savTech.filter(t=>t.cause_origine);
+                      const parCause={};
+                      avecCause.forEach(t=>{if(!parCause[t.cause_origine])parCause[t.cause_origine]=0;parCause[t.cause_origine]++;});
+                      if(!savTech.length) return null;
+                      return(
+                        <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:16}}>
+                          <h3 style={{margin:"0 0 14px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>🛠️ SAV liés à cet installateur</h3>
+                          {/* KPIs SAV */}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
+                            {[
+                              {v:savTech.length,l:"Total SAV",i:"🎫",c:"#3B82F6"},
+                              {v:resolus,l:"Résolus",i:"✅",c:"#10B981"},
+                              {v:nbBornes,l:"Bornes changées",i:"🔄",c:"#60A5FA"},
+                              {v:nbDepla,l:"Déplacements",i:"🚗",c:"#F59E0B"},
+                            ].map(k=>(
+                              <div key={k.l} style={{background:"#070D1A",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:18}}>{k.i}</span>
+                                <div><div style={{fontSize:16,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div><div style={{fontSize:10,color:"#4A6A9E"}}>{k.l}</div></div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Temps & coût */}
+                          {(tempsTotal>0||coutTotal>0)&&<div style={{display:"flex",gap:8,marginBottom:12}}>
+                            {tempsTotal>0&&<div style={{flex:1,background:"#F59E0B08",border:"1px solid #F59E0B25",borderRadius:10,padding:"8px 12px",textAlign:"center"}}>
+                              <div style={{fontSize:14,fontWeight:800,color:"#F59E0B"}}>⏱️ {tempsTotal}h</div>
+                              <div style={{fontSize:10,color:"#4A6A9E"}}>Temps perdu total</div>
+                            </div>}
+                            {coutTotal>0&&<div style={{flex:1,background:"#EF444408",border:"1px solid #EF444425",borderRadius:10,padding:"8px 12px",textAlign:"center"}}>
+                              <div style={{fontSize:14,fontWeight:800,color:"#EF4444"}}>💸 {coutTotal.toLocaleString("fr-FR",{minimumFractionDigits:2})} €</div>
+                              <div style={{fontSize:10,color:"#4A6A9E"}}>Coût erreurs installation</div>
+                            </div>}
+                          </div>}
+                          {/* Causes */}
+                          {Object.keys(parCause).length>0&&<div>
+                            <div style={{fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase"}}>Causes identifiées</div>
+                            {Object.entries(parCause).sort((a,b)=>b[1]-a[1]).map(([k,nb])=>{
+                              const C=CAUSES_LABELS[k];
+                              return C?(
+                                <div key={k} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                                  <span style={{fontSize:12,color:C.color,minWidth:18}}>{C.icon}</span>
+                                  <span style={{fontSize:11,color:"#E8F0FF",flex:1}}>{C.label}</span>
+                                  <span style={{background:C.color+"20",color:C.color,borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700}}>{nb}</span>
+                                </div>
+                              ):null;
+                            })}
+                          </div>}
+                        </div>
+                      );
+                    })()}
                   </>);
                 })()}
 
