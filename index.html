@@ -427,6 +427,7 @@
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
         a_facturer: {label:"En attente",  color:"#EF4444", icon:"🔴"},
+        bloque:     {label:"En attente validation", color:"#F59E0B", icon:"⏸️"},
         facture:    {label:"Facturé",     color:"#3B82F6", icon:"📄"},
         paye:       {label:"Payé",        color:"#10B981", icon:"✅"},
       };
@@ -492,7 +493,7 @@
 
       const kpis = Object.entries(STATUTS_FACT).map(([k,v]) => ({
         ...v, key:k,
-        nb: termines.filter(ch=>(ch.facture?.statut||"a_facturer")===k).length
+        nb: terminesAll.filter(ch=>(ch.facture?.statut||"a_facturer")===k).length
       }));
 
       const urgent = termines.filter(ch => (ch.facture?.statut||"a_facturer") === "a_facturer").length;
