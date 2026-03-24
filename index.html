@@ -6327,6 +6327,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const[tabView,setTabView]=useState("pipeline");
       const[search,setSearch]=useState("");
+      const[techFilter,setTechFilter]=useState("tous");
+      const[expandedCards,setExpandedCards]=useState({});
+      const toggleCard=id=>setExpandedCards(p=>({...p,[id]:!p[id]}));
       const[editModal,setEditModal]=useState(null);
       const[delConf,setDelConf]=useState(null);
       const[newForm,setNewForm]=useState(null);
@@ -6453,22 +6456,24 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       });
       const pipeline=s=>chantiers.filter(ch=>{
         if(ch.statut!==s) return false;
+        if(techFilter!=="tous"&&(ch.technicien||"")!==techFilter) return false;
         if(!search) return true;
         const q=search.toLowerCase();
         return (ch.client||"").toLowerCase().includes(q)||(ch.technicien||"").toLowerCase().includes(q)||(ch.adresse||"").toLowerCase().includes(q);
       });
-      // Ordre des statuts selon le rôle
-      const statOrder=(role==="installateur"||role==="commercial")
-        ?["en_cours","planifie","a_planifier"]
-        :["a_planifier","planifie","en_cours"];
 
-      // Fonction de tri par date pour les planifiés
+      // Ordre unifié : En cours → Planifiés (chrono) → À planifier
+      const statOrder=["en_cours","planifie","a_planifier"];
+
       const parseDate=d=>{if(!d)return Infinity;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
       const pipelineSorted=(statut)=>{
         const list=pipeline(statut);
-        if(statut==="planifie") return [...list].sort((a,b)=>parseDate(a.date_installation)-parseDate(b.date_installation));
+        if(statut==="planifie"||statut==="en_cours") return [...list].sort((a,b)=>parseDate(a.date_installation)-parseDate(b.date_installation));
         return list;
       };
+
+      // Liste des techniciens disponibles
+      const allTechs=[...new Set(chantiers.filter(c=>c.technicien).map(c=>c.technicien))].sort();
       const insufficientChantiers=chantiers.filter(ch=>ch.statut!=="termine"&&(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty)));
 
       return(
@@ -6769,97 +6774,118 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <button onClick={()=>{if(!newForm.client)return;setChantiers(p=>[{...newForm,id:Date.now(),date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",checklist:{client_contacte:false,materiel_prepare:false,acces_confirme:false}},...p]);setNewForm(null);}} style={BTN(!newForm.client?"#1B2D4F":"linear-gradient(135deg,#10B981,#059669)",{flex:2})}>✅ Créer</button>
               </div>
             </div>}
+
+            {/* Filtre technicien */}
+            {allTechs.length>1&&<div style={{display:"flex",gap:5,marginBottom:14,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>
+              {["tous",...allTechs].map(t=>(
+                <button key={t} onClick={()=>setTechFilter(t)}
+                  style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${techFilter===t?"#3B82F6":"#1B2D4F"}`,background:techFilter===t?"#3B82F620":"transparent",color:techFilter===t?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap",flexShrink:0}}>
+                  {t==="tous"?"👥 Tous":t}
+                </button>
+              ))}
+            </div>}
+
             {statOrder.map(statut=>{
-              const list=pipelineSorted(statut);const S=STATUTS_CH[statut];
-              return<div key={statut} style={{marginBottom:22}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <span style={{fontSize:16}}>{S.icon}</span>
-                  <span style={{fontWeight:800,fontSize:14,color:S.color}}>{S.label}</span>
+              const list=pipelineSorted(statut);
+              const S=STATUTS_CH[statut];
+              return<div key={statut} style={{marginBottom:18}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:15}}>{S.icon}</span>
+                  <span style={{fontWeight:800,fontSize:13,color:S.color}}>{S.label}</span>
                   <span style={{background:S.bg,color:S.color,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:700}}>{list.length}</span>
                 </div>
-                {list.length===0?<div style={{background:"#0D1828",borderRadius:10,border:"1px dashed #1B2D4F",padding:"16px",textAlign:"center",color:"#2E4D82",fontSize:12}}>Aucun chantier</div>
-                  :<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
+                {list.length===0
+                  ?<div style={{background:"#0D1828",borderRadius:10,border:"1px dashed #1B2D4F",padding:"12px",textAlign:"center",color:"#2E4D82",fontSize:12}}>Aucun chantier</div>
+                  :<div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {list.map(ch=>{
+                      const isExpanded=!!expandedCards[ch.id];
                       const checkDone=Object.values(ch.checklist||{}).filter(Boolean).length;
                       const hasInsuff=(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty));
-                      return<div key={ch.id} style={{background:"#0D1828",borderRadius:12,border:`1px solid ${hasInsuff?"#EF444440":S.color+"30"}`,padding:"14px 16px"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
-                            {ch.vente_id&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔗 Depuis vente</div>}
-                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444",fontWeight:600}}>⚠️ Sans technicien</span>}</div>
-                            {ch.date_installation&&<div style={{fontSize:11,color:"#3B82F6",fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:5}}>📅 {ch.date_installation}{role!=="installateur"&&<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:5,color:"#4A6A9E",padding:"1px 5px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>✏️</button>}</div>}
-                          </div>
-                          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0,marginLeft:8}}>
-                            <span style={{background:S.bg,color:S.color,padding:"3px 8px",borderRadius:8,fontSize:10,fontWeight:700}}>{S.icon} {S.label}</span>
-                            {ch.duree_chantier&&<span style={{
-                              background:ch.duree_chantier==="demi"?"#F59E0B":"#3B82F6",
-                              color:"#fff",
-                              borderRadius:8,
-                              fontSize:11,
-                              fontWeight:800,
-                              padding:"4px 9px",
-                              letterSpacing:"0.02em",
-                            }}>{ch.duree_chantier==="demi"?"🌅 ½ journée":"☀️ 1 journée"}</span>}
-                          </div>
-                        </div>
-                        {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{background:"#070D1A",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
-                          {(ch.materiels||[]).map((m,i)=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:ins?"#EF4444":"#7B96C8"}}><span>{m.article}</span><span style={{fontWeight:600}}>{m.qty}×{ins&&<span style={{fontSize:10}}> ⚠️{stockDispo(Number(m.id))}</span>}</span></div>;})}
-                          {(ch.cables||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:"#7B96C8"}}><span>{m.article}</span><span>{m.qty}ml</span></div>)}
-                        </div>}
-                        <div style={{display:"flex",gap:5,marginBottom:6,flexWrap:"wrap"}}>
-                          {CHECKLIST_ITEMS.map(item=>(
-                            <div key={item.key} onClick={()=>updateChantier(ch.id,{checklist:{...ch.checklist,[item.key]:!ch.checklist?.[item.key]}})} style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",background:ch.checklist?.[item.key]?"#10B98115":"#070D1A",border:`1px solid ${ch.checklist?.[item.key]?"#10B98140":"#1B2D4F"}`,borderRadius:6,padding:"3px 7px"}}>
-                              <span style={{fontSize:10,color:ch.checklist?.[item.key]?"#10B981":"#2E4D82"}}>{ch.checklist?.[item.key]?"✓ ":""}{item.label}</span>
+                      const hasAlerts=ch.urgence||(ch.problemes_admin||[]).length>0;
+                      return<div key={ch.id} style={{background:"#0D1828",borderRadius:12,border:`1px solid ${hasInsuff?"#EF444440":hasAlerts?"#F59E0B40":S.color+"25"}`,overflow:"hidden"}}>
+
+                        {/* Ligne compacte — toujours visible */}
+                        <div onClick={()=>toggleCard(ch.id)} style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}
+                          onMouseOver={e=>e.currentTarget.style.background="#1B2D4F22"}
+                          onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                          {/* Indicateur statut */}
+                          <div style={{width:4,height:36,borderRadius:2,background:S.color,flexShrink:0}}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,flexWrap:"wrap"}}>
+                              <span style={{fontWeight:700,fontSize:14,color:"#F0F6FF"}}>{ch.client}</span>
+                              {hasInsuff&&<span style={{fontSize:10,color:"#EF4444",fontWeight:700}}>⚠️ Stock</span>}
+                              {(ch.problemes_admin||[]).length>0&&<span style={{fontSize:10,color:"#F59E0B"}}>🚨</span>}
                             </div>
-                          ))}
-                        </div>
-                        <div style={{fontSize:10,color:"#4A6A9E",marginBottom:8}}>{checkDone}/{CHECKLIST_ITEMS.length} vérifiés</div>
-                        {ch.notes&&<div style={{fontSize:11,color:"#4A6A9E",fontStyle:"italic",marginBottom:8,padding:"6px 8px",background:"#070D1A",borderRadius:6}}>"{ch.notes}"</div>}
-                        {/* Miniatures photos chantier */}
-                        {(ch.photos||[]).length>0&&<div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
-                          {(ch.photos||[]).slice(0,4).map((url,i)=>(
-                            <img key={i} src={url} onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"2px solid #1B2D4F"}}/>
-                          ))}
-                          {(ch.photos||[]).length>4&&<div onClick={()=>setPhotosModal(ch)} style={{width:44,height:44,borderRadius:7,background:"#070D1A",border:"2px solid #1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#4A6A9E",fontWeight:700}}>+{(ch.photos||[]).length-4}</div>}
-                        </div>}
-                        {/* Photos de vente (pré-installation) */}
-                        {(()=>{const vl=ventes?.find(v=>v.id===ch.vente_id);const vp=vl?.photos_vente||[];if(!vp.length)return null;return(
-                          <div style={{background:"#0A1628",borderRadius:8,border:"1px solid #F59E0B30",padding:"8px 10px",marginBottom:8}}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#F59E0B",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>📷 Photos visite commerciale ({vp.length})</div>
-                            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                              {vp.slice(0,5).map((url,i)=>(
-                                <img key={i} src={url} onClick={()=>setLightbox(url)} style={{width:48,height:48,objectFit:"cover",borderRadius:7,cursor:"zoom-in",border:"2px solid #F59E0B40"}}/>
-                              ))}
-                              {vp.length>5&&<div onClick={()=>setLightbox(vp[5])} style={{width:48,height:48,borderRadius:7,background:"#070D1A",border:"2px solid #F59E0B40",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:11,color:"#F59E0B",fontWeight:700}}>+{vp.length-5}</div>}
+                            <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#4A6A9E"}}>
+                              {ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444"}}>⚠️ Sans tech.</span>}
+                              {ch.date_installation&&<span style={{color:"#3B82F6",fontWeight:600}}>📅 {ch.date_installation}</span>}
+                              {ch.adresse&&!isMobile&&<span>📍 {ch.adresse.split(",")[0]}</span>}
+                              {(ch.materiels||[]).length>0&&<span>📦 {(ch.materiels||[]).length+(ch.cables||[]).length} article{(ch.materiels||[]).length+(ch.cables||[]).length>1?"s":""}</span>}
                             </div>
                           </div>
-                        );})()}
-                        <div style={{display:"flex",gap:6}}>
-                          {role!=="installateur"&&<button onClick={()=>{setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{flex:1,padding:"7px",fontSize:11})}>✏️</button>}
-                          {S.next&&<button onClick={()=>{
-                            if(S.next==="planifie"){
-                              if(role==="installateur") return;
-                              const today=new Date();
-                              const dd=String(today.getDate()).padStart(2,"0");
-                              const mm=String(today.getMonth()+1).padStart(2,"0");
-                              const yyyy=today.getFullYear();
-                              setPlanifModal({ch,dateStr:ch.date_installation||`${dd}/${mm}/${yyyy}`,mode:"planifier"});
-                            } else if(S.next==="termine"){
-                              setRapportModal({ch,rapport:{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:new Date().toLocaleDateString("fr-FR"),rapport_par:ch.technicien||installerName||""}});
-                            } else {
-                              nextStatut(ch);
-                            }
-                          }} disabled={S.next==="planifie"&&role==="installateur"}
-                            style={BTN(S.next==="planifie"&&role==="installateur"?"#1B2D4F":S.next==="termine"?"#10B981":"#3B82F6",{flex:2,padding:"7px",fontSize:11,opacity:S.next==="planifie"&&role==="installateur"?0.4:1})}>
-                            {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
-                          </button>}
-                          <label style={{background:"#1B2D4F80",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"7px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                            📷{(ch.photos||[]).length>0&&<span style={{fontSize:10,color:"#3B82F6"}}>{(ch.photos||[]).length}</span>}
-                            <input type="file" accept="image/*" multiple onChange={e=>uploadPhotos(ch,e.target.files)} style={{display:"none"}}/>
-                          </label>
-                          {role!=="installateur"&&<button onClick={()=>setDelConf(ch)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"7px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>}
+                          {/* Checklist mini */}
+                          <div style={{display:"flex",gap:3,flexShrink:0}}>
+                            {CHECKLIST_ITEMS.map(item=>(
+                              <div key={item.key} style={{width:7,height:7,borderRadius:"50%",background:ch.checklist?.[item.key]?"#10B981":"#1B2D4F"}}/>
+                            ))}
+                          </div>
+                          <span style={{color:isExpanded?"#3B82F6":"#2E4D82",fontSize:14,transition:"transform 0.2s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",flexShrink:0}}>›</span>
                         </div>
+
+                        {/* Détail déplié */}
+                        {isExpanded&&<div style={{borderTop:"1px solid #1B2D4F",padding:"12px 14px",background:"#070D1A"}}>
+                          {ch.adresse&&<div style={{fontSize:11,color:"#7B96C8",marginBottom:8}}>📍 {ch.adresse}</div>}
+                          {/* Checklist complète */}
+                          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
+                            {CHECKLIST_ITEMS.map(item=>(
+                              <div key={item.key} onClick={()=>updateChantier(ch.id,{checklist:{...ch.checklist,[item.key]:!ch.checklist?.[item.key]}})}
+                                style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",background:ch.checklist?.[item.key]?"#10B98115":"#0D1828",border:`1px solid ${ch.checklist?.[item.key]?"#10B98140":"#1B2D4F"}`,borderRadius:6,padding:"4px 8px"}}>
+                                <span style={{fontSize:11,color:ch.checklist?.[item.key]?"#10B981":"#4A6A9E"}}>{ch.checklist?.[item.key]?"✓ ":""}{item.label}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Matériels */}
+                          {(ch.materiels?.length>0||ch.cables?.length>0)&&<div style={{background:"#0D1828",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
+                            {(ch.materiels||[]).map((m,i)=>{const ins=stockDispo(Number(m.id))<Number(m.qty);return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:ins?"#EF4444":"#7B96C8"}}><span>{m.article}</span><span style={{fontWeight:600}}>{m.qty}×{ins&&<span style={{fontSize:10}}> ⚠️{stockDispo(Number(m.id))}</span>}</span></div>;})}
+                            {(ch.cables||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:"#7B96C8"}}><span>{m.article}</span><span>{m.qty}ml</span></div>)}
+                          </div>}
+                          {/* Photos */}
+                          {(()=>{const vl=ventes?.find(v=>v.id===ch.vente_id);const vp=vl?.photos_vente||[];const cp=ch.photos||[];const allP=[...vp,...cp];if(!allP.length)return null;return(
+                            <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+                              {allP.slice(0,6).map((url,i)=><img key={i} src={url} onClick={()=>setLightbox(url)} style={{width:44,height:44,objectFit:"cover",borderRadius:7,cursor:"zoom-in",border:"2px solid #1B2D4F"}}/>)}
+                              {allP.length>6&&<div onClick={()=>setLightbox(allP[6])} style={{width:44,height:44,borderRadius:7,background:"#0D1828",border:"2px solid #1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,color:"#4A6A9E",fontWeight:700}}>+{allP.length-6}</div>}
+                            </div>
+                          );})()}
+                          {ch.notes&&<div style={{fontSize:11,color:"#4A6A9E",fontStyle:"italic",marginBottom:8,padding:"6px 8px",background:"#0D1828",borderRadius:6}}>"{ch.notes}"</div>}
+                          {/* Actions */}
+                          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                            {role!=="installateur"&&<button onClick={e=>{e.stopPropagation();setEditModal({...ch});setMItem({id:"",qty:""});setCItem({id:"",qty:""});}} style={BTN("#1B2D4F",{padding:"6px 10px",fontSize:11})}>✏️ Modifier</button>}
+                            {ch.date_installation&&role!=="installateur"&&<button onClick={e=>{e.stopPropagation();setPlanifModal({ch,dateStr:ch.date_installation,mode:"redate"});}} style={BTN("#1B2D4F",{padding:"6px 10px",fontSize:11})}>📅 Replanifier</button>}
+                            {S.next&&<button onClick={e=>{
+                              e.stopPropagation();
+                              if(S.next==="planifie"){
+                                if(role==="installateur") return;
+                                const today=new Date();
+                                const dd=String(today.getDate()).padStart(2,"0");
+                                const mm=String(today.getMonth()+1).padStart(2,"0");
+                                const yyyy=today.getFullYear();
+                                setPlanifModal({ch,dateStr:ch.date_installation||`${dd}/${mm}/${yyyy}`,mode:"planifier"});
+                              } else if(S.next==="termine"){
+                                setRapportModal({ch,rapport:{heures_debut:"",heures_fin:"",observations:"",materiel_supp:"",photos_chantier:[],photo_pv:null,signature:null,rapport_date:new Date().toLocaleDateString("fr-FR"),rapport_par:ch.technicien||installerName||""}});
+                              } else {
+                                nextStatut(ch);
+                              }
+                            }} disabled={S.next==="planifie"&&role==="installateur"}
+                              style={BTN(S.next==="planifie"&&role==="installateur"?"#1B2D4F":S.next==="termine"?"#10B981":"#3B82F6",{padding:"6px 12px",fontSize:11,opacity:S.next==="planifie"&&role==="installateur"?0.4:1})}>
+                              {S.next==="planifie"&&"📅 Planifier"}{S.next==="en_cours"&&"🔧 Démarrer"}{S.next==="termine"&&"✅ Terminer"}
+                            </button>}
+                            <label style={{background:"#1B2D4F80",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"6px 9px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                              📷{(ch.photos||[]).length>0&&<span style={{fontSize:10,color:"#3B82F6"}}>{(ch.photos||[]).length}</span>}
+                              <input type="file" accept="image/*" multiple onChange={e=>uploadPhotos(ch,e.target.files)} style={{display:"none"}}/>
+                            </label>
+                            {role!=="installateur"&&<button onClick={e=>{e.stopPropagation();setDelConf(ch);}} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🗑️</button>}
+                          </div>
+                        </div>}
                       </div>;
                     })}
                   </div>
