@@ -6447,7 +6447,18 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         const q=search.toLowerCase();
         return (ch.client||"").toLowerCase().includes(q)||(ch.technicien||"").toLowerCase().includes(q)||(ch.adresse||"").toLowerCase().includes(q);
       });
-      const statOrder=["a_planifier","planifie","en_cours"];
+      // Ordre des statuts selon le rôle
+      const statOrder=(role==="installateur"||role==="commercial")
+        ?["en_cours","planifie","a_planifier"]
+        :["a_planifier","planifie","en_cours"];
+
+      // Fonction de tri par date pour les planifiés
+      const parseDate=d=>{if(!d)return Infinity;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
+      const pipelineSorted=(statut)=>{
+        const list=pipeline(statut);
+        if(statut==="planifie") return [...list].sort((a,b)=>parseDate(a.date_installation)-parseDate(b.date_installation));
+        return list;
+      };
       const insufficientChantiers=chantiers.filter(ch=>ch.statut!=="termine"&&(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty)));
 
       return(
@@ -6749,7 +6760,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
             </div>}
             {statOrder.map(statut=>{
-              const list=pipeline(statut);const S=STATUTS_CH[statut];
+              const list=pipelineSorted(statut);const S=STATUTS_CH[statut];
               return<div key={statut} style={{marginBottom:22}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
                   <span style={{fontSize:16}}>{S.icon}</span>
