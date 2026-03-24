@@ -455,9 +455,11 @@
       const totalBloques = terminesBloques.reduce((s,ch)=>s+getMontant(ch),0);
       const fmtE = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 
-      // Notification quand des factures bloquées existent
+      // Notification quand des factures bloquées existent — une seule fois
+      const notifSentRef = React.useRef(false);
       React.useEffect(()=>{
-        if(terminesBloques.length>0&&addNotif&&canEdit(role)){
+        if(terminesBloques.length>0&&addNotif&&canEdit(role)&&!notifSentRef.current){
+          notifSentRef.current = true;
           addNotif("🚫","Facturations en attente",
             `${terminesBloques.length} chantier${terminesBloques.length>1?"s":""} terminé${terminesBloques.length>1?"s":""} avec problème — facturation en attente de validation`,
             "factures");
