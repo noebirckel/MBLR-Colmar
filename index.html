@@ -681,6 +681,9 @@
             const updateSavStatut=(id,statut_marque)=>{
               if(setTickets) setTickets(p=>p.map(t=>t.id===id?{...t,statut_marque}:t));
             };
+            const deleteSavMarque=(id)=>{
+              if(setTickets) setTickets(p=>p.map(t=>t.id===id?{...t,montant_facture_marque:0,statut_marque:"a_facturer"}:t));
+            };
             const fmtM=n=>Number(n).toLocaleString("fr-FR",{minimumFractionDigits:2})+" €";
             return(
               <div style={{marginBottom:14}}>
@@ -711,35 +714,49 @@
                     const next=steps[idx+1]||null;
                     const prev=steps[idx-1]||null;
                     return(
-                      <div key={t.id} style={{padding:"11px 14px",borderBottom:i<savMarque.length-1?"1px solid #1B2D4F22":"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:2,flexWrap:"wrap"}}>
-                            <span style={{fontWeight:700,fontSize:12,color:"#E8F0FF"}}>{t.client}</span>
-                            {t.marque&&<span style={{fontSize:10,color:"#A78BFA",fontWeight:700}}>⚡ {t.marque}</span>}
-                            {ch&&<span style={{fontSize:10,color:"#4A6A9E"}}>· {ch.client}</span>}
+                      <div key={t.id} style={{padding:"11px 14px",borderBottom:i<savMarque.length-1?"1px solid #1B2D4F22":"none"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:2,flexWrap:"wrap"}}>
+                              <span style={{fontWeight:700,fontSize:12,color:"#E8F0FF"}}>{t.client}</span>
+                              {t.marque&&<span style={{fontSize:10,color:"#A78BFA",fontWeight:700}}>⚡ {t.marque}</span>}
+                              {ch&&<span style={{fontSize:10,color:"#4A6A9E"}}>· {ch.client}</span>}
+                            </div>
+                            {/* Mini stepper */}
+                            <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
+                              {steps.map((s,si)=>(
+                                <React.Fragment key={s.k}>
+                                  <span style={{fontSize:9,fontWeight:700,color:si<=idx?s.c:"#2E4D82",opacity:si<=idx?1:0.5}}>{s.i} {s.l}</span>
+                                  {si<steps.length-1&&<span style={{color:"#1B2D4F",fontSize:9}}>›</span>}
+                                </React.Fragment>
+                              ))}
+                            </div>
                           </div>
-                          {/* Mini stepper */}
-                          <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
-                            {steps.map((s,si)=>(
-                              <React.Fragment key={s.k}>
-                                <span style={{fontSize:9,fontWeight:700,color:si<=idx?s.c:"#2E4D82",opacity:si<=idx?1:0.5}}>{s.i} {s.l}</span>
-                                {si<steps.length-1&&<span style={{color:"#1B2D4F",fontSize:9}}>›</span>}
-                              </React.Fragment>
-                            ))}
+                          <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                            <span style={{fontWeight:800,fontSize:13,color:steps[idx]?.c||"#A78BFA"}}>{fmtM(t.montant_facture_marque)}</span>
+                            {canEdit(role)&&<>
+                              {prev&&<button onClick={()=>updateSavStatut(t.id,prev.k)}
+                                style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 8px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>
+                                ←
+                              </button>}
+                              {next&&<button onClick={()=>updateSavStatut(t.id,next.k)}
+                                style={{background:next.c+"20",border:`1px solid ${next.c}40`,borderRadius:7,color:next.c,padding:"4px 8px",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap"}}>
+                                {next.i} {next.l}
+                              </button>}
+                            </>}
+                            {/* Modifier montant — admin uniquement */}
+                            {role==="administrateur"&&<button
+                              onClick={()=>{const n=window.prompt(`Nouveau montant pour ${t.client} (€ HT)`,t.montant_facture_marque);if(n!==null&&!isNaN(Number(n))&&Number(n)>=0)setTickets(p=>p.map(x=>x.id===t.id?{...x,montant_facture_marque:Number(n)}:x));}}
+                              style={{background:"#1B2D4F",border:"1px solid #2E4D82",borderRadius:7,color:"#7B96C8",padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>
+                              ✏️
+                            </button>}
+                            {/* Supprimer — admin uniquement */}
+                            {role==="administrateur"&&<button
+                              onClick={()=>{if(window.confirm(`Supprimer la facturation marque de ${t.client} ?`))deleteSavMarque(t.id);}}
+                              style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:7,color:"#EF4444",padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>
+                              🗑️
+                            </button>}
                           </div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                          <span style={{fontWeight:800,fontSize:13,color:steps[idx]?.c||"#A78BFA"}}>{fmtM(t.montant_facture_marque)}</span>
-                          {canEdit(role)&&<div style={{display:"flex",gap:4}}>
-                            {prev&&<button onClick={()=>updateSavStatut(t.id,prev.k)}
-                              style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 8px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>
-                              ←
-                            </button>}
-                            {next&&<button onClick={()=>updateSavStatut(t.id,next.k)}
-                              style={{background:next.c+"20",border:`1px solid ${next.c}40`,borderRadius:7,color:next.c,padding:"4px 8px",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap"}}>
-                              {next.i} {next.l}
-                            </button>}
-                          </div>}
                         </div>
                       </div>
                     );
