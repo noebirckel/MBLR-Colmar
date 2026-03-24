@@ -4944,7 +4944,22 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 16px",fontSize:13})}>➕ Nouvel acompte</button>}
           </div>
 
-          {/* KPIs */}
+          {/* KPIs statuts — cliquables pour filtrer */}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:10}}>
+            {Object.entries(STATUTS).map(([k,s])=>{
+              const nb=acomptes.filter(a=>a.statut===k).length;
+              return(
+                <div key={k} onClick={()=>setFilter(filter===k?"tous":k)}
+                  style={{background:"#0D1828",borderRadius:10,padding:"14px 12px",border:`1px solid ${filter===k?s.color:"#1B2D4F"}`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}>
+                  <div style={{fontSize:22,marginBottom:4}}>{s.icon}</div>
+                  <div style={{fontSize:22,fontWeight:800,color:s.color}}>{nb}</div>
+                  <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{s.label}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* KPIs financiers */}
           <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:16}}>
             {[
               {l:"Total acomptes",v:fmt(totalAcomptes),c:"#3B82F6",i:"💶",sub:`${acomptes.length} demande(s)`},
