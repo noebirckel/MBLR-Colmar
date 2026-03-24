@@ -8478,40 +8478,36 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     </button>
                   ))}
 
-                  {/* Chantiers du jour — dépliable avec liens clients */}
+                  {/* Chantiers du jour — toujours visible */}
                   <div style={{background:"#0D1828",border:`1px solid ${chAujourd.length>0?"#3B82F640":"#1B2D4F"}`,borderRadius:12,overflow:"hidden"}}>
-                    <button onClick={()=>goTo("chantier")}
-                      style={{width:"100%",padding:"13px 16px",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left",background:"transparent",border:"none"}}
-                      onMouseOver={e=>e.currentTarget.style.background="#1B2D4F22"}
-                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                    <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:12}}>
                       <div style={{width:40,height:40,borderRadius:10,background:chAujourd.length>0?"#3B82F620":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🔧</div>
                       <div style={{flex:1}}>
                         <div style={{fontWeight:700,fontSize:14,color:chAujourd.length>0?"#60A5FA":"#7B96C8"}}>Chantiers aujourd'hui</div>
-                        <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{chAujourd.length>0?`${chAujourd.length} chantier${chAujourd.length>1?"s":""} ce jour`:"Aucun chantier aujourd'hui"}</div>
+                        <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{chAujourd.length>0?`${chAujourd.length} chantier${chAujourd.length>1?"s":""} planifié${chAujourd.length>1?"s":""}`:"Aucun chantier prévu aujourd'hui"}</div>
                       </div>
                       {chAujourd.length>0
                         ?<span style={{background:"#3B82F620",color:"#60A5FA",borderRadius:20,fontWeight:800,fontSize:18,padding:"3px 14px",flexShrink:0}}>{chAujourd.length}</span>
-                        :<span style={{fontSize:16,color:"#10B981"}}>✅</span>
-                      }
-                    </button>
+                        :<span style={{fontSize:16,color:"#10B981"}}>✅</span>}
+                    </div>
                     {chAujourd.length>0&&<div style={{borderTop:"1px solid #1B2D4F"}}>
                       {chAujourd.map((ch,i)=>(
                         <button key={ch.id}
                           onClick={()=>{setClientInitSearch(ch.client||"");goTo("clients");}}
-                          style={{width:"100%",padding:"10px 16px",background:"transparent",border:"none",borderBottom:i<chAujourd.length-1?"1px solid #1B2D4F44":"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:10,textAlign:"left"}}
+                          style={{width:"100%",padding:"11px 16px",background:"transparent",border:"none",borderBottom:i<chAujourd.length-1?"1px solid #1B2D4F44":"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:10,textAlign:"left"}}
                           onMouseOver={e=>e.currentTarget.style.background="#1B2D4F33"}
                           onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:700,fontSize:13,color:"#E8F0FF"}}>{ch.client}</div>
-                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:1,display:"flex",gap:8,flexWrap:"wrap"}}>
+                            <div style={{fontWeight:700,fontSize:14,color:"#E8F0FF"}}>{ch.client}</div>
+                            <div style={{fontSize:11,color:"#4A6A9E",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
                               {ch.technicien&&<span>👤 {ch.technicien}</span>}
                               {ch.adresse&&<span>📍 {ch.adresse}</span>}
                             </div>
                           </div>
-                          <span style={{fontSize:10,fontWeight:700,color:ch.statut==="en_cours"?"#A855F7":"#3B82F6",background:ch.statut==="en_cours"?"#A855F720":"#3B82F620",borderRadius:20,padding:"2px 8px",flexShrink:0}}>
+                          <span style={{fontSize:10,fontWeight:700,color:ch.statut==="en_cours"?"#A855F7":"#3B82F6",background:ch.statut==="en_cours"?"#A855F720":"#3B82F620",borderRadius:20,padding:"2px 8px",flexShrink:0,whiteSpace:"nowrap"}}>
                             {ch.statut==="en_cours"?"🔧 En cours":"📅 Planifié"}
                           </span>
-                          <span style={{color:"#2E4D82",fontSize:14,flexShrink:0}}>›</span>
+                          <span style={{color:"#2E4D82",fontSize:16,flexShrink:0}}>›</span>
                         </button>
                       ))}
                     </div>}
