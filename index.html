@@ -97,7 +97,7 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","messagerie","stats","marges","perf_installateurs","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","messagerie","stats","marges","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
       commercial:["accueil","messagerie","cartes","clients","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","messagerie","cartes","clients","chantier","sav","rapports","stock","commandes"],
       secretaire:["accueil","messagerie","cartes","clients","ventes","administratif","factures","chantier","sav","rapports"],
@@ -7471,15 +7471,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
-        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","perf_installateurs"]},
+        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","suivi_chantier"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",perf_installateurs:"Perf. Installateurs"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",perf_installateurs:"🔍"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -7750,7 +7750,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} savTickets={savTickets} role={role}/>}
 
-                {view==="perf_installateurs"&&(()=>{
+                {view==="suivi_chantier"&&(()=>{
                   // ── Données croisées ────────────────────────────────────────
                   // Priorité aux profils installateurs réels
                   const profileInstallers=(allProfiles||[]).filter(p=>p.role==="installateur"||p.role==="administrateur").map(p=>p.nom).filter(Boolean);
@@ -7798,16 +7798,41 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   );
 
                   return(<>
-                    <div style={{marginBottom:20}}>
-                      <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>🔍 Performance Installateurs</h2>
-                      <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Taux SAV, problèmes chantiers, incidents par technicien</p>
+                    <div style={{marginBottom:16}}>
+                      <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📈 Suivi chantier</h2>
+                      <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Vue globale du pipeline et performance par installateur</p>
                     </div>
+
+                    {/* ── Pipeline global ── */}
+                    {(()=>{
+                      const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#A855F7"},termine:{label:"Terminé",color:"#10B981"}};
+                      const total=chantiersPipeline.length||1;
+                      const byStatut=Object.entries(STATUTS_CH).map(([k,s])=>({...s,key:k,nb:chantiersPipeline.filter(c=>c.statut===k).length}));
+                      return(
+                        <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:16}}>
+                          <h3 style={{margin:"0 0 12px",fontSize:13,fontWeight:800}}>🔧 Pipeline chantiers</h3>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+                            {byStatut.map(s=>(
+                              <div key={s.key} style={{textAlign:"center",background:"#070D1A",borderRadius:10,padding:"10px 6px",border:`1px solid ${s.color}20`}}>
+                                <div style={{fontSize:20,fontWeight:900,color:s.color}}>{s.nb}</div>
+                                <div style={{fontSize:9,color:"#4A6A9E",fontWeight:700,marginTop:2,textTransform:"uppercase"}}>{s.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{display:"flex",borderRadius:6,overflow:"hidden",height:8}}>
+                            {byStatut.filter(s=>s.nb>0).map(s=>(
+                              <div key={s.key} style={{flex:s.nb,background:s.color,minWidth:4}}/>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* ── Sélecteur technicien ── */}
                     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
                       {techs.map(t=>{
                         const ts=techStats.find(x=>x.tech===t);
-                        const hasAlert=(ts?.tauxSAV||0)>20||(ts?.tauxPb||0)>30||(ts?.rapsUrgence||0)>0;
+                        const hasAlert=(ts?.tauxPb||0)>30||(ts?.rapsUrgence||0)>0;
                         return(
                           <button key={t} onClick={()=>setSelectedTech(t)}
                             style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${selectedTech===t?"#3B82F6":hasAlert?"#EF444440":"#1B2D4F"}`,background:selectedTech===t?"linear-gradient(135deg,#3B82F6,#1D4ED8)":hasAlert?"#EF444408":"#0D1828",color:selectedTech===t?"#FFF":hasAlert?"#EF4444":"#7B96C8",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
@@ -7842,7 +7867,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"20px",marginBottom:16}}>
                         <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:14,color:"#F0F6FF"}}>📈 Indicateurs qualité</h3>
                         <div style={{display:"flex",justifyContent:"space-around",flexWrap:"wrap",gap:16,marginBottom:16}}>
-                          <ScoreBadge pct={sel.tauxSAV} label="Taux SAV"/>
                           <ScoreBadge pct={sel.tauxPb} label="Taux problèmes"/>
                           <div style={{textAlign:"center"}}>
                             <div style={{width:64,height:64,borderRadius:"50%",border:"4px solid #10B981",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px",background:"#10B98115"}}>
