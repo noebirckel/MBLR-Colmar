@@ -7347,9 +7347,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const SR=React.useCallback(v=>{const n=typeof v==="function"?v(rapports):v;setRapports(n);saveDB(null,null,null,null,null,null,null,null,n);},[rapports]);
 
       // ── AUTO-PASSAGE PLANIFIÉ → EN COURS quand c'est le jour de l'installation ──
+      const autoPassageRef=React.useRef(false);
       React.useEffect(()=>{
-        if(firstLoad.current||!chantiersPipeline.length)return;
-        const today=new Date().toLocaleDateString("fr-FR"); // format JJ/MM/AAAA
+        if(!chantiersPipeline.length)return;
+        const today=new Date().toLocaleDateString("fr-FR");
         const toUpdate=chantiersPipeline.filter(ch=>
           ch.statut==="planifie" &&
           ch.date_installation &&
@@ -7363,13 +7364,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         );
         setChantiersPipeline(updated);
         saveDB(null,null,null,null,updated,null,null,null,null);
-        // Aussi mettre à jour dans Supabase directement
         toUpdate.forEach(ch=>{
           sb.from("chantiers").update({statut:"en_cours"}).eq("id",ch.id).then(({error})=>{
             if(error)console.error("auto en_cours:",error.message);
           });
         });
-      },[chantiersPipeline.length]); // Se ré-exécute quand les chantiers se chargent
+      },[chantiersPipeline.length]);
 
       // Sauvegarde forcée avant fermeture/actualisation
       React.useEffect(()=>{
