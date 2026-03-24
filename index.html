@@ -8029,10 +8029,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 {view==="accueil"&&<>
           {/* Bonjour */}
-          <div style={{marginBottom:20}}>
+          {role!=="installateur"&&<div style={{marginBottom:20}}>
             <div style={{fontSize:isMobile?20:24,fontWeight:800,color:"#F0F6FF",marginBottom:4}}>{_greeting} {_prenom} {ROLES[role]?.icon||""}</div>
             <div style={{fontSize:12,color:"#4A6A9E"}}>{_dateStr}</div>
-          </div>
+          </div>}
 
           {/* KPIs admin/commercial */}
           {(role==="administrateur"||role==="commercial")&&(
