@@ -97,10 +97,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","messagerie","stats","marges","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","messagerie","cartes","clients","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
-      installateur:["accueil","messagerie","cartes","clients","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","messagerie","cartes","clients","ventes","administratif","factures","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","stats","marges","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","cartes","clients","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
+      secretaire:["accueil","cartes","clients","ventes","administratif","factures","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -7495,7 +7495,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const fmt=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0});
       const NAV_GROUPS=[
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
-        {id:"messagerie",icon:"💬",label:"Messagerie",tabs:["messagerie"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","suivi_chantier"]},
@@ -7505,8 +7504,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",messagerie:"Messagerie",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
-      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",messagerie:"💬",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
