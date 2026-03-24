@@ -8425,7 +8425,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             const nbAcomAEnvoyer=acomptes.filter(a=>a.statut==="a_envoyer").length;
             const nbFactAFacturer=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
             const nbChAPlanifier=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
-            const chAujourd=chantiersPipeline.filter(ch=>ch.statut!=="termine"&&ch.date_installation===todayStr);
+            const chAujourd=chantiersPipeline.filter(ch=>ch.date_installation===todayStr);
 
             const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:12};
 
@@ -8504,8 +8504,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                               {ch.adresse&&<span>📍 {ch.adresse}</span>}
                             </div>
                           </div>
-                          <span style={{fontSize:10,fontWeight:700,color:ch.statut==="en_cours"?"#A855F7":"#3B82F6",background:ch.statut==="en_cours"?"#A855F720":"#3B82F620",borderRadius:20,padding:"2px 8px",flexShrink:0,whiteSpace:"nowrap"}}>
-                            {ch.statut==="en_cours"?"🔧 En cours":"📅 Planifié"}
+                          <span style={{fontSize:10,fontWeight:700,color:ch.statut==="en_cours"?"#A855F7":ch.statut==="termine"?"#10B981":"#3B82F6",background:ch.statut==="en_cours"?"#A855F720":ch.statut==="termine"?"#10B98120":"#3B82F620",borderRadius:20,padding:"2px 8px",flexShrink:0,whiteSpace:"nowrap"}}>
+                            {ch.statut==="en_cours"?"🔧 En cours":ch.statut==="termine"?"✅ Terminé":"📅 Planifié"}
                           </span>
                           <span style={{color:"#2E4D82",fontSize:16,flexShrink:0}}>›</span>
                         </button>
