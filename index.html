@@ -2301,6 +2301,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[causeDetails,setCauseDetails] = useState("");
       const[facturerMarque,setFacturerMarque] = useState(false);
       const[montantMarque,setMontantMarque]   = useState("");
+      const[tempsPerdu,setTempsPerdu]         = useState(""); // en heures
+      const[coutInstallation,setCoutInstallation] = useState("");
+      const[facturerInstallation,setFacturerInstallation] = useState(false);
       const[contacts,setContacts] = useState(()=>{
         try{ const s=localStorage.getItem("sav_contacts"); return s?JSON.parse(s):DEFAULT_SAV_CONTACTS; }
         catch(e){ return DEFAULT_SAV_CONTACTS; }
@@ -2374,7 +2377,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       // Enregistrer l'analyse de cause (admin)
       const saveCause = (ticket, cause, details) => {
         const montant = facturerMarque && cause==="marque" ? Number(montantMarque)||0 : 0;
-        setTickets(p=>p.map(t=>t.id===ticket.id?{...t,cause_origine:cause,cause_details:details,cause_par:profile?.nom||"",cause_date:new Date().toLocaleDateString("fr-FR"),montant_facture_marque:montant}:t));
+        const cout = facturerInstallation && cause==="installation" ? Number(coutInstallation)||0 : 0;
+        setTickets(p=>p.map(t=>t.id===ticket.id?{
+          ...t,
+          cause_origine:cause,
+          cause_details:details,
+          cause_par:profile?.nom||"",
+          cause_date:new Date().toLocaleDateString("fr-FR"),
+          montant_facture_marque:montant,
+          temps_perdu:Number(tempsPerdu)||0,
+          cout_installation:cout,
+        }:t));
         setCauseModal(null);
       };
 
@@ -2480,8 +2493,44 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",width:"100%",boxSizing:"border-box",resize:"none",fontFamily:'"Outfit",sans-serif',fontSize:13,outline:"none"}}/>
                   </div>
 
+                  {/* Temps perdu — toutes causes */}
+                  {causeVal&&<div style={{background:"#F59E0B08",border:"1px solid #F59E0B25",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+                    <label style={{fontSize:10,fontWeight:700,color:"#F59E0B",display:"block",marginBottom:8,textTransform:"uppercase"}}>⏱️ Temps perdu sur l'intervention (heures)</label>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <input type="number" min="0" step="0.5" value={tempsPerdu} onChange={e=>setTempsPerdu(e.target.value)}
+                        placeholder="Ex : 2.5"
+                        style={{background:"#070D1A",border:"1px solid #F59E0B40",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",flex:1,boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',fontSize:14,outline:"none"}}/>
+                      <span style={{fontSize:12,color:"#4A6A9E",flexShrink:0}}>h</span>
+                    </div>
+                    {Number(tempsPerdu)>0&&<div style={{marginTop:6,fontSize:11,color:"#F59E0B",fontWeight:600}}>
+                      ⏱️ {Number(tempsPerdu)}h de temps non productif enregistré
+                    </div>}
+                  </div>}
+
+                  {/* Coût intervention — uniquement si cause = installation */}
+                  {causeVal==="installation"&&<div style={{background:"#EF444408",border:"1px solid #EF444425",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#EF4444",marginBottom:8}}>💸 Coût engendré par l'erreur d'installation</div>
+                    <div style={{display:"flex",gap:8,marginBottom:8}}>
+                      {[["oui","✅ Oui, il y a eu un coût"],["non","✗ Non, sans coût"]].map(([k,l])=>(
+                        <button key={k} onClick={()=>setFacturerInstallation(k==="oui")}
+                          style={{flex:1,padding:"9px 6px",borderRadius:10,border:`2px solid ${(facturerInstallation&&k==="oui")||(!facturerInstallation&&k==="non")?"#EF4444":"#1B2D4F"}`,background:(facturerInstallation&&k==="oui")||(!facturerInstallation&&k==="non")?"#EF444420":"#070D1A",color:(facturerInstallation&&k==="oui")||(!facturerInstallation&&k==="non")?"#EF4444":"#4A6A9E",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {facturerInstallation&&<>
+                      <label style={{fontSize:10,fontWeight:700,color:"#EF4444",display:"block",marginBottom:6,textTransform:"uppercase"}}>Montant du coût (€)</label>
+                      <input type="number" min="0" step="0.01" value={coutInstallation} onChange={e=>setCoutInstallation(e.target.value)}
+                        placeholder="Ex : 80.00"
+                        style={{background:"#070D1A",border:"1px solid #EF444440",borderRadius:10,color:"#E8F0FF",padding:"10px 12px",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',fontSize:14,outline:"none"}}/>
+                      {Number(coutInstallation)>0&&<div style={{marginTop:6,fontSize:11,color:"#EF4444",fontWeight:600}}>
+                        💸 {Number(coutInstallation).toLocaleString("fr-FR",{minimumFractionDigits:2})} € de coût impacté sur la marge
+                      </div>}
+                    </>}
+                  </div>}
+
                   {/* Facturation marque — uniquement si cause = marque */}
-                  {causeVal==="marque"&&<div style={{background:"#8B5CF608",border:"1px solid #8B5CF630",borderRadius:12,padding:"14px",marginBottom:16}}>
+                  {causeVal==="marque"&&<div style={{background:"#8B5CF608",border:"1px solid #8B5CF630",borderRadius:12,padding:"14px",marginBottom:12}}>
                     <div style={{fontWeight:700,fontSize:13,color:"#A78BFA",marginBottom:10}}>🏭 Facturation à la marque</div>
                     <div style={{display:"flex",gap:8,marginBottom:10}}>
                       {[["oui","✅ Oui, facturer la marque"],["non","✗ Non, ne pas facturer"]].map(([k,l])=>(
@@ -2606,6 +2655,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             const regleNous=tickets.filter(t=>t.statut==="regle_nous").length;
             const regleMarque=tickets.filter(t=>t.statut==="regle_marque").length;
             const avecCause=tickets.filter(t=>t.cause_origine).length;
+            const totalTempsPerdu=tickets.reduce((s,t)=>s+Number(t.temps_perdu||0),0);
+            const totalCoutInstallation=tickets.reduce((s,t)=>s+Number(t.cout_installation||0),0);
 
             // Par marque
             const parMarque={};
@@ -2649,6 +2700,19 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     </div>
                   ))}
                 </div>
+                {/* KPIs coût & temps */}
+                {(totalTempsPerdu>0||totalCoutInstallation>0)&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr",gap:8,marginBottom:16}}>
+                  {totalTempsPerdu>0&&<div style={{background:"#F59E0B08",border:"1px solid #F59E0B25",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:18,marginBottom:3}}>⏱️</div>
+                    <div style={{fontSize:18,fontWeight:900,color:"#F59E0B"}}>{totalTempsPerdu}h</div>
+                    <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>Temps perdu total</div>
+                  </div>}
+                  {totalCoutInstallation>0&&<div style={{background:"#EF444408",border:"1px solid #EF444425",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                    <div style={{fontSize:18,marginBottom:3}}>💸</div>
+                    <div style={{fontSize:16,fontWeight:900,color:"#EF4444"}}>{totalCoutInstallation.toLocaleString("fr-FR",{minimumFractionDigits:2})} €</div>
+                    <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>Coût erreurs installation</div>
+                  </div>}
+                </div>}
 
                 {/* Répartition résolution */}
                 <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px",marginBottom:12}}>
@@ -2996,6 +3060,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                           {t.cause_origine&&CAUSES[t.cause_origine]&&<span style={{background:CAUSES[t.cause_origine].color+"15",color:CAUSES[t.cause_origine].color,border:`1px solid ${CAUSES[t.cause_origine].color}30`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>
                             {CAUSES[t.cause_origine].icon} {CAUSES[t.cause_origine].label}
                           </span>}
+                          {Number(t.temps_perdu)>0&&<span style={{background:"#F59E0B12",color:"#F59E0B",border:"1px solid #F59E0B25",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>⏱️ {t.temps_perdu}h perdues</span>}
+                          {Number(t.cout_installation)>0&&<span style={{background:"#EF444412",color:"#EF4444",border:"1px solid #EF444425",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>💸 {Number(t.cout_installation).toLocaleString("fr-FR")} €</span>}
                           {t.reouvert_le&&<div style={{fontSize:9,color:"#F59E0B"}}>🔁 Réouvert le {t.reouvert_le}</div>}
                           <div style={{display:"flex",gap:5,marginTop:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
                             {/* Clôturer — installateur + admin + secrétaire, SAV actif uniquement */}
@@ -3014,7 +3080,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             )}
                             {/* Analyser cause — admin uniquement, SAV résolu */}
                             {isResolu&&role==="administrateur"&&(
-                              <button onClick={()=>{setCauseVal(t.cause_origine||"");setCauseDetails(t.cause_details||"");setFacturerMarque(!!t.montant_facture_marque);setMontantMarque(t.montant_facture_marque||"");setCauseModal(t);}}
+                              <button onClick={()=>{setCauseVal(t.cause_origine||"");setCauseDetails(t.cause_details||"");setFacturerMarque(!!t.montant_facture_marque);setMontantMarque(t.montant_facture_marque||"");setTempsPerdu(t.temps_perdu||"");setCoutInstallation(t.cout_installation||"");setFacturerInstallation(!!t.cout_installation);setCauseModal(t);}}
                                 style={{background:t.cause_origine?"#3B82F620":"#1B2D4F",border:`1px solid ${t.cause_origine?"#3B82F640":"#1B2D4F"}`,borderRadius:8,color:t.cause_origine?"#60A5FA":"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
                                 🔍 {t.cause_origine?"Cause":"Analyser"}
                               </button>
