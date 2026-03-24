@@ -8403,134 +8403,72 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             const todayStr=now.toLocaleDateString("fr-FR");
             const moisLabel=now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
 
-            // Acomptes
-            const acomAEnvoyer=acomptes.filter(a=>a.statut==="a_envoyer");
-            const acomEnvoyes=acomptes.filter(a=>a.statut==="envoye");
-            const acomPayes=acomptes.filter(a=>a.statut==="paye"&&a.date_paiement&&a.date_paiement.split("/")[1]===mM&&a.date_paiement.split("/")[2]===mY);
-            const totalAcomPayes=acomPayes.reduce((s,a)=>s+Number(a.montant||0),0);
+            // Stats mois
+            const ventesMonth=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+            const caMonth=ventesMonth.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+            const chTerminesMois=chantiersPipeline.filter(ch=>ch.statut==="termine"&&ch.date_fin&&ch.date_fin.split("/")[1]===mM&&ch.date_fin.split("/")[2]===mY);
+            const factPayeesMois=chantiersPipeline.filter(ch=>ch.facture?.statut==="paye"&&ch.facture?.date_paiement?.split("/")[1]===mM);
+            const totalFactPayees=factPayeesMois.reduce((s,ch)=>{const v=ventes.find(v=>v.id===ch.vente_id);return s+Number(v?.prix_ht||0);},0);
+            const acomPayesMois=acomptes.filter(a=>a.statut==="paye"&&a.date_paiement&&a.date_paiement.split("/")[1]===mM&&a.date_paiement.split("/")[2]===mY);
+            const totalAcomPayes=acomPayesMois.reduce((s,a)=>s+Number(a.montant||0),0);
 
-            // Factures
-            const chTermines=chantiersPipeline.filter(ch=>ch.statut==="termine");
-            const factAFacturer=chTermines.filter(ch=>(ch.facture?.statut||"a_facturer")==="a_facturer");
-            const factFacturees=chTermines.filter(ch=>ch.facture?.statut==="facture");
-            const factPayees=chTermines.filter(ch=>ch.facture?.statut==="paye"&&ch.facture?.date_paiement?.split("/")[1]===mM);
-            const totalFactPayees=factPayees.reduce((s,ch)=>{
-              const v=ventes.find(v=>v.id===ch.vente_id);
-              return s+Number(v?.prix_ht||0);
-            },0);
-
-            // Chantiers à planifier
-            const chAPlanifier=chantiersPipeline.filter(ch=>ch.statut==="a_planifier");
+            // Compteurs onglets
+            const nbAcomAEnvoyer=acomptes.filter(a=>a.statut==="a_envoyer").length;
+            const nbFactAFacturer=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+            const nbChAPlanifier=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
             const chAujourd=chantiersPipeline.filter(ch=>ch.statut!=="termine"&&ch.date_installation===todayStr);
 
-            const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px",marginBottom:12};
-            const Row=({label,sub,onClick,badge,color})=>(
-              <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"1px solid #1B2D4F33",cursor:onClick?"pointer":"default"}}
-                onMouseOver={e=>{if(onClick)e.currentTarget.style.background="#1B2D4F22";}}
-                onMouseOut={e=>{e.currentTarget.style.background="transparent";}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{label}</div>
-                  {sub&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{sub}</div>}
-                </div>
-                {badge&&<span style={{background:(color||"#3B82F6")+"20",color:color||"#60A5FA",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>{badge}</span>}
-                {onClick&&<span style={{color:"#2E4D82",fontSize:14,flexShrink:0}}>›</span>}
-              </div>
-            );
+            const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:12};
 
             return(
               <div>
                 {/* Résumé du mois */}
                 <div style={CARD}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",marginBottom:12}}>📅 Résumé — {moisLabel}</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
-                    {[
-                      {v:acomPayes.length,l:"Acomptes reçus",c:"#10B981",i:"💶",sub:fmt(totalAcomPayes),t:"administratif"},
-                      {v:factPayees.length,l:"Factures payées",c:"#10B981",i:"✅",sub:fmt(totalFactPayees),t:"factures"},
-                      {v:factFacturees.length,l:"En attente paiement",c:"#3B82F6",i:"🧾",sub:null,t:"factures"},
-                      {v:factAFacturer.length,l:"À facturer",c:"#F59E0B",i:"⏳",sub:null,t:"factures"},
-                    ].map(k=>(
-                      <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#070D1A",borderRadius:10,padding:"10px 12px",cursor:"pointer",display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:20}}>{k.i}</span>
-                        <div>
-                          <div style={{fontSize:18,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
-                          <div style={{fontSize:10,color:"#4A6A9E",marginTop:1}}>{k.l}</div>
-                          {k.sub&&<div style={{fontSize:10,color:k.c,fontWeight:700}}>{k.sub}</div>}
-                        </div>
+                  <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",marginBottom:14}}>📊 Résumé — {moisLabel}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:10}}>
+                    <div style={{background:"#070D1A",borderRadius:10,padding:"12px"}}>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>💰 CA encaissé</div>
+                      <div style={{fontSize:18,fontWeight:900,color:"#10B981"}}>{fmt(totalFactPayees)}</div>
+                    </div>
+                    <div style={{background:"#070D1A",borderRadius:10,padding:"12px"}}>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>💶 Acomptes reçus</div>
+                      <div style={{fontSize:18,fontWeight:900,color:"#10B981"}}>{fmt(totalAcomPayes)}</div>
+                    </div>
+                    <div style={{background:"#070D1A",borderRadius:10,padding:"12px"}}>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>💼 Ventes signées</div>
+                      <div style={{fontSize:22,fontWeight:900,color:"#3B82F6"}}>{ventesMonth.length}</div>
+                    </div>
+                    <div style={{background:"#070D1A",borderRadius:10,padding:"12px"}}>
+                      <div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>🔧 Chantiers réalisés</div>
+                      <div style={{fontSize:22,fontWeight:900,color:"#A855F7"}}>{chTerminesMois.length}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 onglets cliquables */}
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+                  {[
+                    {nb:nbAcomAEnvoyer,l:"Acomptes à envoyer",i:"📤",c:"#F59E0B",t:"administratif",ok:"Aucun acompte en attente"},
+                    {nb:nbFactAFacturer,l:"Factures à établir",i:"🧾",c:"#EF4444",t:"factures",ok:"Toutes les factures sont à jour"},
+                    {nb:nbChAPlanifier,l:"Chantiers à planifier",i:"📅",c:"#A855F7",t:"chantier",ok:"Tout est planifié"},
+                    {nb:chAujourd.length,l:"Chantiers aujourd'hui",i:"🔧",c:"#3B82F6",t:"chantier",ok:"Aucun chantier aujourd'hui"},
+                  ].map(k=>(
+                    <button key={k.l} onClick={()=>goTo(k.t)}
+                      style={{width:"100%",background:"#0D1828",border:`1px solid ${k.nb>0?k.c+"40":"#1B2D4F"}`,borderRadius:12,padding:"13px 16px",cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,textAlign:"left",transition:"border-color 0.15s"}}
+                      onMouseOver={e=>e.currentTarget.style.borderColor=k.nb>0?k.c:"#3B82F6"}
+                      onMouseOut={e=>e.currentTarget.style.borderColor=k.nb>0?k.c+"40":"#1B2D4F"}>
+                      <div style={{width:40,height:40,borderRadius:10,background:k.nb>0?k.c+"20":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{k.i}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14,color:k.nb>0?k.c:"#7B96C8"}}>{k.l}</div>
+                        <div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>{k.nb>0?`${k.nb} en attente`:k.ok}</div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Acomptes à envoyer */}
-                <div style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:acomAEnvoyer.length>0?8:0}}>
-                    <div style={{fontWeight:700,fontSize:13,color:"#F59E0B",display:"flex",alignItems:"center",gap:6}}>
-                      📤 Acomptes à envoyer
-                      <span style={{background:"#F59E0B20",color:"#F59E0B",borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700}}>{acomAEnvoyer.length}</span>
-                    </div>
-                    <button onClick={()=>goTo("administratif")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"3px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
-                  </div>
-                  {acomAEnvoyer.length===0
-                    ?<div style={{fontSize:12,color:"#10B981",textAlign:"center",padding:"8px 0"}}>✅ Aucun acompte en attente</div>
-                    :acomAEnvoyer.slice(0,4).map(a=>(
-                      <Row key={a.id} label={a.client||"—"} sub={`${fmt(a.montant||0)} · Créé le ${a.date_creation||"—"}`} badge={fmt(a.montant||0)} color="#F59E0B" onClick={()=>goTo("administratif")}/>
-                    ))
-                  }
-                  {acomAEnvoyer.length>4&&<div style={{textAlign:"center",marginTop:6}}><button onClick={()=>goTo("administratif")} style={{background:"transparent",border:"none",color:"#F59E0B",fontSize:12,cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontWeight:600}}>+{acomAEnvoyer.length-4} autres →</button></div>}
-                </div>
-
-                {/* Factures à traiter */}
-                <div style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:factAFacturer.length>0?8:0}}>
-                    <div style={{fontWeight:700,fontSize:13,color:"#EF4444",display:"flex",alignItems:"center",gap:6}}>
-                      🧾 Factures à établir
-                      <span style={{background:"#EF444420",color:"#EF4444",borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700}}>{factAFacturer.length}</span>
-                    </div>
-                    <button onClick={()=>goTo("factures")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"3px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
-                  </div>
-                  {factAFacturer.length===0
-                    ?<div style={{fontSize:12,color:"#10B981",textAlign:"center",padding:"8px 0"}}>✅ Tout est à jour</div>
-                    :factAFacturer.slice(0,4).map(ch=>{
-                      const v=ventes.find(v=>v.id===ch.vente_id);
-                      return<Row key={ch.id} label={ch.client||"—"} sub={`Terminé le ${ch.date_fin||"—"}${v?` · ${fmt(v.prix_ht)}`:""}` } badge="À facturer" color="#EF4444" onClick={()=>goTo("factures")}/>;
-                    })
-                  }
-                  {factAFacturer.length>4&&<div style={{textAlign:"center",marginTop:6}}><button onClick={()=>goTo("factures")} style={{background:"transparent",border:"none",color:"#EF4444",fontSize:12,cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontWeight:600}}>+{factAFacturer.length-4} autres →</button></div>}
-                </div>
-
-                {/* Chantiers à planifier */}
-                <div style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:chAPlanifier.length>0?8:0}}>
-                    <div style={{fontWeight:700,fontSize:13,color:"#A855F7",display:"flex",alignItems:"center",gap:6}}>
-                      📅 Chantiers à planifier
-                      <span style={{background:"#A855F720",color:"#A855F7",borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700}}>{chAPlanifier.length}</span>
-                    </div>
-                    <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"3px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
-                  </div>
-                  {chAPlanifier.length===0
-                    ?<div style={{fontSize:12,color:"#10B981",textAlign:"center",padding:"8px 0"}}>✅ Tout est planifié</div>
-                    :chAPlanifier.slice(0,4).map(ch=>(
-                      <Row key={ch.id} label={ch.client||"—"} sub={ch.technicien?`👤 ${ch.technicien}`:undefined} badge="À planifier" color="#A855F7" onClick={()=>goTo("chantier")}/>
-                    ))
-                  }
-                  {chAPlanifier.length>4&&<div style={{textAlign:"center",marginTop:6}}><button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"none",color:"#A855F7",fontSize:12,cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontWeight:600}}>+{chAPlanifier.length-4} autres →</button></div>}
-                </div>
-
-                {/* Chantiers du jour */}
-                <div style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:chAujourd.length>0?8:0}}>
-                    <div style={{fontWeight:700,fontSize:13,color:"#60A5FA",display:"flex",alignItems:"center",gap:6}}>
-                      🔧 Chantiers aujourd'hui
-                      <span style={{background:"#3B82F620",color:"#60A5FA",borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700}}>{chAujourd.length}</span>
-                    </div>
-                    <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"3px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Voir →</button>
-                  </div>
-                  {chAujourd.length===0
-                    ?<div style={{fontSize:12,color:"#4A6A9E",textAlign:"center",padding:"8px 0"}}>Aucun chantier prévu aujourd'hui</div>
-                    :chAujourd.map(ch=>(
-                      <Row key={ch.id} label={ch.client||"—"} sub={`${ch.technicien?`👤 ${ch.technicien} · `:""}${ch.adresse||""}`} badge={ch.statut==="en_cours"?"🔧 En cours":"📅 Planifié"} color={ch.statut==="en_cours"?"#A855F7":"#3B82F6"} onClick={()=>goTo("chantier")}/>
-                    ))
-                  }
+                      {k.nb>0
+                        ?<span style={{background:k.c+"20",color:k.c,borderRadius:20,fontWeight:800,fontSize:18,padding:"3px 14px",flexShrink:0}}>{k.nb}</span>
+                        :<span style={{fontSize:16,color:"#10B981"}}>✅</span>
+                      }
+                      <span style={{color:"#2E4D82",fontSize:18,flexShrink:0}}>›</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             );
