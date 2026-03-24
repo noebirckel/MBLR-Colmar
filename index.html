@@ -6462,8 +6462,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         return (ch.client||"").toLowerCase().includes(q)||(ch.technicien||"").toLowerCase().includes(q)||(ch.adresse||"").toLowerCase().includes(q);
       });
 
-      // Ordre unifié : En cours → Planifiés (chrono) → À planifier
-      const statOrder=["en_cours","planifie","a_planifier"];
+      // Ordre des statuts selon le rôle
+      const statOrder=(role==="installateur"||role==="commercial")
+        ?["en_cours","planifie","a_planifier"]
+        :["en_cours","a_planifier","planifie"];
 
       const parseDate=d=>{if(!d)return Infinity;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
       const pipelineSorted=(statut)=>{
