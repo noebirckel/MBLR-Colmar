@@ -423,7 +423,7 @@
     // ══════════════════════════════════════════
     // ONGLET FACTURES
     // ══════════════════════════════════════════
-    function FacturesTab({isMobile, chantiers, setChantiers, ventes, savTickets, profile, role, addNotif}){
+    function FacturesTab({isMobile, chantiers, setChantiers, ventes, savTickets, setTickets, profile, role, addNotif}){
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
         a_facturer: {label:"En attente",  color:"#EF4444", icon:"🔴"},
@@ -439,6 +439,7 @@
       const [delConf, setDelConf]   = useState(false);
       const [payModal, setPayModal] = useState(null);
       const [showBloquesList, setShowBloquesList] = useState(false);
+      const [showSavMarque, setShowSavMarque] = useState(false);
 
       // Chantiers terminés : on sépare bloqués des normaux
       const terminesAll = chantiers.filter(ch => ch.statut === "termine" && ch.facture?.statut !== "supprime");
@@ -668,41 +669,80 @@
             ))}
           </div>
 
-          {/* SAV à facturer à la marque */}
+          {/* SAV à facturer à la marque — menu dépliable compact */}
           {(()=>{
             const savMarque=(savTickets||[]).filter(t=>Number(t.montant_facture_marque)>0);
             if(!savMarque.length) return null;
             const total=savMarque.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+            const totalFacture=savMarque.filter(t=>t.statut_marque==="facture"||t.statut_marque==="paye").reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+            const totalPaye=savMarque.filter(t=>t.statut_marque==="paye").reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+            const updateSavStatut=(id,statut_marque)=>{
+              if(setTickets) setTickets(p=>p.map(t=>t.id===id?{...t,statut_marque}:t));
+            };
+            const fmtM=n=>Number(n).toLocaleString("fr-FR",{minimumFractionDigits:2})+" €";
             return(
-              <div style={{background:"#8B5CF608",border:"1px solid #8B5CF630",borderRadius:14,padding:"12px 16px",marginBottom:16}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                  <span style={{fontSize:18}}>🏭</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:700,fontSize:13,color:"#A78BFA"}}>{savMarque.length} SAV à facturer à la marque</div>
-                    <div style={{fontSize:11,color:"#4A6A9E"}}>Total : <span style={{color:"#10B981",fontWeight:700}}>{total.toLocaleString("fr-FR",{minimumFractionDigits:2})} € HT</span> — marge 100%</div>
+              <div style={{marginBottom:14}}>
+                {/* Header compact cliquable */}
+                <button onClick={()=>setShowSavMarque(p=>!p)}
+                  style={{width:"100%",background:"#0D1828",border:"1px solid #8B5CF640",borderRadius:showSavMarque?"14px 14px 0 0":14,padding:"10px 14px",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:16}}>🏭</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <span style={{fontWeight:700,fontSize:13,color:"#A78BFA"}}>{savMarque.length} SAV marque</span>
+                    <span style={{fontSize:11,color:"#4A6A9E",marginLeft:8}}>
+                      {fmtM(total)} · {savMarque.filter(t=>t.statut_marque==="paye").length} payé{savMarque.filter(t=>t.statut_marque==="paye").length>1?"s":""}
+                    </span>
                   </div>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {savMarque.map(t=>{
+                  {totalPaye>0&&<span style={{fontSize:10,fontWeight:700,color:"#10B981",background:"#10B98115",borderRadius:20,padding:"2px 8px"}}>{fmtM(totalPaye)} payé</span>}
+                  <span style={{fontSize:11,color:"#8B5CF6",fontWeight:600}}>{showSavMarque?"▲":"▼"}</span>
+                </button>
+
+                {showSavMarque&&<div style={{background:"#070D1A",border:"1px solid #8B5CF640",borderTop:"none",borderRadius:"0 0 14px 14px",overflow:"hidden"}}>
+                  {savMarque.map((t,i)=>{
                     const ch=t.chantier_id?(chantiers||[]).find(c=>c.id===t.chantier_id||c.id===Number(t.chantier_id)):null;
+                    const statut=t.statut_marque||"a_facturer";
+                    const steps=[
+                      {k:"a_facturer",l:"À facturer",c:"#A78BFA",i:"🏭"},
+                      {k:"facture",l:"Facturé",c:"#3B82F6",i:"📄"},
+                      {k:"paye",l:"Payé",c:"#10B981",i:"✅"},
+                    ];
+                    const idx=steps.findIndex(s=>s.k===statut);
+                    const next=steps[idx+1]||null;
+                    const prev=steps[idx-1]||null;
                     return(
-                      <div key={t.id} style={{background:"#070D1A",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                      <div key={t.id} style={{padding:"11px 14px",borderBottom:i<savMarque.length-1?"1px solid #1B2D4F22":"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontWeight:700,fontSize:13,color:"#F0F6FF"}}>{t.client}</div>
-                          <div style={{fontSize:11,color:"#4A6A9E",marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
-                            {t.marque&&<span>⚡ <strong style={{color:"#A78BFA"}}>{t.marque}</strong></span>}
-                            {ch&&<span>🔧 Chantier : {ch.client}{ch.date_fin?" · "+ch.date_fin:""}</span>}
-                            {t.cause_date&&<span>📅 {t.cause_date}</span>}
+                          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:2,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:700,fontSize:12,color:"#E8F0FF"}}>{t.client}</span>
+                            {t.marque&&<span style={{fontSize:10,color:"#A78BFA",fontWeight:700}}>⚡ {t.marque}</span>}
+                            {ch&&<span style={{fontSize:10,color:"#4A6A9E"}}>· {ch.client}</span>}
                           </div>
-                          {t.cause_details&&<div style={{fontSize:10,color:"#7B96C8",marginTop:2,fontStyle:"italic"}}>"{t.cause_details.slice(0,60)}{t.cause_details.length>60?"…":""}"</div>}
+                          {/* Mini stepper */}
+                          <div style={{display:"flex",alignItems:"center",gap:3,marginTop:3}}>
+                            {steps.map((s,si)=>(
+                              <React.Fragment key={s.k}>
+                                <span style={{fontSize:9,fontWeight:700,color:si<=idx?s.c:"#2E4D82",opacity:si<=idx?1:0.5}}>{s.i} {s.l}</span>
+                                {si<steps.length-1&&<span style={{color:"#1B2D4F",fontSize:9}}>›</span>}
+                              </React.Fragment>
+                            ))}
+                          </div>
                         </div>
-                        <div style={{fontWeight:900,fontSize:15,color:"#10B981",flexShrink:0}}>
-                          {Number(t.montant_facture_marque).toLocaleString("fr-FR",{minimumFractionDigits:2})} €
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                          <span style={{fontWeight:800,fontSize:13,color:steps[idx]?.c||"#A78BFA"}}>{fmtM(t.montant_facture_marque)}</span>
+                          {canEdit(role)&&<div style={{display:"flex",gap:4}}>
+                            {prev&&<button onClick={()=>updateSavStatut(t.id,prev.k)}
+                              style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:7,color:"#4A6A9E",padding:"4px 8px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif'}}>
+                              ←
+                            </button>}
+                            {next&&<button onClick={()=>updateSavStatut(t.id,next.k)}
+                              style={{background:next.c+"20",border:`1px solid ${next.c}40`,borderRadius:7,color:next.c,padding:"4px 8px",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap"}}>
+                              {next.i} {next.l}
+                            </button>}
+                          </div>}
                         </div>
                       </div>
                     );
                   })}
-                </div>
+                </div>}
               </div>
             );
           })()}
@@ -7743,7 +7783,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} profile={profile} role={role} addNotif={addNotif}/>}
+                {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} profile={profile} role={role}/>}
