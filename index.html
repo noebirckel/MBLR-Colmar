@@ -6976,6 +6976,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[stockCompact,setStockCompact]=React.useState(false);
       const[selectedTech,setSelectedTech]=React.useState("");
       const[stockSearch,setStockSearch]=React.useState("");
+      const[showMatAuj,setShowMatAuj]=React.useState({});
+      const[showPhotoAuj,setShowPhotoAuj]=React.useState({});
+      const[showMatDem,setShowMatDem]=React.useState({});
+      const[showPhotoDem,setShowPhotoDem]=React.useState({});
       const[collapsedCats,setCollapsedCats]=React.useState({});
       const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
       const stockFil=React.useMemo(()=>stock.filter(s=>{
@@ -8085,10 +8089,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             const chantiersAujourd=chantiersPipeline.filter(c=>match(c)&&c.statut!=="termine"&&c.date_installation===today);
             const chantiersDemain=chantiersPipeline.filter(c=>match(c)&&c.statut!=="termine"&&c.date_installation===tomorrow);
             const savOuverts=savTickets.filter(t=>t.statut==="ouvert").length;
-            const[showMatAuj,setShowMatAuj]=React.useState({});
-            const[showPhotoAuj,setShowPhotoAuj]=React.useState({});
-            const[showMatDem,setShowMatDem]=React.useState({});
-            const[showPhotoDem,setShowPhotoDem]=React.useState({});
 
             const ChantierCard=({ch,showMat,setShowMat,showPhoto,setShowPhoto})=>{
               const vente=ventes.find(v=>v.id===ch.vente_id);
