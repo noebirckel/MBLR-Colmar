@@ -477,12 +477,18 @@
       };
 
       const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
+      const FACT_ORDER={"a_facturer":0,"bloque":1,"facture":2,"paye":3};
       const filtered = termines.filter(ch => {
         const s = ch.facture?.statut || "a_facturer";
         if(filtre !== "tous" && s !== filtre) return false;
         if(search && !(ch.client||"").toLowerCase().includes(search.toLowerCase())) return false;
         return true;
-      }).sort((a,b)=>parseD(b.date_fin)-parseD(a.date_fin));
+      }).sort((a,b)=>{
+        const sa=FACT_ORDER[a.facture?.statut||"a_facturer"]??9;
+        const sb=FACT_ORDER[b.facture?.statut||"a_facturer"]??9;
+        if(sa!==sb) return sa-sb;
+        return parseD(b.date_fin)-parseD(a.date_fin);
+      });
 
       const kpis = Object.entries(STATUTS_FACT).map(([k,v]) => ({
         ...v, key:k,
@@ -4766,11 +4772,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const totalEnAttente= acomptes.filter(a=>["a_envoyer","envoye"].includes(a.statut)).reduce((s,a)=>s+Number(a.montant_acompte||0),0);
 
       const parseDA=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
+      const ACOM_ORDER={"a_envoyer":0,"envoye":1,"paye":2};
       const filtered = acomptes.filter(a=>{
         if(filter!=="tous"&&a.statut!==filter) return false;
         if(search&&!(a.client||"").toLowerCase().includes(search.toLowerCase())) return false;
         return true;
-      }).sort((a,b)=>parseDA(b.date_creation||"")-parseDA(a.date_creation||"")||b.id-a.id);
+      }).sort((a,b)=>{
+        const sa=ACOM_ORDER[a.statut]??9;
+        const sb=ACOM_ORDER[b.statut]??9;
+        if(sa!==sb) return sa-sb;
+        return parseDA(b.date_creation||"")-parseDA(a.date_creation||"")||b.id-a.id;
+      });
 
       const updateAcompte=(id,patch)=>setAcomptes(p=>p.map(a=>a.id===id?{...a,...patch}:a));
 
