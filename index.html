@@ -7720,7 +7720,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               )}
 
               {/* Sous-onglets mobile — affiché si le groupe a plusieurs tabs */}
-              {isMobile&&subTabs.length>1&&(
+              {isMobile&&subTabs.length>1&&role!=="installateur"&&(
                 <div style={{background:"#070D1A",borderBottom:"1px solid #1B2D4F",display:"flex",overflowX:"auto",padding:"6px 10px",gap:5,flexShrink:0,scrollbarWidth:"none"}}>
                   {subTabs.map(t=>{
                     const isAct=view===t;
