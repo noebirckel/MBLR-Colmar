@@ -6991,6 +6991,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[showPhotoAuj,setShowPhotoAuj]=React.useState({});
       const[showMatDem,setShowMatDem]=React.useState({});
       const[showPhotoDem,setShowPhotoDem]=React.useState({});
+      const[commAccueilTab,setCommAccueilTab]=React.useState("perso");
       const[collapsedCats,setCollapsedCats]=React.useState({});
       const[stockSubView,setStockSubView]=React.useState("tout"); // tout | alertes
       const stockFil=React.useMemo(()=>stock.filter(s=>{
@@ -8049,8 +8050,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{fontSize:12,color:"#4A6A9E"}}>{_dateStr}</div>
           </div>}
 
-          {/* KPIs admin/commercial */}
-          {(role==="administrateur"||role==="commercial")&&(
+          {/* KPIs admin uniquement */}
+          {role==="administrateur"&&(
           <div style={{marginBottom:20}}>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
               {[
@@ -8090,6 +8091,240 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div>
           )}
+
+          {/* Accueil commercial dédié */}
+          {role==="commercial"&&(()=>{
+            const now=new Date();
+            const mM=String(now.getMonth()+1).padStart(2,"0");
+            const mY=String(now.getFullYear());
+            const nom=profile?.nom||"";
+
+            // Perso
+            const mesVentes=ventes.filter(v=>(v.par||"")===nom);
+            const ventesMonth=mesVentes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+            const caPerso=ventesMonth.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+            const oKey=`${mY}-${mM}__${nom}`;
+            const obj=objectifs[oKey]||{};
+            const objCA=Number(obj.ca||0);
+            const pctCA=objCA>0?Math.min(100,Math.round((caPerso/objCA)*100)):null;
+            const colorCA=pctCA===null?"#3B82F6":pctCA>=100?"#10B981":pctCA>=70?"#3B82F6":pctCA>=40?"#F59E0B":"#EF4444";
+
+            // Agence
+            const ventesAgence=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+            const caAgence=ventesAgence.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+            const nbVentesAuj=ventes.filter(v=>new Date(v.id).toDateString()===now.toDateString()).length;
+
+            // Suivi commercial
+            const aAppeler=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler");
+            const pasReponse=chantiersPipeline.filter(ch=>ch.statut==="termine"&&ch.suivi_comm?.etat==="pas_reponse");
+
+            // Ruptures
+            const ruptures=stock.filter(s=>s.rupture);
+            const alertStock=stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil);
+
+            // Historique perso 6 mois
+            const hist6=Array.from({length:6},(_,i)=>{
+              const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+              const mm=String(d.getMonth()+1).padStart(2,"0");
+              const yy=String(d.getFullYear());
+              const ok=`${yy}-${mm}__${nom}`;
+              const o=objectifs[ok]||{};
+              const vs=mesVentes.filter(v=>v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy);
+              const ca=vs.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+              return{label:d.toLocaleDateString("fr-FR",{month:"short"}),ca,obj:Number(o.ca||0),nb:vs.length,cur:i===0};
+            }).reverse();
+            const maxCA=Math.max(...hist6.map(h=>Math.max(h.ca,h.obj)),1);
+
+            const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px",marginBottom:12};
+
+            return(
+              <div>
+                {/* Tabs */}
+                <div style={{display:"flex",gap:5,marginBottom:16,background:"#070D1A",borderRadius:12,padding:4}}>
+                  {[["perso","🎯 Perso"],["agence","🏢 Agence"],["suivi","📞 Suivi"],["stock","📦 Stock"]].map(([k,l])=>(
+                    <button key={k} onClick={()=>setCommAccueilTab(k)}
+                      style={{flex:1,padding:"8px 4px",borderRadius:9,border:"none",background:commAccueilTab===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"transparent",color:commAccueilTab===k?"#FFF":"#5A7AAA",cursor:"pointer",fontSize:isMobile?11:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"}}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── PERSO ── */}
+                {commAccueilTab==="perso"&&<>
+                  {/* Objectif du mois */}
+                  <div style={CARD}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",marginBottom:4}}>🎯 Mon objectif — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div>
+                        <div style={{fontSize:isMobile?26:30,fontWeight:900,color:colorCA,lineHeight:1}}>{fmt(caPerso)}</div>
+                        {objCA>0&&<div style={{fontSize:12,color:"#4A6A9E",marginTop:3}}>sur {fmt(objCA)} d'objectif</div>}
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:28,fontWeight:900,color:colorCA}}>{pctCA!==null?pctCA+"%":"—"}</div>
+                        <button onClick={()=>goTo("mes_objectifs")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif',marginTop:4}}>Voir détail →</button>
+                      </div>
+                    </div>
+                    {/* Barre de progression */}
+                    {objCA>0&&<>
+                      <div style={{height:8,background:"#1B2D4F",borderRadius:4,overflow:"hidden",marginBottom:6}}>
+                        <div style={{height:"100%",width:`${pctCA||0}%`,background:`linear-gradient(90deg,${colorCA},${colorCA}CC)`,borderRadius:4,transition:"width 0.5s"}}/>
+                      </div>
+                      <div style={{fontSize:10,color:"#4A6A9E"}}>
+                        {pctCA>=100?"🏆 Objectif atteint !":pctCA>=70?"💪 Bien parti !":pctCA>=40?"📈 Continue !":"⚡ À fond !"}
+                        {pctCA<100&&objCA>0&&<span style={{marginLeft:6}}>{fmt(objCA-caPerso)} restants</span>}
+                      </div>
+                    </>}
+                    {!objCA&&<button onClick={()=>goTo("mes_objectifs")} style={{background:"#3B82F620",border:"1px solid #3B82F640",borderRadius:8,color:"#60A5FA",padding:"8px",width:"100%",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',marginTop:8}}>
+                      ➕ Définir mon objectif du mois
+                    </button>}
+                  </div>
+
+                  {/* KPIs perso */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                    {[
+                      {v:ventesMonth.length,l:"Ventes ce mois",i:"📊",c:"#3B82F6"},
+                      {v:nbVentesAuj,l:"Ventes aujourd'hui",i:"💼",c:"#A78BFA"},
+                    ].map(k=>(
+                      <div key={k.l} onClick={()=>goTo("ventes")} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:22}}>{k.i}</span>
+                        <div><div style={{fontSize:22,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div><div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div></div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Historique 6 mois mini-graphe */}
+                  <div style={CARD}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#4A6A9E",marginBottom:12}}>📅 Mes 6 derniers mois</div>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80,marginBottom:8}}>
+                      {hist6.map((h,i)=>{
+                        const hCA=maxCA>0?Math.round((h.ca/maxCA)*70):0;
+                        const hObj=h.obj>0&&maxCA>0?Math.round((h.obj/maxCA)*70):0;
+                        return(
+                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,height:"100%",justifyContent:"flex-end"}}>
+                            <div style={{width:"100%",position:"relative"}}>
+                              <div style={{width:"100%",height:hCA||2,background:h.cur?"linear-gradient(180deg,#3B82F6,#1D4ED8)":h.ca>=h.obj&&h.obj>0?"#10B981":"#1B2D4F",borderRadius:"3px 3px 0 0",minHeight:2}}/>
+                              {hObj>0&&<div style={{position:"absolute",bottom:hObj,left:0,right:0,borderTop:"2px dashed #F59E0B40",pointerEvents:"none"}}/>}
+                            </div>
+                            <div style={{fontSize:8,color:h.cur?"#3B82F6":"#2E4D82",textAlign:"center",lineHeight:1}}>{h.label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:"flex",gap:12,fontSize:10,color:"#4A6A9E"}}>
+                      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:4,background:"#3B82F6",borderRadius:2,display:"inline-block"}}/> CA réel</span>
+                      <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,borderTop:"2px dashed #F59E0B",display:"inline-block"}}/> Objectif</span>
+                    </div>
+                  </div>
+                </>}
+
+                {/* ── AGENCE ── */}
+                {commAccueilTab==="agence"&&<>
+                  <div style={CARD}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",marginBottom:8}}>🏢 CA Agence — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div>
+                    <div style={{fontSize:isMobile?28:34,fontWeight:900,color:"#10B981",marginBottom:4}}>{fmt(caAgence)}</div>
+                    <div style={{fontSize:12,color:"#4A6A9E"}}>{ventesAgence.length} vente{ventesAgence.length>1?"s":""} ce mois</div>
+                  </div>
+                  {/* Top commerciaux */}
+                  {(()=>{
+                    const byComm={};
+                    ventesAgence.forEach(v=>{const k=v.par||"Inconnu";if(!byComm[k])byComm[k]={nb:0,ca:0};byComm[k].nb++;byComm[k].ca+=Number(v.prix_ht||0);});
+                    const classement=Object.entries(byComm).sort((a,b)=>b[1].ca-a[1].ca);
+                    const maxCa=classement[0]?.[1]?.ca||1;
+                    return classement.length>0?(
+                      <div style={CARD}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#4A6A9E",marginBottom:10}}>🏆 Classement commerciaux</div>
+                        {classement.map(([nm,d],i)=>(
+                          <div key={nm} style={{marginBottom:10}}>
+                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                              <span style={{fontSize:12,fontWeight:700,color:nm===nom?"#60A5FA":"#E8F0FF",display:"flex",alignItems:"center",gap:6}}>
+                                <span style={{fontSize:14}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":"  "}</span>{nm}{nm===nom&&<span style={{fontSize:10,color:"#60A5FA"}}>← moi</span>}
+                              </span>
+                              <span style={{fontSize:12,fontWeight:800,color:"#10B981"}}>{fmt(d.ca)}</span>
+                            </div>
+                            <div style={{height:5,background:"#1B2D4F",borderRadius:3,overflow:"hidden"}}>
+                              <div style={{height:"100%",width:`${Math.round((d.ca/maxCa)*100)}%`,background:nm===nom?"#3B82F6":"#10B981",borderRadius:3}}/>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ):null;
+                  })()}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {[
+                      {v:_chEnCours,l:"Chantiers en cours",i:"🔧",c:"#A855F7",t:"chantier"},
+                      {v:_chPlan,l:"À planifier",i:"📅",c:"#F59E0B",t:"chantier"},
+                    ].map(k=>(
+                      <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"12px",cursor:"pointer",display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:20}}>{k.i}</span>
+                        <div><div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div><div style={{fontSize:10,color:"#4A6A9E"}}>{k.l}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                </>}
+
+                {/* ── SUIVI COMMERCIAL ── */}
+                {commAccueilTab==="suivi"&&<>
+                  {/* Résumé */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                    <div onClick={()=>goTo("suivi_comm")} style={{background:"#3B82F610",border:"1px solid #3B82F640",borderRadius:12,padding:"12px 14px",cursor:"pointer",display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:22}}>📞</span>
+                      <div><div style={{fontSize:22,fontWeight:900,color:"#3B82F6"}}>{aAppeler.length}</div><div style={{fontSize:10,color:"#4A6A9E"}}>À appeler</div></div>
+                    </div>
+                    <div onClick={()=>goTo("suivi_comm")} style={{background:"#F59E0B10",border:"1px solid #F59E0B30",borderRadius:12,padding:"12px 14px",cursor:"pointer",display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:22}}>📵</span>
+                      <div><div style={{fontSize:22,fontWeight:900,color:"#F59E0B"}}>{pasReponse.length}</div><div style={{fontSize:10,color:"#4A6A9E"}}>Pas de réponse</div></div>
+                    </div>
+                  </div>
+                  {/* Liste à appeler */}
+                  {aAppeler.length>0&&<div style={CARD}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#4A6A9E",marginBottom:10}}>📋 Clients à appeler en priorité</div>
+                    {aAppeler.slice(0,5).map(ch=>(
+                      <div key={ch.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #1B2D4F44"}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:"#3B82F6",flexShrink:0}}/>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{ch.client}</div>
+                          <div style={{fontSize:10,color:"#4A6A9E"}}>✅ Terminé le {ch.date_fin||"—"}</div>
+                        </div>
+                        <button onClick={()=>goTo("suivi_comm")} style={{background:"#3B82F620",border:"1px solid #3B82F640",borderRadius:8,color:"#60A5FA",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>Contacter →</button>
+                      </div>
+                    ))}
+                    {aAppeler.length>5&&<div style={{textAlign:"center",marginTop:8}}><button onClick={()=>goTo("suivi_comm")} style={{background:"transparent",border:"none",color:"#3B82F6",fontSize:12,cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontWeight:600}}>Voir {aAppeler.length-5} de plus →</button></div>}
+                  </div>}
+                  {aAppeler.length===0&&<div style={{...CARD,textAlign:"center",padding:"24px",color:"#10B981"}}>
+                    <div style={{fontSize:32,marginBottom:6}}>✅</div>
+                    <div style={{fontWeight:700}}>Tous les clients ont été contactés !</div>
+                  </div>}
+                </>}
+
+                {/* ── STOCK ── */}
+                {commAccueilTab==="stock"&&<>
+                  {ruptures.length>0&&<div style={{background:"#A855F710",border:"1px solid #A855F730",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#A855F7",marginBottom:8}}>🚫 Ruptures fournisseur ({ruptures.length})</div>
+                    {ruptures.map(s=>(
+                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #A855F720",fontSize:12}}>
+                        <span style={{color:"#E8F0FF"}}>{s.article}</span>
+                        <span style={{color:"#A855F7",fontWeight:700}}>Rupture</span>
+                      </div>
+                    ))}
+                  </div>}
+                  {alertStock.length>0&&<div style={{background:"#EF444410",border:"1px solid #EF444430",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#EF4444",marginBottom:8}}>⚠️ Stock critique ({alertStock.length})</div>
+                    {alertStock.map(s=>(
+                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #EF444420",fontSize:12}}>
+                        <span style={{color:"#E8F0FF"}}>{s.article}</span>
+                        <span style={{color:"#EF4444",fontWeight:700}}>{s.stock}/{s.seuil}</span>
+                      </div>
+                    ))}
+                  </div>}
+                  {ruptures.length===0&&alertStock.length===0&&<div style={{...CARD,textAlign:"center",padding:"24px",color:"#10B981"}}>
+                    <div style={{fontSize:32,marginBottom:6}}>✅</div>
+                    <div style={{fontWeight:700}}>Stock en bon état</div>
+                    <div style={{fontSize:12,color:"#4A6A9E",marginTop:4}}>Aucune rupture ni alerte</div>
+                  </div>}
+                </>}
+              </div>
+            );
+          })()}
 
           {/* Accueil installateur — optimisé mobile */}
           {role==="installateur"&&(()=>{
