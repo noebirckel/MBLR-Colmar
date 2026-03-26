@@ -88,6 +88,7 @@
       ok:{label:"OK",color:"#10B981",bg:"#0A2218",icon:"✅"},
       vide:{label:"—",color:"#7B96C8",bg:"#0D1828",icon:"—"},
       rupture:{label:"RUPTURE",color:"#A855F7",bg:"#1E0A2D",icon:"⛔"},
+      sans_gestion:{label:"Sans gestion",color:"#4A6A9E",bg:"#0D1828",icon:"∞"},
     };
     const ROLES = {
       administrateur:{label:"Administrateur",color:"#EF4444",bg:"#3B1212",icon:"⚡"},
@@ -110,14 +111,15 @@
     const canParams    = r => r === "administrateur";
 
     const fmt = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
-    const gS  = (s,seuil,rupt,ord) => {
+    const gS  = (s,seuil,rupt,ord,sans) => {
+      if(sans) return "sans_gestion";
       if(rupt) return "rupture";
       if(seuil===0) return s===0?"vide":"ok";
       if(s<seuil) return ord?"ordered":"alert";
       if(s<seuil*1.3) return "warn";
       return "ok";
     };
-    const EC = {cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false};
+    const EC = {cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false,sans_gestion:false};
     const BDG=cat=>({background:(CC[cat]||'#1B2D4F')+'22',color:CC[cat]||'#7B96C8',padding:'2px 8px',borderRadius:5,fontSize:11,fontWeight:700});
 
     function useIsMobile(){ const[m,setM]=useState(window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return m; }
@@ -6502,7 +6504,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         return r;
       },[chantiers]);
 
-      const stockDispo=id=>Math.max(0,(stock.find(s=>s.id===id)?.stock||0)-(reservations[id]||0));
+      const stockDispo=id=>{const s=stock.find(s=>s.id===id);if(!s)return 0;if(s.sans_gestion)return 9999;return Math.max(0,(s.stock||0)-(reservations[id]||0));};
       const updateChantier=(id,patch)=>setChantiers(p=>p.map(ch=>ch.id===id?{...ch,...patch}:ch));
 
       const nextStatut=ch=>{
@@ -6570,7 +6572,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Liste des techniciens disponibles
       const allTechs=[...new Set(chantiers.filter(c=>c.technicien).map(c=>c.technicien))].sort();
-      const insufficientChantiers=chantiers.filter(ch=>ch.statut!=="termine"&&(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty)));
+      const insufficientChantiers=chantiers.filter(ch=>ch.statut!=="termine"&&(ch.materiels||[]).some(m=>{const s=stock.find(x=>x.id===Number(m.id));return !s?.sans_gestion&&stockDispo(Number(m.id))<Number(m.qty);}));
 
       return(
         <div>
@@ -6896,7 +6898,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     {list.map(ch=>{
                       const isExpanded=!!expandedCards[ch.id];
                       const checkDone=Object.values(ch.checklist||{}).filter(Boolean).length;
-                      const hasInsuff=(ch.materiels||[]).some(m=>stockDispo(Number(m.id))<Number(m.qty));
+                      const hasInsuff=(ch.materiels||[]).some(m=>{const s=stock.find(x=>x.id===Number(m.id));return !s?.sans_gestion&&stockDispo(Number(m.id))<Number(m.qty);});
                       const hasAlerts=ch.urgence||(ch.problemes_admin||[]).length>0;
                       return<div key={ch.id} style={{background:"#0D1828",borderRadius:12,border:`1px solid ${hasInsuff?"#EF444440":hasAlerts?"#F59E0B40":S.color+"25"}`,overflow:"hidden"}}>
 
@@ -7111,7 +7113,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[oEditForm,setOEditForm]=React.useState({});
       const[oDelConf,setODelConf]=React.useState(null);
       const[eComp,setEComp]=React.useState(null);
-      const[cForm,setCForm]=React.useState({cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false});
+      const[cForm,setCForm]=React.useState({cat:"",article:"",marque:"",unite:"pce",stock:0,seuil:0,prix:0,rupture:false,sans_gestion:false});
       const[delConf,setDelConf]=React.useState(null);
       const[eSId,setESId]=React.useState(null);
       const[eSVal,setESVal]=React.useState("");
@@ -7746,9 +7748,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 list="cat-list" style={{background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,padding:"9px 10px",color:"#E8F0FF",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
               <datalist id="cat-list">{[...new Set(stock.map(s=>s.cat).filter(Boolean))].map(c=><option key={c} value={c}/>)}</datalist>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-              <input type="checkbox" checked={cForm.rupture} onChange={e=>setCForm(p=>({...p,rupture:e.target.checked}))} id="rupt_cb" style={{width:16,height:16}}/>
-              <label htmlFor="rupt_cb" style={{fontSize:13,color:"#E8F0FF",cursor:"pointer"}}>Rupture centrale fournisseur</label>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="checkbox" checked={cForm.rupture} onChange={e=>setCForm(p=>({...p,rupture:e.target.checked}))} id="rupt_cb" style={{width:16,height:16}}/>
+                <label htmlFor="rupt_cb" style={{fontSize:13,color:"#E8F0FF",cursor:"pointer"}}>Rupture centrale fournisseur</label>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="checkbox" checked={!!cForm.sans_gestion} onChange={e=>setCForm(p=>({...p,sans_gestion:e.target.checked}))} id="sang_cb" style={{width:16,height:16}}/>
+                <label htmlFor="sang_cb" style={{fontSize:13,color:"#E8F0FF",cursor:"pointer"}}>Sans gestion de stock <span style={{fontSize:11,color:"#4A6A9E"}}>(accessoire, consommable…)</span></label>
+              </div>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>{
@@ -8665,7 +8673,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {stock.filter(s=>!s.rupture&&s.seuil>0&&s.stock<s.seuil).slice(0,5).map(item=>{
-                  const st=gS(item.stock,item.seuil,item.rupture,aOIds.has(item.id));
+                  const st=gS(item.stock,item.seuil,item.rupture,aOIds.has(item.id),item.sans_gestion,item.sans_gestion);
                   const sc=SC[st];
                   return(
                     <div key={item.id} style={{display:"flex",alignItems:"center",gap:10}}>
@@ -8727,12 +8735,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     return"Autre";
   })();
 
-  const alertItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";});
-  const warnItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="warn";});
+  const alertItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert"||st==="rupture";});
+  const warnItems=stockFil.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="warn";});
 
   // KPI totals
-  const kpiOk=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id))==="ok").length;
-  const kpiAlert=stock.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert";}).length;
+  const kpiOk=stock.filter(s=>gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion)==="ok").length;
+  const kpiAlert=stock.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert";}).length;
   const kpiRupture=stock.filter(s=>s.rupture).length;
   const kpiOrdered=stock.filter(s=>aOIds.has(s.id)).length;
 
@@ -8759,7 +8767,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
   // ── Article card ────────────────────────────────
   const ArticleRow=({item,compact})=>{
     const hasO=aOIds.has(item.id);
-    const st=gS(item.stock,item.seuil,item.rupture,hasO);
+    const st=gS(item.stock,item.seuil,item.rupture,hasO,item.sans_gestion);
     const s=SC[st];
     const pct=item.seuil>0?Math.min(100,Math.round((item.stock/item.seuil)*100)):item.stock>0?100:0;
     const barColor=st==="rupture"?"#A855F7":st==="alert"?"#EF4444":st==="warn"?"#F59E0B":st==="ordered"?"#3B82F6":"#10B981";
@@ -8958,7 +8966,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",overflow:"hidden"}}>
         {Object.entries(byCategory).map(([cat,byBrand])=>{
           const catTotal=Object.values(byBrand).flat().length;
-          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert"||st==="rupture";}).length;
           return(
             <div key={cat}>
               {/* Header catégorie */}
@@ -8970,7 +8978,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </button>
               {collapsedCats[cat]===true&&Object.entries(byBrand).map(([brand,items])=>{
                 const bKey=`${cat}__${brand}`;
-                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert"||st==="rupture";}).length;
                 return(
                   <div key={brand}>
                     {/* Header marque */}
@@ -8994,7 +9002,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       <div>
         {Object.entries(byCategory).map(([cat,byBrand])=>{
           const catTotal=Object.values(byBrand).flat().length;
-          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+          const catAlerts=Object.values(byBrand).flat().filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert"||st==="rupture";}).length;
           return(
             <div key={cat} style={{marginBottom:14}}>
               {/* Header catégorie */}
@@ -9007,7 +9015,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </button>
               {collapsedCats[cat]===true&&Object.entries(byBrand).map(([brand,items])=>{
                 const bKey=`${cat}__${brand}`;
-                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id));return st==="alert"||st==="rupture";}).length;
+                const brandAlerts=items.filter(s=>{const st=gS(s.stock,s.seuil,s.rupture,aOIds.has(s.id),s.sans_gestion,s.sans_gestion);return st==="alert"||st==="rupture";}).length;
                 return(
                   <div key={brand} style={{marginLeft:8,marginBottom:8}}>
                     {/* Header marque */}
@@ -9232,7 +9240,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
                           {ci.map(item=>{
                             const hasO=aOIds.has(item.id);
-                            const st=gS(item.stock,item.seuil,item.rupture,hasO);
+                            const st=gS(item.stock,item.seuil,item.rupture,hasO,item.sans_gestion);
                             const s=SC[st];
                             return(
                               <div key={item.id} style={{background:item.rupture?"#1A0A2A":hasO?"#0A1628":"#0D1828",borderRadius:12,border:`1px solid ${item.rupture?"#A855F740":"#1B2D4F"}`,padding:14,position:"relative"}}>
