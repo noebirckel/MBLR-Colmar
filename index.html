@@ -7673,7 +7673,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         setDemoMode(true);
       };
 
-      const IS_DEV=!["noebirckel.github.io"].some(d=>window.location.hostname.includes(d))&&window.location.hostname!=="";
+      const IS_DEV=!window.location.hostname.includes("noebirckel.github.io");
       if(!authUser)return <LoginScreen onDemo={IS_DEV?loginDemo:null}/>;
       if(authUser&&!profile&&!demoMode)return(
         <div style={{background:"#070D1A",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
