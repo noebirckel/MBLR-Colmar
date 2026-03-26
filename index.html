@@ -6512,6 +6512,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(!n)return;
         if(n==="termine"){
           const ns=stock.map(s=>{
+            if(s.sans_gestion) return s;
             const u=(ch.materiels||[]).find(m=>Number(m.id)===s.id);
             const uc=(ch.cables||[]).find(m=>Number(m.id)===s.id);
             const q=(u?Number(u.qty):0)+(uc?Number(uc.qty):0);
@@ -6755,8 +6756,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             }}
             onSaveAndFinish={(rapport)=>{
               const ch=rapportModal.ch;
-              // Déduire stock
+              // Déduire stock (hors articles sans gestion)
               const ns=stock.map(s=>{
+                if(s.sans_gestion) return s;
                 const u=(ch.materiels||[]).find(m=>Number(m.id)===s.id);
                 const uc=(ch.cables||[]).find(m=>Number(m.id)===s.id);
                 const q=(u?Number(u.qty):0)+(uc?Number(uc.qty):0);
