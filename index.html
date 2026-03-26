@@ -5435,7 +5435,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET VENTES
     // ══════════════════════════════════════
-    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, installConfigs, onVenteSaved, onDeleteVente}) {
+    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, installConfigs, marqueConfigs, onVenteSaved, onDeleteVente}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
@@ -5747,15 +5747,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             {/* Longueur de câble */}
             {form.marque_borne&&(()=>{
               const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
-              // Câble 1 — alimentation
+              const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
               const cable1Stock=cfg?.cable_id?[stock.find(s=>s.id===Number(cfg.cable_id))].filter(Boolean):CABLES;
-              // Câble 2 — communication (si activé)
-              const cable2Stock=cfg?.cable2_id?[stock.find(s=>s.id===Number(cfg.cable2_id))].filter(Boolean):CABLES;
-              const existsCab=id=>form.cables.find(c=>c.id===id);
+              const cable2Stock=mqCfg?.cable_comm_id?[stock.find(s=>s.id===Number(mqCfg.cable_comm_id))].filter(Boolean):CABLES;
               return(
                 <div style={{marginBottom:8}}>
                   {/* Câble d'alimentation */}
-                  <L c={cfg?.cable?"Câble d'alimentation":"CÂBLE (ML)"}/>
+                  <L c={cfg?.cable?"Câble d'alimentation — "+cfg.cable:"CÂBLE (ML)"}/>
                   <div style={{display:"flex",gap:6,marginBottom:5}}>
                     <select value={cItem.id} onChange={e=>setCItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
                       <option value="">Choisir un câble…</option>
@@ -5764,9 +5762,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     <input type="number" min="1" value={cItem.qty} onChange={e=>setCItem(p=>({...p,qty:e.target.value}))} placeholder="ml" style={{...INP(),width:68,textAlign:"center"}}/>
                     <button onClick={addCable} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
                   </div>
-                  {/* Câble de communication si activé */}
-                  {cfg?.cable2_active&&<>
-                    <L c={`Câble de communication${cfg.cable2?" — "+cfg.cable2:""}`}/>
+                  {/* Câble de communication si la marque en requiert un */}
+                  {mqCfg?.cable_comm_active&&<>
+                    <L c={`Câble de communication${mqCfg.cable_comm?` — ${mqCfg.cable_comm}`:""}`}/>
                     <div style={{display:"flex",gap:6,marginBottom:5}}>
                       <select value={cItem.id} onChange={e=>setCItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
                         <option value="">Choisir un câble…</option>
@@ -7185,6 +7183,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         };}catch(e){return {};}
       });
       const saveInstallConfigs=c=>{setInstallConfigs(c);try{localStorage.setItem("install_configs",JSON.stringify(c));}catch(e){}};
+      const[marqueConfigs,setMarqueConfigs]=React.useState(()=>{
+        try{const s=localStorage.getItem("marque_configs");return s?JSON.parse(s):{};}catch(e){return {};}
+      });
+      const saveMarqueConfigs=c=>{setMarqueConfigs(c);try{localStorage.setItem("marque_configs",JSON.stringify(c));}catch(e){}};
       const[rapports,setRapports]=React.useState([]);
       const[view,setView]=React.useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
       const[fCat,setFCat]=React.useState("Toutes");
@@ -8014,7 +8016,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 
 
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs}
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs}
                   onVenteSaved={v=>{
                     SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:"",technicien:installerName||"",duree_chantier:v.duree_chantier||"1j"},...p]);
                     SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
@@ -9406,32 +9408,39 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             </div>
                           </div>
 
-                          {/* Câble 2 — communication (optionnel) */}
-                          <div style={{background:"#070D1A",borderRadius:9,padding:"10px 12px"}}>
-                            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                              <div style={{fontWeight:700,fontSize:12,color:"#E8F0FF"}}>📡 Câble de communication <span style={{fontSize:10,color:"#4A6A9E",fontWeight:400}}>(optionnel)</span></div>
-                              <button onClick={()=>upd({cable2_active:!cfg.cable2_active})}
-                                style={{background:cfg.cable2_active?"#3B82F620":"transparent",border:`1px solid ${cfg.cable2_active?"#3B82F6":"#1B2D4F"}`,borderRadius:6,color:cfg.cable2_active?"#60A5FA":"#4A6A9E",padding:"3px 9px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif',fontWeight:700}}>
-                                {cfg.cable2_active?"✓ Activé":"+ Activer"}
-                              </button>
-                            </div>
-                            {cfg.cable2_active&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-                              <div>
-                                <LBL c="Nom affiché"/>
-                                <input value={cfg.cable2||""} onChange={e=>upd({cable2:e.target.value})} placeholder="Ex: Câble RJ45" style={SINP}/>
-                              </div>
-                              <div>
-                                <LBL c="Article stock lié"/>
-                                <select value={cfg.cable2_id||""} onChange={e=>upd({cable2_id:e.target.value})} style={SINP}>
-                                  <option value="">— Non lié —</option>
-                                  {CABLES_STOCK.map(s=><option key={s.id} value={s.id}>{s.article}</option>)}
-                                </select>
-                              </div>
-                            </div>}
-                          </div>
                         </div>
                       );
                     })}
+
+                    {/* Config câble communication par marque */}
+                    <div style={{marginTop:16}}>
+                      <h4 style={{margin:"0 0 6px",fontSize:13,fontWeight:800,color:"#E8F0FF"}}>📡 Câble de communication par marque</h4>
+                      <p style={{margin:"0 0 10px",fontSize:11,color:"#4A6A9E"}}>Certaines marques nécessitent un câble dédié (ex: Easee, Zaptec…)</p>
+                      {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee"].map(marque=>{
+                        const mq=(marqueConfigs||{})[marque]||{};
+                        const SINP2={background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",padding:"8px 10px",width:"100%",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',fontSize:12,outline:"none"};
+                        const updMq=patch=>saveMarqueConfigs({...marqueConfigs,[marque]:{...mq,...patch}});
+                        return(
+                          <div key={marque} style={{background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F",padding:"10px 14px",marginBottom:7,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:700,fontSize:13,color:"#E8F0FF",minWidth:70,flexShrink:0}}>{marque}</span>
+                            <button onClick={()=>updMq({cable_comm_active:!mq.cable_comm_active})}
+                              style={{background:mq.cable_comm_active?"#3B82F620":"transparent",border:`1px solid ${mq.cable_comm_active?"#3B82F6":"#1B2D4F"}`,borderRadius:6,color:mq.cable_comm_active?"#60A5FA":"#4A6A9E",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif',fontWeight:700,flexShrink:0}}>
+                              {mq.cable_comm_active?"📡 Activé":"+ Câble comm."}
+                            </button>
+                            {mq.cable_comm_active&&<>
+                              <input value={mq.cable_comm||""} onChange={e=>updMq({cable_comm:e.target.value})}
+                                placeholder="Nom affiché (ex: Câble RJ45)"
+                                style={{...SINP2,flex:1,minWidth:100}}/>
+                              <select value={mq.cable_comm_id||""} onChange={e=>updMq({cable_comm_id:e.target.value})}
+                                style={{...SINP2,flex:1,minWidth:100}}>
+                                <option value="">— Article stock —</option>
+                                {CABLES_STOCK.map(s=><option key={s.id} value={s.id}>{s.article}</option>)}
+                              </select>
+                            </>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </>}
 
