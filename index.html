@@ -5435,6 +5435,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
     // ONGLET VENTES
     // ══════════════════════════════════════
+    function SCard({n,title,icon,done,children}){return(<div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
+        <div style={{width:24,height:24,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
+        <span style={{fontWeight:700,fontSize:13,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
+      </div>
+      {children&&<div style={{padding:"13px 16px"}}>{children}</div>}
+    </div>);}
+
     function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, installConfigs, marqueConfigs, onVenteSaved, onDeleteVente}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
@@ -5647,13 +5655,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         };
 
         const SH=(n,title,icon,done)=>({n,title,icon,done});
-        const SCard=({n,title,icon,done,children})=>(<div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10,overflow:"hidden"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
-            <div style={{width:24,height:24,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
-            <span style={{fontWeight:700,fontSize:13,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
-          </div>
-          {children&&<div style={{padding:"13px 16px"}}>{children}</div>}
-        </div>);
 
         return (
           <div style={{paddingBottom:40}}>
