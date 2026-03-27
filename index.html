@@ -5622,318 +5622,299 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       }));
       const filteredVentes = ventes.filter(v=>!search||(v.client||"").toLowerCase().includes(search.toLowerCase())||(v.par||"").toLowerCase().includes(search.toLowerCase()));
 
-      // ══ VUE FORMULAIRE (page complète, pas de modal) ══
+      // ══ VUE FORMULAIRE ══
       if(viewMode==="form") return (
-        <div>
-          {/* Bandeau brouillon */}
-          <div style={{background:"#10B98115",border:"1px solid #10B98140",borderRadius:10,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#10B981"}}>
-            <span style={{fontSize:16}}>💾</span>
-            <span style={{fontWeight:600}}>Brouillon auto-sauvegardé — tu peux changer d'onglet ou de page, ta saisie est conservée.</span>
+        <div style={{paddingBottom:isMobile?100:40}}>
+          {/* Header */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+            <button onClick={cancelForm} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:9,color:"#4A6A9E",padding:"7px 12px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+            <div>
+              <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#F0F6FF"}}>{editId?"Modifier la vente":"Nouvelle vente"}</h2>
+              <div style={{fontSize:10,color:"#10B981",marginTop:2,fontWeight:600}}>💾 Brouillon auto-sauvegardé</div>
+            </div>
           </div>
 
-          <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:isMobile?16:24,maxWidth:620}}>
-            <h3 style={{margin:"0 0 20px",fontWeight:800,fontSize:17}}>{editId?"✏️ Modifier la vente":"💰 Nouvelle vente"}</h3>
+          {(()=>{
+            const cout=totalMat(form)+totalCab(form);
+            const prixHT=Number(form.prix_ht)||0;
+            const marge=prixHT-cout;
+            const pctM=prixHT>0?Math.round((marge/prixHT)*100):null;
 
-            {/* Client + Date */}
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr auto",gap:10,marginBottom:10}}>
-              <div><L c="CLIENT"/><input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))} placeholder="Nom du client ou société" style={INP()}/></div>
-              <div><L c="DATE"/><input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={INP({width:isMobile?"100%":115})}/></div>
-            </div>
-            {/* Adresse */}
-            <div style={{marginBottom:14}}>
-              <L c="ADRESSE D'INSTALLATION"/>
-              <div style={{position:"relative"}}>
-                <input value={form.adresse||""} onChange={e=>{
-                  setForm(p=>({...p,adresse:e.target.value,coords:null}));
-                  clearTimeout(addrTimer.current);
-                  const v=e.target.value;
-                  if(v.length<3){setAddrSugg([]);return;}
-                  addrTimer.current=setTimeout(async()=>{
-                    try{
-                      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
-                      const d=await r.json();
-                      setAddrSugg(d.map(x=>({display:x.display_name,lat:parseFloat(x.lat),lng:parseFloat(x.lon)})));
-                    }catch(e2){}
-                  },400);
-                }} placeholder="Ex: 12 rue des Lilas, 67000 Strasbourg" style={INP()}/>
-                {form.coords&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:12,color:"#10B981",fontWeight:700}}>📍</div>}
-                {addrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:"0 0 10px 10px",zIndex:200,boxShadow:"0 8px 24px #0009",maxHeight:200,overflowY:"auto"}}>
-                  {addrSugg.map((s,i)=>(
-                    <div key={i} onClick={()=>{
-                      setForm(p=>({...p,adresse:s.display,coords:{lat:s.lat,lng:s.lng}}));
-                      setAddrSugg([]);
-                    }}
-                      style={{padding:"9px 13px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addrSugg.length-1?"1px solid #1B2D4F":"none",display:"flex",gap:6,alignItems:"flex-start"}}
-                      onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
-                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                      <span style={{flexShrink:0,marginTop:1}}>📍</span>
-                      <span style={{lineHeight:1.4}}>{s.display}</span>
-                    </div>
-                  ))}
-                </div>}
+            // Helpers visuels
+            const Section=({n,title,icon,done,children})=>(
+              <div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10,overflow:"hidden"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
+                  <div style={{width:26,height:26,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
+                  <span style={{fontWeight:700,fontSize:14,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
+                </div>
+                {children&&<div style={{padding:"14px 16px"}}>{children}</div>}
               </div>
-              {form.adresse&&!form.coords&&addrSugg.length===0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>Sélectionnez une suggestion ou l'adresse sera géocodée à l'enregistrement</div>}
-            </div>
-        {/* ── WIZARD INSTALLATION ── */}
-          <div style={{marginBottom:14}}>
-            <L c="MARQUE DE LA BORNE"/>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:8}}>
-              {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee","Prise renforcée"].map(b=>(
-                <button key={b} onClick={()=>setForm(p=>({...p,marque_borne:b,modele_borne:"",puissance_install:""}))}
-                  style={{padding:"9px 6px",borderRadius:10,border:`2px solid ${form.marque_borne===b?"#3B82F6":"#1B2D4F"}`,background:form.marque_borne===b?"#3B82F620":"#070D1A",color:form.marque_borne===b?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
-                  {b}
-                </button>
-              ))}
-            </div>
+            );
 
-            {/* Modèle de borne */}
-            {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&(()=>{
-              // Filtre uniquement les bornes (sous_cat=borne ou détection par mot-clé si pas de sous_cat)
-              const isborne=s=>s.sous_cat==="borne"||(s.sous_cat===""&&(s.article+" "+(s.cat||"")).toLowerCase().match(/borne|wallbox|chargeur|station|charge up|charge core|charge max/));
-              const bornesBrand=BORNES.filter(s=>(s.cat===form.marque_borne||(s.cat||"").toLowerCase()===form.marque_borne.toLowerCase())&&isborne(s));
-              if(!bornesBrand.length) return <div style={{fontSize:12,color:"#4A6A9E",marginBottom:8}}>Aucune borne {form.marque_borne} dans le stock — vous pourrez l'ajouter manuellement.</div>;
-              return(
-                <div style={{marginBottom:8}}>
-                  <L c={`MODÈLE ${form.marque_borne.toUpperCase()}`}/>
-                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    {bornesBrand.map(b=>(
-                      <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
-                        style={{padding:"10px 12px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#1B2D4F"}`,background:form.modele_borne===b.article?"#3B82F620":"#070D1A",color:form.modele_borne===b.article?"#E8F0FF":"#7B96C8",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontWeight:700,fontSize:13}}>{b.article}</span>
-                        <span style={{fontSize:11,color:"#10B981"}}>{fmt(b.prix)}</span>
-                      </button>
-                    ))}
+            const Chip=({label,active,onClick,color="#3B82F6"})=>(
+              <button onClick={onClick} style={{padding:"8px 12px",borderRadius:9,border:`2px solid ${active?color:"#1B2D4F"}`,background:active?color+"20":"#070D1A",color:active?color:"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',transition:"all 0.12s",whiteSpace:"nowrap"}}>
+                {label}
+              </button>
+            );
+
+            return(<>
+              {/* ── 1. Client ── */}
+              <Section n={1} title="Client" icon="👤" done={!!form.client}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:10}}>
+                  <div>
+                    <L c="NOM / SOCIÉTÉ"/>
+                    <input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))} placeholder="Ex: Martin Jean" style={INP()}/>
+                  </div>
+                  <div>
+                    <L c="DATE"/>
+                    <input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={INP()}/>
                   </div>
                 </div>
-              );
-            })()}
-
-            {/* Puissance — hors prise renforcée */}
-            {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&<div style={{marginBottom:8}}>
-              <L c="PUISSANCE D'INSTALLATION"/>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-                {["7.4kW","11kW","22kW"].map(p=>{
-                  const cfg=(installConfigs||{})[p]||{};
-                  return(
-                    <button key={p} onClick={()=>{
-                      const cfg=(installConfigs||{})[p]||{};
-                      const newMats=[...form.materiels];
-                      const newCabs=[...form.cables];
-                      // Auto-add disjoncteur si lié au stock
-                      if(cfg.disjoncteur_id){
-                        const s=stock.find(x=>x.id===Number(cfg.disjoncteur_id));
-                        if(s&&!newMats.find(m=>m.id===s.id))newMats.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});
-                      }
-                      // Retirer les câbles liés aux anciennes configs
-                      const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const c=(installConfigs||{})[pw]||{};return[Number(c.cable_id),Number(c.cable2_id)].filter(Boolean);});
-                      const cabsSansConfig=newCabs.filter(c=>!allCableIds.includes(Number(c.id)));
-                      setForm(pr=>({...pr,puissance_install:p,materiels:newMats,cables:cabsSansConfig}));
-                    }}
-                      style={{padding:"10px 6px",borderRadius:10,border:`2px solid ${form.puissance_install===p?"#A855F7":"#1B2D4F"}`,background:form.puissance_install===p?"#A855F720":"#070D1A",cursor:"pointer",fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
-                      <div style={{fontWeight:800,fontSize:14,color:form.puissance_install===p?"#C084FC":"#7B96C8"}}>{cfg.label||p}</div>
-                      {cfg.disjoncteur&&<div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>⚡ {cfg.disjoncteur}</div>}
-                    </button>
-                  );
-                })}
-              </div>
-              {form.puissance_install&&(installConfigs||{})[form.puissance_install]&&(()=>{
-                const cfg=(installConfigs||{})[form.puissance_install];
-                return(
-                  <div style={{background:"#A855F710",border:"1px solid #A855F725",borderRadius:10,padding:"10px 12px",marginTop:8,fontSize:12}}>
-                    {cfg.disjoncteur&&<div style={{color:"#C084FC",marginBottom:3}}>⚡ Disjoncteur : <strong>{cfg.disjoncteur}</strong></div>}
-                    {cfg.cable&&<div style={{color:"#7B96C8"}}>🔌 Câble recommandé : <strong>{cfg.cable}</strong></div>}
-                  </div>
-                );
-              })()}
-            </div>}
-
-            {/* Longueur de câble */}
-            {form.marque_borne&&(()=>{
-              const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
-              const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
-              const cableAlimStock=cfg?.cable_id?stock.find(s=>s.id===Number(cfg.cable_id)):null;
-              const cableCommStock=mqCfg?.cable_comm_active&&mqCfg?.cable_comm_id?stock.find(s=>s.id===Number(mqCfg.cable_comm_id)):null;
-
-              const addCables=()=>{
-                if(!cableMl||cableMl<=0)return;
-                const newCabs=[];
-                const alim=cableAlimStock||CABLES[0];
-                if(alim) newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl,prix_unit:alim.prix||0});
-                if(cableCommStock) newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl,prix_unit:cableCommStock.prix||0});
-                setForm(p=>({...p,cables:newCabs}));
-              };
-
-              return(
-                <div style={{marginBottom:8}}>
-                  <L c="LONGUEUR DE CÂBLE (ML)"/>
-                  {/* Info câbles qui seront ajoutés */}
-                  <div style={{background:"#1B2D4F22",borderRadius:8,padding:"8px 12px",marginBottom:8,fontSize:11,color:"#7B96C8"}}>
-                    🔌 {cableAlimStock?cableAlimStock.article:(cfg?.cable||"Câble d'alimentation")}
-                    {cableCommStock&&<span style={{marginLeft:10,color:"#A855F7"}}>· 📡 {cableCommStock.article}</span>}
-                    {!cableAlimStock&&!cfg?.cable&&<span style={{color:"#F59E0B"}}> — configurez le câble dans Paramètres</span>}
-                  </div>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <button onClick={()=>{const v=Math.max(1,cableMl-5);setCableMl(v);}} style={{background:"#1B2D4F",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",width:40,height:44,cursor:"pointer",fontSize:18,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>−</button>
-                    <div style={{flex:1,display:"flex",alignItems:"center",gap:6}}>
-                      <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value))} style={{...INP(),textAlign:"center",fontSize:16,fontWeight:800}}/>
-                      <span style={{color:"#4A6A9E",fontWeight:700,flexShrink:0,fontSize:14}}>ml</span>
-                    </div>
-                    <button onClick={()=>{setCableMl(v=>v+5);}} style={{background:"#1B2D4F",border:"1px solid #1B2D4F",borderRadius:8,color:"#E8F0FF",width:40,height:44,cursor:"pointer",fontSize:18,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>+</button>
-                    <button onClick={addCables} style={BTN("#3B82F6",{padding:"10px 14px",flexShrink:0})}>✓ Ajouter</button>
-                  </div>
-                  {form.cables.length>0&&<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:3}}>
-                    {form.cables.map(m=>(
-                      <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"6px 12px"}}>
-                        <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          <span style={{fontSize:13,color:"#10B981",fontWeight:700}}>{m.qty} ml</span>
-                          <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444422",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                        </div>
+                <div style={{marginTop:10,position:"relative"}}>
+                  <L c="ADRESSE"/>
+                  <input value={form.adresse||""} onChange={e=>{
+                    setForm(p=>({...p,adresse:e.target.value,coords:null}));
+                    clearTimeout(addrTimer.current);
+                    const v=e.target.value;
+                    if(v.length<3){setAddrSugg([]);return;}
+                    addrTimer.current=setTimeout(async()=>{
+                      try{
+                        const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
+                        const d=await r.json();
+                        setAddrSugg(d.map(x=>({display:x.display_name,lat:parseFloat(x.lat),lng:parseFloat(x.lon)})));
+                      }catch(e2){}
+                    },400);
+                  }} placeholder="Adresse d'installation" style={INP()}/>
+                  {form.coords&&<div style={{position:"absolute",right:12,top:32,fontSize:12,color:"#10B981",fontWeight:700}}>📍</div>}
+                  {addrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:"0 0 10px 10px",zIndex:200,boxShadow:"0 8px 24px #0009",maxHeight:160,overflowY:"auto"}}>
+                    {addrSugg.map((s,i)=>(
+                      <div key={i} onClick={()=>{setForm(p=>({...p,adresse:s.display,coords:{lat:s.lat,lng:s.lng}}));setAddrSugg([]);}}
+                        style={{padding:"8px 12px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addrSugg.length-1?"1px solid #1B2D4F":"none"}}
+                        onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
+                        onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        📍 {s.display}
                       </div>
                     ))}
                   </div>}
                 </div>
-              );
-            })()}
+              </Section>
 
-            {/* Composants supplémentaires */}
-            {form.marque_borne&&<div style={{marginBottom:8}}>
-              <L c="COMPOSANTS SUPPLÉMENTAIRES"/>
-              <div style={{display:"flex",gap:6,marginBottom:5}}>
-                <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2}}>
-                  <option value="">Ajouter un composant…</option>
-                  {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
-                </select>
-                <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:64,textAlign:"center"}}/>
-                <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
-              </div>
-              {form.materiels.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
-                  <span style={{fontSize:12}}>{m.article}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
-                    <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444422",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+              {/* ── 2. Marque ── */}
+              <Section n={2} title="Marque de la borne" icon="⚡" done={!!form.marque_borne}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
+                  {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee","Prise renforcée"].map(b=>(
+                    <button key={b} onClick={()=>setForm(p=>({...p,marque_borne:b,modele_borne:"",puissance_install:"",materiels:p.materiels.filter(m=>false),cables:[]}))}
+                      style={{padding:"10px 6px",borderRadius:10,border:`2px solid ${form.marque_borne===b?"#3B82F6":"#1B2D4F"}`,background:form.marque_borne===b?"#3B82F620":"#070D1A",color:form.marque_borne===b?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center",lineHeight:1.3}}>
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </Section>
+
+              {/* ── 3. Modèle ── */}
+              {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&(()=>{
+                const isborne=s=>s.sous_cat==="borne"||(s.sous_cat===""&&(s.article+" "+(s.cat||"")).toLowerCase().match(/borne|wallbox|chargeur|station|charge up|charge core|charge max/));
+                const bornesBrand=BORNES.filter(s=>(s.cat===form.marque_borne||(s.cat||"").toLowerCase()===form.marque_borne.toLowerCase())&&isborne(s));
+                if(!bornesBrand.length) return null;
+                return(
+                  <Section n={3} title={`Modèle ${form.marque_borne}`} icon="🔌" done={!!form.modele_borne}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {bornesBrand.map(b=>(
+                        <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
+                          style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#1B2D4F"}`,background:form.modele_borne===b.article?"#3B82F620":"#070D1A",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.12s"}}>
+                          <span style={{fontWeight:700,fontSize:14,color:form.modele_borne===b.article?"#E8F0FF":"#7B96C8"}}>{b.article}</span>
+                          <span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{fmt(b.prix)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </Section>
+                );
+              })()}
+
+              {/* ── 4. Puissance ── */}
+              {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&(
+                <Section n={4} title="Puissance d'installation" icon="🔋" done={!!form.puissance_install}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    {["7.4kW","11kW","22kW"].map(p=>{
+                      const cfg=(installConfigs||{})[p]||{};
+                      const active=form.puissance_install===p;
+                      return(
+                        <button key={p} onClick={()=>{
+                          const c=(installConfigs||{})[p]||{};
+                          const newMats=[...form.materiels];
+                          const allDisjIds=["7.4kW","11kW","22kW"].map(pw=>Number((installConfigs||{})[pw]?.disjoncteur_id)).filter(Boolean);
+                          const matsClean=newMats.filter(m=>!allDisjIds.includes(Number(m.id)));
+                          if(c.disjoncteur_id){const s=stock.find(x=>x.id===Number(c.disjoncteur_id));if(s)matsClean.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});}
+                          const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const cc=(installConfigs||{})[pw]||{};return[Number(cc.cable_id),Number(cc.cable2_id)].filter(Boolean);});
+                          const cabsClean=form.cables.filter(cab=>!allCableIds.includes(Number(cab.id)));
+                          setForm(pr=>({...pr,puissance_install:p,materiels:matsClean,cables:cabsClean}));
+                        }}
+                          style={{padding:"12px 8px",borderRadius:12,border:`2px solid ${active?"#A855F7":"#1B2D4F"}`,background:active?"#A855F720":"#070D1A",cursor:"pointer",textAlign:"center",fontFamily:'"Outfit",sans-serif',transition:"all 0.12s"}}>
+                          <div style={{fontWeight:900,fontSize:16,color:active?"#C084FC":"#7B96C8"}}>{cfg.label||p}</div>
+                          {cfg.disjoncteur&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:3}}>⚡ {cfg.disjoncteur}</div>}
+                          {cfg.cable&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔌 {cfg.cable}</div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Section>
+              )}
+
+              {/* ── 5. Câble ── */}
+              {form.marque_borne&&(()=>{
+                const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
+                const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
+                const cableAlimStock=cfg?.cable_id?stock.find(s=>s.id===Number(cfg.cable_id)):null;
+                const cableCommStock=mqCfg?.cable_comm_active&&mqCfg?.cable_comm_id?stock.find(s=>s.id===Number(mqCfg.cable_comm_id)):null;
+                const hasCables=form.cables.length>0;
+
+                const addCables=()=>{
+                  if(!cableMl||cableMl<=0)return;
+                  const newCabs=[];
+                  const alim=cableAlimStock||CABLES[0];
+                  if(alim) newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl,prix_unit:alim.prix||0});
+                  if(cableCommStock) newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl,prix_unit:cableCommStock.prix||0});
+                  setForm(p=>({...p,cables:newCabs}));
+                };
+
+                return(
+                  <Section n={5} title="Longueur de câble" icon="🔌" done={hasCables}>
+                    {/* Info câbles recommandés */}
+                    <div style={{background:"#1B2D4F22",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#7B96C8"}}>
+                      🔌 {cableAlimStock?cableAlimStock.article:(cfg?.cable||"Câble d'alimentation — configurez dans Paramètres")}
+                      {cableCommStock&&<span style={{marginLeft:10,color:"#A855F7"}}>· 📡 {cableCommStock.article}</span>}
+                    </div>
+                    {/* Stepper ml */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                      <button onClick={()=>setCableMl(v=>Math.max(1,v-5))} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
+                      <div style={{flex:1,position:"relative"}}>
+                        <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value)||1)}
+                          style={{...INP(),textAlign:"center",fontSize:18,fontWeight:800,paddingRight:32}}/>
+                        <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#4A6A9E",fontWeight:700,fontSize:13}}>ml</span>
+                      </div>
+                      <button onClick={()=>setCableMl(v=>v+5)} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
+                      <button onClick={addCables} style={{...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)"),padding:"10px 18px",height:44,flexShrink:0}}>Ajouter</button>
+                    </div>
+                    {/* Câbles sélectionnés */}
+                    {form.cables.map(m=>(
+                      <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:4}}>
+                        <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          <span style={{fontSize:13,color:"#10B981",fontWeight:700}}>{m.qty} ml</span>
+                          <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </Section>
+                );
+              })()}
+
+              {/* ── 6. Composants suppl. ── */}
+              {form.marque_borne&&(
+                <Section n={6} title="Composants supplémentaires" icon="📦" done={false}>
+                  <div style={{display:"flex",gap:6,marginBottom:6}}>
+                    <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:13}}>
+                      <option value="">Ajouter un composant…</option>
+                      {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
+                    </select>
+                    <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:60,textAlign:"center"}}/>
+                    <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
+                  </div>
+                  {form.materiels.map(m=>(
+                    <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
+                      <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
+                        <span style={{fontSize:11,color:"#4A6A9E"}}>{fmt((m.prix_unit||0)*m.qty)}</span>
+                        <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </Section>
+              )}
+
+              {/* ── 7. Prix & Marge ── */}
+              <Section n={7} title="Prix de vente" icon="💶" done={!!form.prix_ht}>
+                <div style={{marginBottom:cout>0?12:0}}>
+                  <L c="PRIX HT (€)"/>
+                  <input type="number" step="0.01" value={form.prix_ht} onChange={e=>setForm(p=>({...p,prix_ht:e.target.value}))} placeholder="Ex: 1250.00" style={{...INP(),fontSize:18,fontWeight:800}}/>
+                </div>
+                {cout>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  {[
+                    {l:"Coût matériaux",v:fmt(cout),c:"#4A6A9E"},
+                    {l:"Marge brute",v:prixHT>0?fmt(marge):"—",c:marge>=0?"#10B981":"#EF4444"},
+                    {l:"Taux de marge",v:pctM!==null?pctM+"%":"—",c:pctM===null?"#4A6A9E":pctM>=40?"#10B981":pctM>=20?"#F59E0B":"#EF4444"},
+                  ].map(k=>(
+                    <div key={k.l} style={{background:"#070D1A",borderRadius:9,padding:"10px 12px",textAlign:"center"}}>
+                      <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
+                    </div>
+                  ))}
+                </div>}
+              </Section>
+
+              {/* ── 8. Infos finales ── */}
+              <Section n={8} title="Informations complémentaires" icon="📋" done={false}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
+                  <div>
+                    <L c="COMMERCIAL"/>
+                    {(()=>{
+                      const known=[...new Set([...(profile?.nom?[profile.nom]:[]),...ventes.map(v=>v.par).filter(Boolean)])].sort();
+                      return known.length>0
+                        ?<select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}>
+                          <option value="">Choisir…</option>
+                          {known.map(n=><option key={n} value={n}>{n}</option>)}
+                        </select>
+                        :<input value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom" style={INP()}/>;
+                    })()}
+                  </div>
+                  <div>
+                    <L c="DURÉE CHANTIER"/>
+                    <div style={{display:"flex",gap:6}}>
+                      {[["demi","🌅 ½ j"],["1j","☀️ 1 j"]].map(([v,l])=>(
+                        <button key={v} onClick={()=>setForm(p=>({...p,duree_chantier:v}))}
+                          style={{flex:1,padding:"11px 6px",borderRadius:10,border:`2px solid ${form.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:form.duree_chantier===v?"#3B82F620":"#070D1A",color:form.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>}
-          </div>
+                <div style={{marginBottom:10}}>
+                  <L c="NOTES"/>
+                  <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails, conditions particulières…" style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
+                </div>
+                {/* Photos */}
+                <div>
+                  <L c="PHOTOS DE VISITE"/>
+                  <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:`2px dashed ${uploadingVentePhotos?"#3B82F6":"#1B2D4F"}`,borderRadius:10,padding:"12px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8}}>
+                    <span style={{fontSize:18}}>{uploadingVentePhotos?"⏳":"📷"}</span>
+                    {uploadingVentePhotos?"Upload en cours…":"Ajouter des photos de visite"}
+                    <input type="file" accept="image/*" multiple onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}} disabled={uploadingVentePhotos}/>
+                  </label>
+                  {(form.photos_vente||[]).length>0&&(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                      {(form.photos_vente||[]).map((url,i)=>(
+                        <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
+                          <img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                          <button onClick={()=>removeVentePhoto(url)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.8)",border:"none",borderRadius:"50%",color:"#fff",width:20,height:20,cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Section>
 
-            {/* Prix HT */}
-            <div style={{marginBottom:14}}>
-              <L c="PRIX DE VENTE HT (€)"/>
-              <input type="number" step="0.01" value={form.prix_ht} onChange={e=>setForm(p=>({...p,prix_ht:e.target.value}))} placeholder="Ex: 1250.00" style={INP()}/>
-            </div>
-
-            {/* Marge */}
-            {Number(form.prix_ht)>0&&(form.materiels.length>0||form.cables.length>0)&&(()=>{
-              const cout=totalMat(form)+totalCab(form);
-              const marge=Number(form.prix_ht)-cout;
-              const pct=cout>0?((marge/Number(form.prix_ht))*100).toFixed(1):null;
-              return <div style={{background:marge>=0?"#10B98115":"#EF444415",border:`1px solid ${marge>=0?"#10B98140":"#EF444440"}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontWeight:700,color:marge>=0?"#10B981":"#EF4444",fontSize:13}}>
-                {marge>=0?"📈":"📉"} Marge estimée : {fmt(marge)} {pct&&`(${pct}%)`}
-              </div>;
-            })()}
-
-            {/* Commercial */}
-            <div style={{marginBottom:14}}>
-              <L c="COMMERCIAL"/>
-              {(()=>{
-                const known=[...new Set([
-                  ...(profile?.nom?[profile.nom]:[]),
-                  ...ventes.map(v=>v.par).filter(Boolean)
-                ])].sort();
-                return known.length>0
-                  ? <select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}>
-                      <option value="">Choisir un commercial…</option>
-                      {known.map(n=><option key={n} value={n}>{n}</option>)}
-                      <option value="__other__">✏️ Autre (saisir manuellement)</option>
-                    </select>
-                  : null;
-              })()}
-              {(form.par==="__other__"||(form.par&&![...new Set([...(profile?.nom?[profile.nom]:[]),...ventes.map(v=>v.par).filter(Boolean)])].includes(form.par)))&&
-                <input value={form.par==="__other__"?"":form.par} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom du commercial" style={{...INP(),marginTop:6}}/>
-              }
-            </div>
-
-            {/* Durée du chantier */}
-            <div style={{marginBottom:14}}>
-              <L c="DURÉE DU CHANTIER"/>
-              <div style={{display:"flex",gap:8}}>
-                {[["demi","🌅 Demi-journée"],["1j","☀️ 1 journée"]].map(([v,l])=>(
-                  <button key={v} onClick={()=>setForm(p=>({...p,duree_chantier:v}))}
-                    style={{flex:1,padding:"12px 8px",borderRadius:10,border:`2px solid ${form.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:form.duree_chantier===v?"rgba(59,130,246,0.12)":"#070D1A",color:form.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s"}}>
-                    {l}
-                  </button>
-                ))}
+              {/* ── Actions ── */}
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <button onClick={cancelForm} style={BTN("#1B2D4F",{flex:1,padding:"14px"})}>Annuler</button>
+                <button onClick={saveVente} disabled={!form.client||!form.prix_ht}
+                  style={BTN(!form.client||!form.prix_ht?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"14px",fontSize:14,opacity:!form.client||!form.prix_ht?0.5:1})}>
+                  {editId?"💾 Mettre à jour":"💰 Enregistrer la vente"}
+                </button>
               </div>
-            </div>
-
-            {/* Description */}
-            <div style={{marginBottom:20}}>
-              <L c="DESCRIPTION / NOTES"/>
-              <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails du projet, conditions particulières…" style={{...INP(),height:90,resize:"none",lineHeight:1.6}}/>
-            </div>
-
-            {/* Photos de visite */}
-            <div style={{marginBottom:20}}>
-              <L c="PHOTOS DE VISITE / PRÉ-INSTALLATION"/>
-              <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:"2px dashed #1B2D4F",borderRadius:10,padding:"13px",cursor:uploadingVentePhotos?"default":"pointer",color:uploadingVentePhotos?"#2E4D82":"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8,opacity:uploadingVentePhotos?0.6:1}}
-                onMouseOver={e=>{if(!uploadingVentePhotos)e.currentTarget.style.borderColor="#3B82F6";}}
-                onMouseOut={e=>e.currentTarget.style.borderColor="#1B2D4F"}>
-                <span style={{fontSize:18}}>{uploadingVentePhotos?"⏳":"📷"}</span>
-                {uploadingVentePhotos?"Chargement en cours…":"Compteur, coffret, emplacement borne…"}
-                <input type="file" accept="image/*" multiple disabled={uploadingVentePhotos}
-                  onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}}/>
-              </label>
-              {(form.photos_vente||[]).length>0&&(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:6}}>
-                  {(form.photos_vente||[]).map((url,i)=>(
-                    <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
-                      <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      <button onClick={()=>removeVentePhoto(url)}
-                        style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.75)",border:"none",borderRadius:"50%",color:"white",width:22,height:22,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(form.photos_vente||[]).length>0&&<div style={{fontSize:10,color:"#10B981"}}>📷 {(form.photos_vente||[]).length} photo(s) · visibles dans l'onglet Chantier</div>}
-            </div>
-
-            {/* Photos de visite */}
-            <div style={{marginBottom:20}}>
-              <L c="📸 PHOTOS DE VISITE / CHANTIER"/>
-              <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:`2px dashed ${uploadingVentePhotos?"#3B82F6":"#1B2D4F"}`,borderRadius:10,padding:"14px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8,transition:"border-color 0.2s"}}
-                onMouseOver={e=>e.currentTarget.style.borderColor="#3B82F6"}
-                onMouseOut={e=>e.currentTarget.style.borderColor=uploadingVentePhotos?"#3B82F6":"#1B2D4F"}>
-                {uploadingVentePhotos
-                  ?<><div style={{width:14,height:14,borderRadius:"50%",border:"2px solid #1B2D4F",borderTop:"2px solid #3B82F6",animation:"spin 0.8s linear infinite"}}/> Upload en cours…</>
-                  :<><span style={{fontSize:18}}>📸</span> Ajouter des photos de visite</>
-                }
-                <input type="file" accept="image/*" multiple onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}} disabled={uploadingVentePhotos}/>
-              </label>
-              {(form.photos_vente||[]).length>0&&(
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-                  {(form.photos_vente||[]).map((url,i)=>(
-                    <div key={i} style={{position:"relative",borderRadius:9,overflow:"hidden",aspectRatio:"1",border:"1px solid #1B2D4F"}}>
-                      <img src={url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      <button onClick={()=>removeVentePhoto(url)}
-                        style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.75)",border:"none",borderRadius:"50%",color:"white",width:22,height:22,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                      <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,#000A)",padding:"6px 4px 4px",fontSize:9,color:"#AAC4E8",textAlign:"center"}}>Photo {i+1}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(form.photos_vente||[]).length===0&&<div style={{fontSize:10,color:"#2E4D82",textAlign:"center"}}>Ces photos seront visibles dans l'onglet Chantier pour préparer l'intervention</div>}
-            </div>
-
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={cancelForm} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={saveVente} disabled={!form.client||!form.prix_ht} style={BTN(!form.client||!form.prix_ht?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"13px"})}>
-                {editId?"💾 Mettre à jour":"💰 Enregistrer la vente"}
-              </button>
-            </div>
-          </div>
+            </>);
+          })()}
         </div>
       );
 
