@@ -5555,7 +5555,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const saveVente = async() => {
         if(!form.client||!form.prix_ht)return;
         let coords=form.coords||null;
-        // Géocodage Nominatim si adresse fournie et pas encore geocodée
         if(form.adresse&&!coords){
           try{
             const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(form.adresse)}&limit=1`,{headers:{"Accept-Language":"fr"}});
@@ -5564,8 +5563,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           }catch(e){}
         }
         const entry={...form, prix_ht:Number(form.prix_ht), id:editId||Date.now(), coords};
-        if(editId) setVentes(p=>p.map(v=>v.id===editId?entry:v));
-        else { setVentes(p=>[entry,...p]); if(onVenteSaved) onVenteSaved(entry); }
+        if(editId){
+          setVentes(p=>p.map(v=>v.id===editId?entry:v));
+          try{await sb.from("ventes").upsert(entry);}catch(e){console.error("saveVente update:",e);}
+        } else {
+          setVentes(p=>[entry,...p]);
+          try{await sb.from("ventes").upsert(entry);}catch(e){console.error("saveVente insert:",e);}
+          if(onVenteSaved) onVenteSaved(entry);
+        }
         clearDraft();
         goToView("list");
         setEditId(null);
@@ -5775,10 +5780,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             {/* 6. Composants supplémentaires */}
             {form.marque_borne&&<SCard n={6} title="Composants supplémentaires" icon="📦" done={false}>
+              <div style={{position:"relative",marginBottom:6}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4A6A9E"}}>🔍</span>
+                <input value={matSearch} onChange={e=>setMatSearch(e.target.value)} placeholder="Rechercher un composant…"
+                  style={{...INP(),paddingLeft:32,fontSize:13}}/>
+                {matSearch&&<button onClick={()=>setMatSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#4A6A9E",cursor:"pointer",fontSize:16,fontFamily:'"Outfit",sans-serif'}}>×</button>}
+              </div>
               <div style={{display:"flex",gap:6,marginBottom:6}}>
                 <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:13}}>
                   <option value="">Ajouter un composant…</option>
-                  {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
+                  {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)&&(!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()))).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
                 </select>
                 <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:60,textAlign:"center"}}/>
                 <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
