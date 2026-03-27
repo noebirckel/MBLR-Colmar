@@ -1725,10 +1725,282 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       );
     }
 
+    // ── Composant graphe pleine page ──────────────────────────────────────────
+    function ChartFullPage({type, data, onClose, isMobile, fmt}) {
+      const pct=(m,ca)=>ca>0?Math.round((m/ca)*100):0;
+      const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
+      const medals=["🥇","🥈","🥉"];
+      const BRAND_COLORS={"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Tesla":"#E31937","Smappee":"#FF6B35"};
+
+      // SVG line chart helper
+      const SvgLineChart=({months,height=260,width=700})=>{
+        if(!months.length) return null;
+        const pad={t:20,r:20,b:40,l:60};
+        const W=width-pad.l-pad.r, H=height-pad.t-pad.b;
+        const maxV=Math.max(...months.map(m=>m.ca),1);
+        const x=(i)=>pad.l+(i/(months.length-1||1))*W;
+        const y=(v)=>pad.t+H-(v/maxV)*H;
+        const caPath=months.map((m,i)=>`${i===0?"M":"L"}${x(i)},${y(m.ca)}`).join(" ");
+        const margePath=months.filter(m=>m.marge>0).map((m,i)=>{
+          const origI=months.indexOf(m);
+          return `${origI===0?"M":"L"}${x(origI)},${y(m.marge)}`;
+        }).join(" ");
+        const areaPath=`${caPath} L${x(months.length-1)},${pad.t+H} L${x(0)},${pad.t+H} Z`;
+        return(
+          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:"auto"}}>
+            <defs>
+              <linearGradient id="caGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3"/>
+                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.02"/>
+              </linearGradient>
+            </defs>
+            {/* Grid lines */}
+            {[0,25,50,75,100].map(p=>{
+              const yp=pad.t+H*(1-p/100);
+              return(<g key={p}>
+                <line x1={pad.l} y1={yp} x2={pad.l+W} y2={yp} stroke="#1B2D4F" strokeWidth="1"/>
+                <text x={pad.l-8} y={yp+4} textAnchor="end" fontSize="9" fill="#4A6A9E">{Math.round(maxV*p/100/1000)}k</text>
+              </g>);
+            })}
+            {/* Area */}
+            <path d={areaPath} fill="url(#caGrad)"/>
+            {/* CA line */}
+            <path d={caPath} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            {/* Marge line */}
+            {margePath&&<path d={margePath} fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="5,3" strokeLinecap="round"/>}
+            {/* Points + labels */}
+            {months.map((m,i)=>(
+              <g key={i}>
+                <circle cx={x(i)} cy={y(m.ca)} r="4" fill="#3B82F6" stroke="#070D1A" strokeWidth="2"/>
+                <text x={x(i)} y={pad.t+H+16} textAnchor="middle" fontSize="9" fill="#4A6A9E">{m.label}</text>
+                {i===months.length-1||i===0||m.ca===Math.max(...months.map(m=>m.ca))?
+                  <text x={x(i)} y={y(m.ca)-10} textAnchor="middle" fontSize="9" fill="#60A5FA" fontWeight="700">{Math.round(m.ca/1000)}k€</text>:null}
+              </g>
+            ))}
+          </svg>
+        );
+      };
+
+      return(
+        <div style={{position:"fixed",inset:0,background:"#000000DD",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"20px 0"}}>
+          <div style={{background:"#0A1628",borderRadius:18,border:"1px solid #1B2D4F",width:"100%",maxWidth:820,margin:"0 16px",boxShadow:"0 32px 80px #000A"}}>
+            {/* Header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:"1px solid #1B2D4F"}}>
+              <h2 style={{margin:0,fontSize:17,fontWeight:800,color:"#F0F6FF"}}>
+                {type==="ca_mensuel"?"📅 CA & Marge mensuel — Détail complet":
+                 type==="marques"?"⚡ Performance par marque":
+                 type==="commerciaux"?"👤 Performance commerciaux":
+                 type==="pipeline"?"⚡ Pipeline de conversion":"📊 Graphique"}
+              </h2>
+              <button onClick={onClose} style={{background:"#1B2D4F",border:"none",borderRadius:10,color:"#7B96C8",width:36,height:36,cursor:"pointer",fontSize:18,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+
+            <div style={{padding:"20px 24px"}}>
+
+              {/* ── CA MENSUEL ── */}
+              {type==="ca_mensuel"&&<>
+                {/* KPIs recap */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  {[
+                    {l:"CA total",v:fmt(data.months.reduce((s,m)=>s+m.ca,0)),c:"#3B82F6"},
+                    {l:"Marge totale",v:fmt(data.months.reduce((s,m)=>s+m.marge,0)),c:"#10B981"},
+                    {l:"Taux moyen",v:pct(data.months.reduce((s,m)=>s+m.marge,0),data.months.reduce((s,m)=>s+m.ca,0))+"%",c:txColor(pct(data.months.reduce((s,m)=>s+m.marge,0),data.months.reduce((s,m)=>s+m.ca,0)))},
+                    {l:"Nb ventes",v:data.months.reduce((s,m)=>s+m.nb,0),c:"#A855F7"},
+                  ].map(k=>(
+                    <div key={k.l} style={{background:"#0D1828",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                      <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Graphe SVG */}
+                <div style={{background:"#070D1A",borderRadius:12,padding:"16px",marginBottom:20}}>
+                  <div style={{display:"flex",gap:16,marginBottom:12,fontSize:12,color:"#4A6A9E"}}>
+                    <span><span style={{display:"inline-block",width:12,height:3,background:"#3B82F6",borderRadius:2,marginRight:6,verticalAlign:"middle"}}/>CA</span>
+                    <span><span style={{display:"inline-block",width:12,height:2,background:"#10B981",borderRadius:2,marginRight:6,verticalAlign:"middle",borderBottom:"2px dashed #10B981"}}/>Marge</span>
+                  </div>
+                  <SvgLineChart months={data.months} height={220}/>
+                </div>
+                {/* Tableau détaillé */}
+                <div style={{background:"#070D1A",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 60px",gap:0,background:"#0D1828",padding:"10px 14px",fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                    <span>Mois</span><span style={{textAlign:"right"}}>CA</span><span style={{textAlign:"right"}}>Marge</span><span style={{textAlign:"right"}}>Taux</span><span style={{textAlign:"right"}}>Ventes</span>
+                  </div>
+                  {[...data.months].reverse().map((m,i)=>(
+                    <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 60px",gap:0,padding:"10px 14px",borderTop:"1px solid #1B2D4F20",background:i===0?"#1B2D4F10":"transparent"}}>
+                      <span style={{fontSize:12,fontWeight:700,color:i===0?"#60A5FA":"#E8F0FF"}}>{m.label}{i===0&&" ←"}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:"#3B82F6",textAlign:"right"}}>{fmt(m.ca)}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:m.marge>=0?"#10B981":"#EF4444",textAlign:"right"}}>{fmt(m.marge)}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:txColor(pct(m.marge,m.ca)),textAlign:"right"}}>{pct(m.marge,m.ca)}%</span>
+                      <span style={{fontSize:12,color:"#7B96C8",textAlign:"right"}}>{m.nb}</span>
+                    </div>
+                  ))}
+                  {/* Total */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 60px",gap:0,padding:"10px 14px",borderTop:"2px solid #1B2D4F",background:"#0D1828"}}>
+                    <span style={{fontSize:12,fontWeight:800,color:"#F0F6FF"}}>TOTAL</span>
+                    <span style={{fontSize:12,fontWeight:800,color:"#3B82F6",textAlign:"right"}}>{fmt(data.months.reduce((s,m)=>s+m.ca,0))}</span>
+                    <span style={{fontSize:12,fontWeight:800,color:"#10B981",textAlign:"right"}}>{fmt(data.months.reduce((s,m)=>s+m.marge,0))}</span>
+                    <span style={{fontSize:12,fontWeight:800,color:txColor(pct(data.months.reduce((s,m)=>s+m.marge,0),data.months.reduce((s,m)=>s+m.ca,0))),textAlign:"right"}}>{pct(data.months.reduce((s,m)=>s+m.marge,0),data.months.reduce((s,m)=>s+m.ca,0))}%</span>
+                    <span style={{fontSize:12,fontWeight:800,color:"#A855F7",textAlign:"right"}}>{data.months.reduce((s,m)=>s+m.nb,0)}</span>
+                  </div>
+                </div>
+              </>}
+
+              {/* ── MARQUES ── */}
+              {type==="marques"&&<>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
+                  {[
+                    {l:"Marge totale",v:fmt(data.marques.reduce((s,r)=>s+r.marge,0)),c:"#10B981"},
+                    {l:"CA total",v:fmt(data.marques.reduce((s,r)=>s+r.ca,0)),c:"#3B82F6"},
+                    {l:"Taux moyen",v:pct(data.marques.reduce((s,r)=>s+r.marge,0),data.marques.reduce((s,r)=>s+r.ca,0))+"%",c:txColor(pct(data.marques.reduce((s,r)=>s+r.marge,0),data.marques.reduce((s,r)=>s+r.ca,0)))},
+                  ].map(k=>(
+                    <div key={k.l} style={{background:"#0D1828",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                      <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Graphe SVG horizontal */}
+                <div style={{background:"#070D1A",borderRadius:12,padding:"16px",marginBottom:20}}>
+                  {data.marques.map((r,i)=>{
+                    const maxM=Math.max(...data.marques.map(x=>x.ca),1);
+                    const col=BRAND_COLORS[r.marque]||"#3B82F6";
+                    const wCA=(r.ca/maxM)*100;
+                    const wMarge=r.ca>0?(r.marge/r.ca)*wCA:0;
+                    return(
+                      <div key={r.marque} style={{marginBottom:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                          <span style={{fontSize:13,fontWeight:800,color:"#E8F0FF"}}>{r.marque}</span>
+                          <div style={{display:"flex",gap:12}}>
+                            <span style={{fontSize:12,color:"#4A6A9E"}}>{r.nb} vente(s)</span>
+                            <span style={{fontSize:12,fontWeight:800,color:txColor(r.tx)}}>{r.tx}% marge</span>
+                            <span style={{fontSize:13,fontWeight:800,color:col}}>{fmt(r.ca)}</span>
+                          </div>
+                        </div>
+                        <div style={{height:18,background:"#1B2D4F",borderRadius:9,overflow:"hidden",position:"relative"}}>
+                          <div style={{position:"absolute",top:0,left:0,height:"100%",width:wCA+"%",background:col+"50",borderRadius:9}}/>
+                          <div style={{position:"absolute",top:0,left:0,height:"100%",width:Math.max(0,wMarge)+"%",background:col,borderRadius:9}}/>
+                        </div>
+                        <div style={{display:"flex",gap:8,marginTop:4,fontSize:10,color:"#4A6A9E"}}>
+                          <span>Marge: {fmt(r.marge)}</span>
+                          <span>·</span>
+                          <span>Coût: {fmt(r.cout)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{display:"flex",gap:16,marginTop:8,fontSize:11,color:"#4A6A9E"}}>
+                    <span><span style={{display:"inline-block",width:10,height:10,background:"#3B82F650",borderRadius:2,marginRight:4}}/>CA</span>
+                    <span><span style={{display:"inline-block",width:10,height:10,background:"#3B82F6",borderRadius:2,marginRight:4}}/>Marge</span>
+                  </div>
+                </div>
+                {/* Tableau */}
+                <div style={{background:"#070D1A",borderRadius:12,overflow:"hidden"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",padding:"10px 14px",background:"#0D1828",fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase"}}>
+                    <span>Marque</span><span style={{textAlign:"right"}}>CA</span><span style={{textAlign:"right"}}>Coût</span><span style={{textAlign:"right"}}>Marge</span><span style={{textAlign:"right"}}>Taux</span>
+                  </div>
+                  {data.marques.map((r,i)=>(
+                    <div key={r.marque} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",padding:"10px 14px",borderTop:"1px solid #1B2D4F20"}}>
+                      <span style={{fontSize:12,fontWeight:800,color:BRAND_COLORS[r.marque]||"#E8F0FF"}}>{r.marque}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:"#3B82F6",textAlign:"right"}}>{fmt(r.ca)}</span>
+                      <span style={{fontSize:12,color:"#F59E0B",textAlign:"right"}}>{fmt(r.cout)}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:r.marge>=0?"#10B981":"#EF4444",textAlign:"right"}}>{fmt(r.marge)}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:txColor(r.tx),textAlign:"right"}}>{r.tx}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>}
+
+              {/* ── COMMERCIAUX ── */}
+              {type==="commerciaux"&&<>
+                {/* SVG radial/bar chart */}
+                <div style={{background:"#070D1A",borderRadius:12,padding:"16px",marginBottom:20}}>
+                  {data.comms.map((v,i)=>{
+                    const maxCA=Math.max(...data.comms.map(x=>x.ca),1);
+                    const colors=["#F59E0B","#7B96C8","#C07850","#3B82F6","#10B981","#A855F7"];
+                    const col=colors[i%colors.length];
+                    const wCA=(v.ca/maxCA)*100;
+                    const wMarge=v.ca>0?(v.marge/v.ca)*wCA:0;
+                    return(
+                      <div key={v.nom} style={{marginBottom:18}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:20}}>{medals[i]||"💼"}</span>
+                            <span style={{fontSize:13,fontWeight:800,color:"#E8F0FF"}}>{v.nom}</span>
+                            <span style={{fontSize:11,color:"#4A6A9E"}}>{v.nb} vente(s)</span>
+                          </div>
+                          <div style={{display:"flex",gap:12}}>
+                            <span style={{fontSize:13,fontWeight:800,color:col}}>{fmt(v.ca)}</span>
+                            <span style={{fontSize:12,color:"#10B981"}}>{fmt(v.marge)} marge</span>
+                          </div>
+                        </div>
+                        <div style={{height:20,background:"#1B2D4F",borderRadius:10,overflow:"hidden",position:"relative"}}>
+                          <div style={{position:"absolute",top:0,left:0,height:"100%",width:wCA+"%",background:col+"40",borderRadius:10}}/>
+                          <div style={{position:"absolute",top:0,left:0,height:"100%",width:Math.max(0,wMarge)+"%",background:col,borderRadius:10}}/>
+                          {wCA>12&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",fontSize:10,color:"#FFF",fontWeight:700}}>{pct(v.marge,v.ca)}% marge</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div style={{display:"flex",gap:16,marginTop:8,fontSize:11,color:"#4A6A9E"}}>
+                    <span><span style={{display:"inline-block",width:10,height:10,background:"#F59E0B40",borderRadius:2,marginRight:4}}/>CA</span>
+                    <span><span style={{display:"inline-block",width:10,height:10,background:"#F59E0B",borderRadius:2,marginRight:4}}/>Marge</span>
+                  </div>
+                </div>
+                {/* Évolution mensuelle par commercial */}
+                {data.months&&data.months.length>0&&<>
+                  <h4 style={{margin:"0 0 12px",fontSize:13,fontWeight:800,color:"#F0F6FF"}}>📅 Évolution mensuelle</h4>
+                  <div style={{background:"#070D1A",borderRadius:12,overflow:"hidden"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"120px "+data.months.map(()=>"1fr").join(" "),padding:"10px 14px",background:"#0D1828",gap:6,fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase",overflowX:"auto"}}>
+                      <span>Commercial</span>
+                      {data.months.map(m=><span key={m.label} style={{textAlign:"center"}}>{m.label}</span>)}
+                    </div>
+                    {data.comms.map((v,ci)=>{
+                      const colors=["#F59E0B","#7B96C8","#C07850","#3B82F6","#10B981","#A855F7"];
+                      const col=colors[ci%colors.length];
+                      return(
+                        <div key={v.nom} style={{display:"grid",gridTemplateColumns:"120px "+data.months.map(()=>"1fr").join(" "),padding:"8px 14px",borderTop:"1px solid #1B2D4F20",gap:6,alignItems:"center"}}>
+                          <span style={{fontSize:11,fontWeight:700,color:col}}>{v.nom}</span>
+                          {data.months.map(m=>{
+                            const ca=data.ventesRaw.filter(vv=>(vv.par||"Inconnu")===v.nom&&vv.date?.includes(m.mo+"/"+m.y)).reduce((s,vv)=>s+Number(vv.prix_ht||0),0);
+                            return <span key={m.label} style={{fontSize:11,fontWeight:ca>0?700:400,color:ca>0?col:"#2E4D82",textAlign:"center"}}>{ca>0?Math.round(ca/1000)+"k":"—"}</span>;
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>}
+                {/* Tableau récap */}
+                <div style={{background:"#070D1A",borderRadius:12,overflow:"hidden",marginTop:16}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 80px",padding:"10px 14px",background:"#0D1828",fontSize:10,fontWeight:700,color:"#4A6A9E",textTransform:"uppercase"}}>
+                    <span>Commercial</span><span style={{textAlign:"right"}}>CA</span><span style={{textAlign:"right"}}>Marge</span><span style={{textAlign:"right"}}>Taux</span><span style={{textAlign:"right"}}>Ventes</span>
+                  </div>
+                  {data.comms.map((v,i)=>{
+                    const colors=["#F59E0B","#7B96C8","#C07850","#3B82F6","#10B981","#A855F7"];
+                    return(
+                      <div key={v.nom} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 80px",padding:"10px 14px",borderTop:"1px solid #1B2D4F20"}}>
+                        <span style={{fontSize:12,fontWeight:800,color:colors[i%colors.length]}}>{medals[i]||"·"} {v.nom}</span>
+                        <span style={{fontSize:12,fontWeight:800,color:"#3B82F6",textAlign:"right"}}>{fmt(v.ca)}</span>
+                        <span style={{fontSize:12,fontWeight:800,color:"#10B981",textAlign:"right"}}>{fmt(v.marge)}</span>
+                        <span style={{fontSize:12,fontWeight:800,color:txColor(pct(v.marge,v.ca)),textAlign:"right"}}>{pct(v.marge,v.ca)}%</span>
+                        <span style={{fontSize:12,color:"#A855F7",textAlign:"right"}}>{v.nb}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>}
+
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── StatsTab ───────────────────────────────────────────────────────────────
     function StatsTab({isMobile, ventes, chantiers, acomptes, stock, savTickets, fmt, objectifs, setObjectifs, role, addNotif}) {
       const[section,setSection]=useState("global");
       const[period,setPeriod]=useState(6);
-      const[selectedMonth,setSelectedMonth]=useState(null);
+      const[chartModal,setChartModal]=useState(null); // {type, data}
       const canEdit=role==="administrateur";
       const now=new Date();
       const mM=String(now.getMonth()+1).padStart(2,"0");
@@ -1737,6 +2009,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const coutVente=v=>(v.materiels||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0)+(v.cables||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0);
       const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
       const pct=(m,ca)=>ca>0?Math.round((m/ca)*100):0;
+      const medals=["🥇","🥈","🥉"];
+      const BRAND_COLORS={"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Tesla":"#E31937","Smappee":"#FF6B35"};
 
       // Filtre période
       const ventesPeriod=useMemo(()=>ventes.filter(v=>{
@@ -1746,29 +2020,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         return (now-new Date(Number(y),Number(mo)-1,Number(d)))/(1000*60*60*24*30)<=period;
       }),[ventes,period]);
 
-      const savPeriod=useMemo(()=>(savTickets||[]).filter(t=>{
-        if(period===999||!Number(t.montant_facture_marque))return Number(t.montant_facture_marque)>0;
-        const[d,mo,y]=(t.date_ouverture||"").split("/");if(!y)return true;
-        return (now-new Date(Number(y),Number(mo)-1,Number(d)))/(1000*60*60*24*30)<=period;
-      }),[savTickets,period]);
-
+      const savPeriod=useMemo(()=>(savTickets||[]).filter(t=>Number(t.montant_facture_marque)>0),[savTickets]);
       const caSAV=savPeriod.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
       const caTotal=ventesPeriod.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
       const coutTotal=ventesPeriod.reduce((s,v)=>s+coutVente(v),0);
       const margeTotal=caTotal-coutTotal;
       const txMarge=pct(margeTotal,caTotal);
       const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0);
-      const nbVentes=ventesPeriod.length;
-      const nbActifs=chantiers.filter(c=>c.statut!=="termine").length;
-      const totalAcomptes=acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-      const totalPaye=acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-      const tauxEnc=totalAcomptes>0?Math.round((totalPaye/totalAcomptes)*100):0;
-      const valStock=stock.reduce((s,a)=>s+Number(a.stock||0)*Number(a.prix||0),0);
+      const moisPrec=String(now.getMonth()===0?12:now.getMonth()).padStart(2,"0");
+      const anneePrec=String(now.getMonth()===0?now.getFullYear()-1:now.getFullYear());
+      const caMoisPrec=ventes.filter(v=>v.date&&v.date.split("/")[1]===moisPrec&&v.date.split("/")[2]===anneePrec).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const evoMois=caMoisPrec>0?Math.round(((caMois-caMoisPrec)/caMoisPrec)*100):null;
 
       // CA par mois
+      const nMonths=period===999?12:period;
       const caParMois=useMemo(()=>{
         const months=[];
-        for(let i=period===999?11:period-1;i>=0;i--){
+        for(let i=nMonths-1;i>=0;i--){
           const d2=new Date();d2.setMonth(d2.getMonth()-i);
           const mo=String(d2.getMonth()+1).padStart(2,"0"),y=String(d2.getFullYear());
           const label=d2.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"});
@@ -1788,7 +2056,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         return Object.values(map).sort((a,b)=>b.ca-a.ca);
       },[ventesPeriod]);
       const maxComm=Math.max(...caParComm.map(v=>v.ca),1);
-      const medals=["🥇","🥈","🥉"];
 
       // Marges par marque
       const marParMarque=useMemo(()=>{
@@ -1798,42 +2065,24 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[ventesPeriod]);
 
       // Pipeline conversion
-      const nbSigne=ventesPeriod.length;
       const nbPlan=chantiers.filter(c=>c.statut==="planifie").length;
-      const nbCours=chantiers.filter(c=>c.statut==="en_cours").length;
       const nbTermine=chantiers.filter(c=>c.statut==="termine").length;
       const nbFacture=chantiers.filter(c=>c.statut==="termine"&&["facture","paye"].includes(c.facture?.statut)).length;
       const nbPaye=chantiers.filter(c=>c.statut==="termine"&&c.facture?.statut==="paye").length;
-
-      // SAV stats
-      const allSAV=savTickets||[];
-      const savParMarque=useMemo(()=>{
-        const map={};
-        allSAV.forEach(t=>{const k=t.marque||t.client||"Autre";if(!map[k])map[k]={marque:k,total:0,resolus:0,temps:0,montant:0};map[k].total++;if(t.statut==="resolu")map[k].resolus++;map[k].montant+=Number(t.montant_facture_marque||0);});
-        return Object.values(map).sort((a,b)=>b.total-a.total);
-      },[allSAV]);
-      const savParCause=useMemo(()=>{
-        const map={};
-        allSAV.filter(t=>t.cause_origine).forEach(t=>{const k=t.cause_origine;if(!map[k])map[k]=0;map[k]++;});
-        return Object.entries(map).sort((a,b)=>b[1]-a[1]);
-      },[allSAV]);
-
-      // Stock rotation
-      const stockRot=useMemo(()=>{
-        const map={};
-        ventes.forEach(v=>{(v.materiels||[]).forEach(m=>{const k=m.id;if(!map[k])map[k]={article:m.article,cat:m.cat,qty:0};map[k].qty+=Number(m.qty||0);});});
-        return Object.values(map).sort((a,b)=>b.qty-a.qty).slice(0,8);
-      },[ventes]);
-
-      const SECTIONS=[["global","📊","Vue globale"],["ca_marges","💰","CA & Marges"],["chantiers","🔧","Chantiers"],["commerciaux","👤","Commerciaux"],["sav","🛠️","SAV"],["stock_section","📦","Stock"]];
+      const totalAcomptes=acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const totalPaye=acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const tauxEnc=totalAcomptes>0?Math.round((totalPaye/totalAcomptes)*100):0;
 
       const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
-      const KPI=({icon,label,value,sub,color,onClick})=>(
-        <div onClick={onClick} style={{...CARD,borderLeft:`3px solid ${color}`,cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
+      const clickCard={cursor:"pointer",transition:"border-color 0.15s",outline:"none"};
+
+      const KPI=({icon,label,value,sub,color,onClick,evo})=>(
+        <div onClick={onClick} style={{...CARD,borderLeft:`3px solid ${color}`,cursor:onClick?"pointer":"default"}}>
           <div style={{fontSize:20,marginBottom:6}}>{icon}</div>
           <div style={{fontSize:isMobile?16:21,fontWeight:800,color}}>{value}</div>
           <div style={{fontSize:11,color:"#7B96C8",marginTop:2}}>{label}</div>
-          {sub&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{sub}</div>}
+          {evo!==null&&evo!==undefined&&<div style={{fontSize:10,color:evo>=0?"#10B981":"#EF4444",marginTop:2,fontWeight:700}}>{evo>=0?"↑":"↓"} {Math.abs(evo)}% vs mois préc.</div>}
+          {sub&&!evo&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{sub}</div>}
         </div>
       );
       const Bar=({w,color,h=8})=>(
@@ -1841,24 +2090,28 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           <div style={{height:h,borderRadius:h/2,width:Math.max(0,Math.min(100,w))+"%",background:color,transition:"width 0.4s"}}/>
         </div>
       );
-
       const PipeStep=({label,nb,color,arrow})=>(
-        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:isMobile?"wrap":"nowrap"}}>
-          <div style={{background:color+"20",border:`1px solid ${color}40`,borderRadius:10,padding:"10px 14px",textAlign:"center",minWidth:90,flex:1}}>
-            <div style={{fontWeight:900,fontSize:18,color}}>{nb}</div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{background:color+"20",border:`1px solid ${color}40`,borderRadius:10,padding:"10px 12px",textAlign:"center",minWidth:80,flex:1}}>
+            <div style={{fontWeight:900,fontSize:17,color}}>{nb}</div>
             <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{label}</div>
           </div>
-          {arrow&&<div style={{color:"#2E4D82",fontSize:16,flexShrink:0}}>{isMobile?"↓":"→"}</div>}
+          {arrow&&<div style={{color:"#2E4D82",fontSize:14,flexShrink:0}}>→</div>}
         </div>
       );
 
+      const SECTIONS=[["global","📊","Vue globale"],["ca_marges","💰","CA & Marges"],["commerciaux","👤","Commerciaux"]];
+
       return(
         <div>
-          {/* Header + filtres */}
+          {/* ChartModal */}
+          {chartModal&&<ChartFullPage type={chartModal.type} data={chartModal.data} onClose={()=>setChartModal(null)} isMobile={isMobile} fmt={fmt}/>}
+
+          {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
             <div>
               <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800}}>📊 Statistiques</h2>
-              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{nbVentes} vente(s) · {period===999?"Tout":period+" mois"}</p>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{ventesPeriod.length} vente(s) · {period===999?"Tout":period+" mois"}</p>
             </div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
               {[[1,"1m"],[3,"3m"],[6,"6m"],[12,"12m"],[999,"Tout"]].map(([p,l])=>(
@@ -1867,152 +2120,146 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div>
 
-          {/* Nav sections */}
+          {/* Nav */}
           <div style={{display:"flex",gap:5,marginBottom:16,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
             {SECTIONS.map(([k,ic,lbl])=>(
               <button key={k} onClick={()=>setSection(k)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${section===k?"#3B82F6":"#1B2D4F"}`,background:section===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0D1828",color:section===k?"#FFF":"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap"}}>{ic} {lbl}</button>
             ))}
           </div>
 
-          {/* ── SECTION : VUE GLOBALE ── */}
+          {/* ── VUE GLOBALE ── */}
           {section==="global"&&<>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-              <KPI icon="💶" label="CA total" value={fmt(caTotal)} sub={`${nbVentes} vente(s)`} color="#10B981" onClick={()=>setSection("ca_marges")}/>
-              <KPI icon="📅" label="CA ce mois" value={fmt(caMois)} sub={new Date().toLocaleDateString("fr-FR",{month:"long"})} color="#3B82F6" onClick={()=>setSection("ca_marges")}/>
-              <KPI icon="📈" label="Taux de marge" value={txMarge+"%"} sub={fmt(margeTotal)+" de marge"} color={txColor(txMarge)} onClick={()=>setSection("ca_marges")}/>
-              <KPI icon="🔧" label="Chantiers actifs" value={nbActifs} sub={`${nbTermine} terminés`} color="#A855F7" onClick={()=>setSection("chantiers")}/>
-              <KPI icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${tauxEnc}% encaissé`} color="#F59E0B"/>
-              <KPI icon="📦" label="Valeur stock" value={fmt(valStock)} sub={`${stock.length} références`} color="#7B96C8" onClick={()=>setSection("stock_section")}/>
-              <KPI icon="🛠️" label="SAV ouverts" value={allSAV.filter(t=>t.statut==="ouvert").length} sub={`${allSAV.filter(t=>t.statut==="resolu").length} résolus`} color="#EF4444" onClick={()=>setSection("sav")}/>
-              <KPI icon="👤" label="Commerciaux actifs" value={caParComm.length} sub="ce trimestre" color="#06B6D4" onClick={()=>setSection("commerciaux")}/>
+              <KPI icon="💶" label="CA total" value={fmt(caTotal)} color="#10B981" onClick={()=>setSection("ca_marges")} sub={`${ventesPeriod.length} ventes`}/>
+              <KPI icon="📅" label="CA ce mois" value={fmt(caMois)} color="#3B82F6" evo={evoMois} onClick={()=>setSection("ca_marges")}/>
+              <KPI icon="📈" label="Taux de marge" value={txMarge+"%"} color={txColor(txMarge)} sub={fmt(margeTotal)} onClick={()=>setSection("ca_marges")}/>
+              <KPI icon="✅" label="Acomptes encaissés" value={tauxEnc+"%"} color="#F59E0B" sub={`${fmt(totalPaye)} encaissé`}/>
             </div>
 
-            {/* Mini graphe CA */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>💶 CA mensuel — {period===999?12:period} derniers mois</h3>
-              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:120,paddingBottom:24,position:"relative"}}>
+            {/* Mini graphe CA cliquable */}
+            <div onClick={()=>setChartModal({type:"ca_mensuel",data:{months:caParMois}})} style={{...CARD,...clickCard,marginBottom:14,border:"1px solid #1B2D4F",position:"relative"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800}}>💶 CA mensuel</h3>
+                <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Agrandir</span>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80,paddingBottom:16,position:"relative"}}>
                 {caParMois.map((m,i)=>(
-                  <div key={i} onClick={()=>{setSelectedMonth(selectedMonth===m.label?null:m.label);setSection("ca_marges");}} title={`${m.label}: ${fmt(m.ca)} · ${m.nb} vente(s)`}
-                    style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",position:"relative"}}>
-                    <div style={{width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:2,justifyContent:"flex-end",height:96}}>
-                      {m.ca>0&&<div style={{width:"60%",background:selectedMonth===m.label?"#10B981":"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(4,(m.ca/maxCA)*90)+"%",transition:"all 0.3s"}}/>}
-                      {m.marge>0&&<div style={{width:"40%",background:"#10B98160",borderRadius:"2px 2px 0 0",position:"absolute",bottom:0,left:"30%",height:Math.max(2,(m.marge/maxCA)*90)+"%"}}/>}
-                    </div>
-                    <div style={{fontSize:9,color:"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",position:"relative"}}>
+                    <div style={{width:"65%",background:"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*76)+"%"}}/>
+                    <div style={{width:"40%",background:"#10B98170",borderRadius:"2px 2px 0 0",position:"absolute",bottom:16,left:"30%",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*76)+"%"}}/>
+                    <div style={{fontSize:8,color:"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
                   </div>
                 ))}
-                <div style={{position:"absolute",bottom:20,left:0,right:0,height:1,background:"#1B2D4F"}}/>
+                <div style={{position:"absolute",bottom:14,left:0,right:0,height:1,background:"#1B2D4F"}}/>
               </div>
-              <div style={{display:"flex",gap:16,marginTop:4,fontSize:11,color:"#4A6A9E"}}>
-                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#1D4ED8",display:"inline-block"}}/> CA</span>
-                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#10B98160",display:"inline-block"}}/> Marge</span>
-                <span style={{color:"#2E4D82"}}>Cliquer sur une barre pour filtrer</span>
+              <div style={{display:"flex",gap:12,fontSize:10,color:"#4A6A9E",marginTop:4}}>
+                <span><span style={{display:"inline-block",width:8,height:8,background:"#1D4ED8",borderRadius:1,marginRight:4}}/>CA</span>
+                <span><span style={{display:"inline-block",width:8,height:8,background:"#10B98170",borderRadius:1,marginRight:4}}/>Marge</span>
               </div>
             </div>
 
             {/* Pipeline */}
             <div style={{...CARD,marginBottom:14}}>
               <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Pipeline de conversion</h3>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <PipeStep label="Ventes" nb={nbSigne} color="#3B82F6" arrow/>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:isMobile?"wrap":"nowrap"}}>
+                <PipeStep label="Ventes" nb={ventesPeriod.length} color="#3B82F6" arrow/>
                 <PipeStep label="Planifiés" nb={nbPlan} color="#A855F7" arrow/>
-                <PipeStep label="En cours" nb={nbCours} color="#F59E0B" arrow/>
                 <PipeStep label="Terminés" nb={nbTermine} color="#10B981" arrow/>
                 <PipeStep label="Facturés" nb={nbFacture} color="#06B6D4" arrow/>
                 <PipeStep label="Payés" nb={nbPaye} color="#10B981"/>
               </div>
             </div>
 
-            {/* Top commerciaux - résumé */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>👤 Top commerciaux</h3>
+            {/* Top 3 commerciaux mini */}
+            <div onClick={()=>setChartModal({type:"commerciaux",data:{comms:caParComm,months:caParMois,ventesRaw:ventes}})} style={{...CARD,...clickCard}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800}}>👤 Top commerciaux</h3>
+                <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Détail</span>
+              </div>
               {caParComm.slice(0,3).map((v,i)=>(
-                <div key={v.nom} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                  <span style={{fontSize:20,width:28,flexShrink:0}}>{medals[i]||"·"}</span>
+                <div key={v.nom} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:18,width:26,flexShrink:0}}>{medals[i]||"·"}</span>
                   <div style={{flex:1}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.nom}</span>
-                      <span style={{fontSize:13,fontWeight:800,color:["#F59E0B","#C8C8C8","#CD7F32"][i]||"#3B82F6"}}>{fmt(v.ca)}</span>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{v.nom}</span>
+                      <span style={{fontSize:12,fontWeight:800,color:["#F59E0B","#7B96C8","#C07850"][i]||"#3B82F6"}}>{fmt(v.ca)}</span>
                     </div>
                     <Bar w={maxComm>0?(v.ca/maxComm)*100:0} color={["#F59E0B","#7B96C8","#C07850"][i]||"#3B82F6"}/>
-                    <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{v.nb} vente(s) · marge {pct(v.marge,v.ca)}%</div>
+                    <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{v.nb} vente(s) · {pct(v.marge,v.ca)}% marge</div>
                   </div>
                 </div>
               ))}
-              {caParComm.length===0&&<div style={{textAlign:"center",color:"#2E4D82",padding:"20px 0",fontSize:12}}>Aucune vente enregistrée</div>}
+              {caParComm.length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune vente enregistrée</div>}
             </div>
           </>}
 
-          {/* ── SECTION : CA & MARGES ── */}
+          {/* ── CA & MARGES ── */}
           {section==="ca_marges"&&<>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-              <KPI icon="💶" label="CA total" value={fmt(caTotal)} sub={`${nbVentes} ventes`} color="#3B82F6"/>
+              <KPI icon="💶" label="CA total" value={fmt(caTotal)} sub={`${ventesPeriod.length} ventes`} color="#3B82F6"/>
               <KPI icon="🏭" label="Coût matériaux" value={fmt(coutTotal)} color="#F59E0B"/>
               <KPI icon="📈" label="Marge brute" value={fmt(margeTotal)} color={margeTotal>=0?"#10B981":"#EF4444"}/>
               <KPI icon="🎯" label="Taux de marge" value={txMarge+"%"} color={txColor(txMarge)}/>
             </div>
 
-            {/* Graphe CA+Marge par mois */}
-            <div style={{...CARD,marginBottom:14}}>
+            {/* Graphe CA+Marge cliquable */}
+            <div onClick={()=>setChartModal({type:"ca_mensuel",data:{months:caParMois}})} style={{...CARD,...clickCard,marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                 <h3 style={{margin:0,fontSize:14,fontWeight:800}}>📅 Évolution CA & Marge</h3>
-                {selectedMonth&&<button onClick={()=>setSelectedMonth(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>✕ Effacer filtre</button>}
+                <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Agrandir</span>
               </div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:5,height:140,paddingBottom:28,position:"relative"}}>
+              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:110,paddingBottom:20,position:"relative"}}>
                 {caParMois.map((m,i)=>(
-                  <div key={i} onClick={()=>setSelectedMonth(selectedMonth===m.label?null:m.label)}
-                    title={`${m.label}\nCA: ${fmt(m.ca)}\nMarge: ${fmt(m.marge)}\nVentes: ${m.nb}`}
-                    style={{flex:1,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",gap:2,position:"relative"}}>
-                    <div style={{width:"100%",display:"flex",justifyContent:"center",gap:2,height:112,alignItems:"flex-end"}}>
-                      <div style={{width:"42%",background:selectedMonth===m.label?"#1D9E75":"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*110)+"%",transition:"all 0.25s",opacity:selectedMonth&&selectedMonth!==m.label?0.4:1}}/>
-                      <div style={{width:"35%",background:selectedMonth===m.label?"#10B981":"#10B98170",borderRadius:"3px 3px 0 0",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*110)+"%",transition:"all 0.25s",opacity:selectedMonth&&selectedMonth!==m.label?0.4:1}}/>
-                    </div>
-                    <div style={{fontSize:9,color:selectedMonth===m.label?"#60A5FA":"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap",fontWeight:selectedMonth===m.label?700:400}}>{m.label}</div>
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",position:"relative"}}>
+                    <div style={{width:"52%",background:"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*90)+"%",transition:"all 0.25s"}}/>
+                    <div style={{width:"35%",background:"#10B98180",borderRadius:"2px 2px 0 0",position:"absolute",bottom:18,left:"32%",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*90)+"%"}}/>
+                    <div style={{fontSize:9,color:"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
                   </div>
                 ))}
-                <div style={{position:"absolute",bottom:22,left:0,right:0,height:1,background:"#1B2D4F"}}/>
+                <div style={{position:"absolute",bottom:18,left:0,right:0,height:1,background:"#1B2D4F"}}/>
               </div>
-              <div style={{display:"flex",gap:16,fontSize:11,color:"#4A6A9E"}}>
+              <div style={{display:"flex",gap:14,fontSize:11,color:"#4A6A9E",marginTop:4}}>
                 <span><span style={{display:"inline-block",width:10,height:10,background:"#1D4ED8",borderRadius:2,marginRight:4}}/>CA</span>
-                <span><span style={{display:"inline-block",width:10,height:10,background:"#10B98170",borderRadius:2,marginRight:4}}/>Marge</span>
+                <span><span style={{display:"inline-block",width:10,height:10,background:"#10B98180",borderRadius:2,marginRight:4}}/>Marge</span>
               </div>
             </div>
 
-            {/* Marges par marque */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Marges par marque</h3>
-              {marParMarque.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune donnée (renseignez la marque dans les ventes)</div>
-                :marParMarque.map(r=>{
-                  const maxM=Math.max(...marParMarque.map(x=>x.marge),1);
-                  const colors={"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Tesla":"#E31937","Smappee":"#FF6B35"};
-                  const col=colors[r.marque]||"#3B82F6";
+            {/* Marges par marque cliquable */}
+            <div onClick={()=>setChartModal({type:"marques",data:{marques:marParMarque}})} style={{...CARD,...clickCard,marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800}}>⚡ Marges par marque</h3>
+                <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Détail</span>
+              </div>
+              {marParMarque.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Renseignez la marque dans vos ventes</div>
+                :marParMarque.map((r,i)=>{
+                  const maxM=Math.max(...marParMarque.map(x=>x.ca),1);
+                  const col=BRAND_COLORS[r.marque]||"#3B82F6";
                   return(
-                    <div key={r.marque} style={{marginBottom:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                        <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{r.marque}</span>
-                        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                    <div key={r.marque} style={{marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:12,fontWeight:800,color:"#E8F0FF"}}>{r.marque}</span>
+                        <div style={{display:"flex",gap:10}}>
                           <span style={{fontSize:11,color:"#4A6A9E"}}>{r.nb} vente(s)</span>
                           <span style={{fontSize:12,fontWeight:800,color:txColor(r.tx)}}>{r.tx}%</span>
-                          <span style={{fontSize:13,fontWeight:800,color:r.marge>=0?"#10B981":"#EF4444"}}>{fmt(r.marge)}</span>
+                          <span style={{fontSize:12,fontWeight:800,color:col}}>{fmt(r.marge)}</span>
                         </div>
                       </div>
-                      <Bar w={maxM>0?(r.marge/maxM)*100:0} color={col}/>
+                      <div style={{height:14,background:"#1B2D4F",borderRadius:7,overflow:"hidden",position:"relative"}}>
+                        <div style={{position:"absolute",top:0,left:0,height:"100%",width:(r.ca/maxM)*100+"%",background:col+"40",borderRadius:7}}/>
+                        <div style={{position:"absolute",top:0,left:0,height:"100%",width:Math.max(0,(r.marge/maxM)*100)+"%",background:col,borderRadius:7}}/>
+                      </div>
                     </div>
                   );
                 })
               }
             </div>
 
-            {/* Ventes détail */}
+            {/* Ventes liste */}
             <div style={{...CARD}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🧾 Détail par vente{selectedMonth?` — ${selectedMonth}`:""}</h3>
-              {ventesPeriod.filter(v=>!selectedMonth||v.date?.includes(selectedMonth.split("/").reverse().join("/"))||v.date?.endsWith(selectedMonth.replace("/","/")))
-                .map(v=>{const ca=Number(v.prix_ht||0),cout=coutVente(v),marge=ca-cout,tx=pct(marge,ca);return(
-                <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1B2D4F13"}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div>
-                    <div style={{fontSize:11,color:"#4A6A9E"}}>{v.date} · {v.par||"—"} {v.marque_borne&&`· ${v.marque_borne}`}</div>
-                  </div>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🧾 Toutes les ventes — {period===999?"tout":period+" mois"}</h3>
+              {ventesPeriod.map(v=>{const ca=Number(v.prix_ht||0),cout=coutVente(v),marge=ca-cout,tx=pct(marge,ca);return(
+                <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1B2D4F18"}}>
+                  <div><div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{v.date} · {v.par||"—"}{v.marque_borne?` · ${v.marque_borne}`:""}</div></div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:13,fontWeight:800,color:"#3B82F6"}}>{fmt(ca)}</div>
                     <div style={{fontSize:11,color:txColor(tx)}}>{tx}% marge</div>
@@ -2023,106 +2270,48 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </>}
 
-          {/* ── SECTION : CHANTIERS ── */}
-          {section==="chantiers"&&<>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-              {[
-                {label:"À planifier",nb:chantiers.filter(c=>c.statut==="a_planifier").length,color:"#F59E0B"},
-                {label:"Planifiés",nb:chantiers.filter(c=>c.statut==="planifie").length,color:"#3B82F6"},
-                {label:"En cours",nb:chantiers.filter(c=>c.statut==="en_cours").length,color:"#A855F7"},
-                {label:"Terminés",nb:chantiers.filter(c=>c.statut==="termine").length,color:"#10B981"},
-              ].map(s=><KPI key={s.label} icon="🔧" label={s.label} value={s.nb} color={s.color}/>)}
-            </div>
-
-            {/* Barre segmentée */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:800}}>Distribution des chantiers</h3>
-              <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:24,marginBottom:14}}>
-                {[{k:"a_planifier",c:"#F59E0B"},{k:"planifie",c:"#3B82F6"},{k:"en_cours",c:"#A855F7"},{k:"termine",c:"#10B981"}].map(s=>{
-                  const nb=chantiers.filter(c=>c.statut===s.k).length;
-                  return nb>0?<div key={s.k} title={s.k+": "+nb} style={{width:`${(nb/Math.max(chantiers.length,1))*100}%`,background:s.c,minWidth:4}}/>:null;
-                })}
+          {/* ── COMMERCIAUX ── */}
+          {section==="commerciaux"&&<>
+            {/* Graphe bar cliquable */}
+            <div onClick={()=>setChartModal({type:"commerciaux",data:{comms:caParComm,months:caParMois,ventesRaw:ventes}})} style={{...CARD,...clickCard,marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800}}>👤 Performance commerciaux</h3>
+                <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Détail</span>
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {[{k:"a_planifier",l:"À planifier",c:"#F59E0B"},{k:"planifie",l:"Planifié",c:"#3B82F6"},{k:"en_cours",l:"En cours",c:"#A855F7"},{k:"termine",l:"Terminé",c:"#10B981"}].map(s=>{
-                  const nb=chantiers.filter(c=>c.statut===s.k).length;
+              {caParComm.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune vente</div>
+                :caParComm.map((v,i)=>{
+                  const colors=["#F59E0B","#7B96C8","#C07850","#3B82F6","#10B981","#A855F7"];
+                  const col=colors[i%colors.length];
+                  const wCA=maxComm>0?(v.ca/maxComm)*100:0;
+                  const wMarge=v.ca>0?(v.marge/v.ca)*wCA:0;
                   return(
-                    <div key={s.k} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:s.c}}/><span style={{fontSize:12,color:"#7B96C8"}}>{s.l}</span></div>
-                      <div style={{display:"flex",gap:8}}><span style={{fontSize:14,fontWeight:800,color:s.c}}>{nb}</span><span style={{fontSize:10,color:"#2E4D82"}}>{Math.round((nb/Math.max(chantiers.length,1))*100)}%</span></div>
+                    <div key={v.nom} style={{marginBottom:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>{medals[i]||"💼"}</span><span style={{fontSize:13,fontWeight:800,color:"#E8F0FF"}}>{v.nom}</span><span style={{fontSize:11,color:"#4A6A9E"}}>{v.nb} vente(s)</span></div>
+                        <div style={{display:"flex",gap:10}}><span style={{fontSize:13,fontWeight:800,color:col}}>{fmt(v.ca)}</span><span style={{fontSize:12,color:"#10B981"}}>{pct(v.marge,v.ca)}%</span></div>
+                      </div>
+                      <div style={{height:18,background:"#1B2D4F",borderRadius:9,overflow:"hidden",position:"relative"}}>
+                        <div style={{position:"absolute",top:0,left:0,height:"100%",width:wCA+"%",background:col+"35",borderRadius:9}}/>
+                        <div style={{position:"absolute",top:0,left:0,height:"100%",width:Math.max(0,wMarge)+"%",background:col,borderRadius:9}}/>
+                      </div>
                     </div>
                   );
-                })}
+                })
+              }
+              <div style={{display:"flex",gap:12,fontSize:11,color:"#4A6A9E",marginTop:4}}>
+                <span><span style={{display:"inline-block",width:8,height:8,background:"#F59E0B35",borderRadius:1,marginRight:4}}/>CA</span>
+                <span><span style={{display:"inline-block",width:8,height:8,background:"#F59E0B",borderRadius:1,marginRight:4}}/>Marge</span>
               </div>
             </div>
 
-            {/* Pipeline */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Pipeline complet</h3>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <PipeStep label="Ventes signées" nb={nbSigne} color="#3B82F6" arrow/>
-                <PipeStep label="Planifiés" nb={nbPlan} color="#A855F7" arrow/>
-                <PipeStep label="En cours" nb={nbCours} color="#F59E0B" arrow/>
-                <PipeStep label="Terminés" nb={nbTermine} color="#10B981" arrow/>
-                <PipeStep label="Facturés" nb={nbFacture} color="#06B6D4" arrow/>
-                <PipeStep label="Payés" nb={nbPaye} color="#10B981"/>
-              </div>
-            </div>
-
-            {/* Facturations bloquées */}
-            {(()=>{const bl=chantiers.filter(c=>c.statut==="termine"&&c.facture?.statut==="bloque");if(!bl.length)return null;
-            return(<div style={{...CARD,border:"1px solid #F59E0B30"}}>
-              <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:800,color:"#F59E0B"}}>⏸️ Facturations bloquées ({bl.length})</h3>
-              {bl.map(ch=><div key={ch.id} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #1B2D4F20"}}>
-                <div><div style={{fontSize:13,fontWeight:700,color:"#F0F6FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{ch.date_fin||"—"} · {ch.technicien||"—"}</div></div>
-                <span style={{fontSize:11,color:"#F59E0B",alignSelf:"center"}}>→ Onglet Factures</span>
-              </div>)}
-            </div>);})()}
-          </>}
-
-          {/* ── SECTION : COMMERCIAUX ── */}
-          {section==="commerciaux"&&<>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:14}}>
-              {caParComm.map((v,i)=>(
-                <div key={v.nom} style={{...CARD}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                    <span style={{fontSize:22}}>{medals[i]||"💼"}</span>
-                    <div>
-                      <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{v.nom}</div>
-                      <div style={{fontSize:11,color:"#4A6A9E"}}>{v.nb} vente(s) · marge {pct(v.marge,v.ca)}%</div>
-                    </div>
-                    <div style={{marginLeft:"auto",textAlign:"right"}}>
-                      <div style={{fontSize:16,fontWeight:800,color:["#F59E0B","#7B96C8","#C07850"][i]||"#3B82F6"}}>{fmt(v.ca)}</div>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:10}}>
-                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{fontSize:14,fontWeight:800,color:"#3B82F6"}}>{fmt(v.ca)}</div>
-                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>CA</div>
-                    </div>
-                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{fontSize:14,fontWeight:800,color:"#10B981"}}>{fmt(v.marge)}</div>
-                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>Marge</div>
-                    </div>
-                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                      <div style={{fontSize:14,fontWeight:800,color:txColor(pct(v.marge,v.ca))}}>{pct(v.marge,v.ca)}%</div>
-                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>Taux</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Objectifs commerciaux */}
+            {/* Objectifs */}
             {(()=>{
               const mM_now=mM,mY_now=mY,mKey=`${mY_now}-${mM_now}`;
               const vendeurs=[...new Set(ventes.map(v=>v.par||"Inconnu"))].sort();
               return(<div style={{...CARD}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <h3 style={{margin:0,fontSize:14,fontWeight:800}}>🎯 Objectifs — {new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
-                    {canEdit&&<p style={{margin:"4px 0 0",fontSize:11,color:"#2E4D82"}}>Cliquez ✏️ pour modifier les objectifs</p>}
-                  </div>
+                  <h3 style={{margin:0,fontSize:14,fontWeight:800}}>🎯 Objectifs — {new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
+                  {canEdit&&<span style={{fontSize:11,color:"#2E4D82"}}>✏️ pour modifier</span>}
                 </div>
                 {vendeurs.length===0?<div style={{textAlign:"center",padding:"20px 0",color:"#2E4D82",fontSize:12}}>Aucun commercial — enregistrez des ventes d'abord</div>
                   :<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2130,106 +2319,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   </div>}
               </div>);
             })()}
-          </>}
-
-          {/* ── SECTION : SAV ── */}
-          {section==="sav"&&<>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-              <KPI icon="🛠️" label="SAV total" value={allSAV.length} color="#EF4444"/>
-              <KPI icon="✅" label="Résolus" value={allSAV.filter(t=>t.statut==="resolu").length} sub={pct(allSAV.filter(t=>t.statut==="resolu").length,allSAV.length)+"%"} color="#10B981"/>
-              <KPI icon="⏳" label="En cours" value={allSAV.filter(t=>t.statut==="ouvert").length} color="#F59E0B"/>
-              <KPI icon="💶" label="Facturé marques" value={fmt(allSAV.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0))} color="#A855F7"/>
-            </div>
-
-            {/* SAV par marque */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>📊 SAV par marque</h3>
-              {savParMarque.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucun ticket SAV</div>
-                :savParMarque.map((r,i)=>{
-                  const maxT=Math.max(...savParMarque.map(x=>x.total),1);
-                  const txRes=pct(r.resolus,r.total);
-                  return(
-                    <div key={r.marque} style={{marginBottom:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                        <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{r.marque}</span>
-                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                          <span style={{fontSize:11,color:"#10B981"}}>{txRes}% résolu</span>
-                          {r.montant>0&&<span style={{fontSize:11,color:"#A855F7"}}>{fmt(r.montant)} facturé</span>}
-                          <span style={{fontSize:13,fontWeight:800,color:"#EF4444"}}>{r.total}</span>
-                        </div>
-                      </div>
-                      <div style={{display:"flex",gap:3,height:8}}>
-                        <div style={{flex:r.resolus||0,background:"#10B981",borderRadius:"4px 0 0 4px"}}/>
-                        <div style={{flex:r.total-r.resolus||0,background:"#EF444440",borderRadius:"0 4px 4px 0"}}/>
-                      </div>
-                    </div>
-                  );
-                })
-              }
-            </div>
-
-            {/* Causes */}
-            {savParCause.length>0&&<div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🔍 Causes identifiées</h3>
-              {savParCause.map(([cause,nb])=>{
-                const labels={marque:"Défaut marque",installation:"Erreur installation",direction:"Décision direction",externe:"Cause externe"};
-                const colors={marque:"#EF4444",installation:"#F59E0B",direction:"#3B82F6",externe:"#10B981"};
-                return(
-                  <div key={cause} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #1B2D4F20"}}>
-                    <span style={{fontSize:13,color:"#E8F0FF"}}>{labels[cause]||cause}</span>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <Bar w={pct(nb,allSAV.length)} color={colors[cause]||"#3B82F6"}/>
-                      <span style={{fontSize:13,fontWeight:800,color:colors[cause]||"#3B82F6",width:24,textAlign:"right"}}>{nb}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>}
-          </>}
-
-          {/* ── SECTION : STOCK ── */}
-          {section==="stock_section"&&<>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-              <KPI icon="📦" label="Valeur totale" value={fmt(valStock)} sub={`${stock.length} références`} color="#3B82F6"/>
-              <KPI icon="🔴" label="À commander" value={stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil&&s.stock>0).length} sub="sous le seuil" color="#EF4444"/>
-              <KPI icon="⛔" label="Ruptures" value={stock.filter(s=>!s.sans_gestion&&s.stock===0).length} sub="stock à zéro" color="#7C3AED"/>
-              <KPI icon="✅" label="Articles OK" value={stock.filter(s=>s.sans_gestion||s.stock>s.seuil).length} sub="au-dessus du seuil" color="#10B981"/>
-            </div>
-
-            {/* Rotation articles */}
-            <div style={{...CARD,marginBottom:14}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🔄 Top articles utilisés en chantier</h3>
-              {stockRot.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune donnée de vente</div>
-                :stockRot.map((r,i)=>{
-                  const maxQ=stockRot[0]?.qty||1;
-                  return(
-                    <div key={r.article} style={{marginBottom:10}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{r.article}</span>
-                        <span style={{fontSize:12,fontWeight:800,color:"#3B82F6"}}>{r.qty} unité(s)</span>
-                      </div>
-                      <Bar w={(r.qty/maxQ)*100} color="#3B82F6" h={6}/>
-                    </div>
-                  );
-                })
-              }
-            </div>
-
-            {/* Alertes */}
-            <div style={{...CARD}}>
-              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚠️ Articles à surveiller</h3>
-              {stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil).length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>✅ Tout le stock est au-dessus des seuils</div>
-                :stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil).map(s=>(
-                  <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1B2D4F20"}}>
-                    <div><div style={{fontSize:13,fontWeight:700,color:"#F0F6FF"}}>{s.article}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{s.cat}</div></div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:13,fontWeight:800,color:s.stock===0?"#EF4444":"#F59E0B"}}>{s.stock===0?"Rupture":`${s.stock} / ${s.seuil}`}</div>
-                      <div style={{fontSize:10,color:"#4A6A9E"}}>{s.stock===0?"Stock épuisé":"Sous le seuil"}</div>
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
           </>}
         </div>
       );
