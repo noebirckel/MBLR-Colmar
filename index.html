@@ -9434,7 +9434,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                                 <LBL c="Article stock lié"/>
                                 <select value={cfg.cable_id||""} onChange={e=>upd({cable_id:e.target.value})} style={SINP}>
                                   <option value="">— Non lié —</option>
-                                  {CABLES_STOCK.map(s=><option key={s.id} value={s.id}>{s.article}</option>)}
+                                  {stock.filter(s=>s.sous_cat==="cable_alim"||(!s.sous_cat&&s.unite==="ml")).map(s=><option key={s.id} value={s.id}>{s.article} ({s.cat})</option>)}
                                 </select>
                               </div>
                             </div>
@@ -9466,7 +9466,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                               <select value={mq.cable_comm_id||""} onChange={e=>updMq({cable_comm_id:e.target.value})}
                                 style={{...SINP2,flex:1,minWidth:100}}>
                                 <option value="">— Article stock —</option>
-                                {CABLES_STOCK.map(s=><option key={s.id} value={s.id}>{s.article}</option>)}
+                                {stock.filter(s=>s.sous_cat==="cable_comm"||(!s.sous_cat&&s.unite==="ml")).map(s=><option key={s.id} value={s.id}>{s.article} ({s.cat})</option>)}
                               </select>
                             </>}
                           </div>
