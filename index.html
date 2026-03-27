@@ -5697,7 +5697,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <L c={`MODÈLE ${form.marque_borne.toUpperCase()}`}/>
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {bornesBrand.map(b=>(
-                      <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1}]};})}
+                      <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
                         style={{padding:"10px 12px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#1B2D4F"}`,background:form.modele_borne===b.article?"#3B82F620":"#070D1A",color:form.modele_borne===b.article?"#E8F0FF":"#7B96C8",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <span style={{fontWeight:700,fontSize:13}}>{b.article}</span>
                         <span style={{fontSize:11,color:"#10B981"}}>{fmt(b.prix)}</span>
@@ -5722,7 +5722,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       // Auto-add disjoncteur si lié au stock
                       if(cfg.disjoncteur_id){
                         const s=stock.find(x=>x.id===Number(cfg.disjoncteur_id));
-                        if(s&&!newMats.find(m=>m.id===s.id))newMats.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1});
+                        if(s&&!newMats.find(m=>m.id===s.id))newMats.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});
                       }
                       // Retirer les câbles liés aux anciennes configs
                       const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const c=(installConfigs||{})[pw]||{};return[Number(c.cable_id),Number(c.cable2_id)].filter(Boolean);});
@@ -5757,11 +5757,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               const addCables=()=>{
                 if(!cableMl||cableMl<=0)return;
                 const newCabs=[];
-                // Câble alimentation
                 const alim=cableAlimStock||CABLES[0];
-                if(alim) newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl});
-                // Câble communication auto-ajouté à la même longueur, pas de choix
-                if(cableCommStock) newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl});
+                if(alim) newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl,prix_unit:alim.prix||0});
+                if(cableCommStock) newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl,prix_unit:cableCommStock.prix||0});
                 setForm(p=>({...p,cables:newCabs}));
               };
 
