@@ -5623,300 +5623,250 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const filteredVentes = ventes.filter(v=>!search||(v.client||"").toLowerCase().includes(search.toLowerCase())||(v.par||"").toLowerCase().includes(search.toLowerCase()));
 
       // ══ VUE FORMULAIRE ══
-      if(viewMode==="form") return (
-        <div style={{paddingBottom:isMobile?100:40}}>
-          {/* Header */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-            <button onClick={cancelForm} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:9,color:"#4A6A9E",padding:"7px 12px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
-            <div>
-              <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#F0F6FF"}}>{editId?"Modifier la vente":"Nouvelle vente"}</h2>
-              <div style={{fontSize:10,color:"#10B981",marginTop:2,fontWeight:600}}>💾 Brouillon auto-sauvegardé</div>
-            </div>
+      if(viewMode==="form") {
+        const cout=totalMat(form)+totalCab(form);
+        const prixHT=Number(form.prix_ht)||0;
+        const marge=prixHT-cout;
+        const pctM=prixHT>0?Math.round((marge/prixHT)*100):null;
+
+        const isborne=s=>s.sous_cat==="borne"||(s.sous_cat===""&&(s.article+" "+(s.cat||"")).toLowerCase().match(/borne|wallbox|chargeur|station|charge up|charge core|charge max/));
+        const bornesBrand=form.marque_borne&&form.marque_borne!=="Prise renforcée"?BORNES.filter(s=>(s.cat===form.marque_borne||(s.cat||"").toLowerCase()===form.marque_borne.toLowerCase())&&isborne(s)):[];
+
+        const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
+        const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
+        const cableAlimStock=cfg?.cable_id?stock.find(s=>s.id===Number(cfg.cable_id)):null;
+        const cableCommStock=mqCfg?.cable_comm_active&&mqCfg?.cable_comm_id?stock.find(s=>s.id===Number(mqCfg.cable_comm_id)):null;
+
+        const addCables=()=>{
+          if(!cableMl||cableMl<=0)return;
+          const newCabs=[];
+          const alim=cableAlimStock||CABLES[0];
+          if(alim)newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl,prix_unit:alim.prix||0});
+          if(cableCommStock)newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl,prix_unit:cableCommStock.prix||0});
+          setForm(p=>({...p,cables:newCabs}));
+        };
+
+        const SH=(n,title,icon,done)=>({n,title,icon,done});
+        const SCard=({n,title,icon,done,children})=>(<div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
+            <div style={{width:24,height:24,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
+            <span style={{fontWeight:700,fontSize:13,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
           </div>
+          {children&&<div style={{padding:"13px 16px"}}>{children}</div>}
+        </div>);
 
-          {(()=>{
-            const cout=totalMat(form)+totalCab(form);
-            const prixHT=Number(form.prix_ht)||0;
-            const marge=prixHT-cout;
-            const pctM=prixHT>0?Math.round((marge/prixHT)*100):null;
-
-            // Helpers visuels
-            const Section=({n,title,icon,done,children})=>(
-              <div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10,overflow:"hidden"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
-                  <div style={{width:26,height:26,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
-                  <span style={{fontWeight:700,fontSize:14,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
-                </div>
-                {children&&<div style={{padding:"14px 16px"}}>{children}</div>}
+        return (
+          <div style={{paddingBottom:40}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:18}}>
+              <button onClick={cancelForm} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:9,color:"#4A6A9E",padding:"7px 12px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
+              <div>
+                <h2 style={{margin:0,fontSize:16,fontWeight:800,color:"#F0F6FF"}}>{editId?"Modifier la vente":"Nouvelle vente"}</h2>
+                <div style={{fontSize:10,color:"#10B981",marginTop:2,fontWeight:600}}>💾 Brouillon auto-sauvegardé</div>
               </div>
-            );
+            </div>
 
-            const Chip=({label,active,onClick,color="#3B82F6"})=>(
-              <button onClick={onClick} style={{padding:"8px 12px",borderRadius:9,border:`2px solid ${active?color:"#1B2D4F"}`,background:active?color+"20":"#070D1A",color:active?color:"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',transition:"all 0.12s",whiteSpace:"nowrap"}}>
-                {label}
-              </button>
-            );
-
-            return(<>
-              {/* ── 1. Client ── */}
-              <Section n={1} title="Client" icon="👤" done={!!form.client}>
-                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:10}}>
-                  <div>
-                    <L c="NOM / SOCIÉTÉ"/>
-                    <input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))} placeholder="Ex: Martin Jean" style={INP()}/>
-                  </div>
-                  <div>
-                    <L c="DATE"/>
-                    <input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={INP()}/>
-                  </div>
-                </div>
-                <div style={{marginTop:10,position:"relative"}}>
-                  <L c="ADRESSE"/>
-                  <input value={form.adresse||""} onChange={e=>{
-                    setForm(p=>({...p,adresse:e.target.value,coords:null}));
-                    clearTimeout(addrTimer.current);
-                    const v=e.target.value;
-                    if(v.length<3){setAddrSugg([]);return;}
-                    addrTimer.current=setTimeout(async()=>{
-                      try{
-                        const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});
-                        const d=await r.json();
-                        setAddrSugg(d.map(x=>({display:x.display_name,lat:parseFloat(x.lat),lng:parseFloat(x.lon)})));
-                      }catch(e2){}
-                    },400);
-                  }} placeholder="Adresse d'installation" style={INP()}/>
-                  {form.coords&&<div style={{position:"absolute",right:12,top:32,fontSize:12,color:"#10B981",fontWeight:700}}>📍</div>}
-                  {addrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:"0 0 10px 10px",zIndex:200,boxShadow:"0 8px 24px #0009",maxHeight:160,overflowY:"auto"}}>
-                    {addrSugg.map((s,i)=>(
-                      <div key={i} onClick={()=>{setForm(p=>({...p,adresse:s.display,coords:{lat:s.lat,lng:s.lng}}));setAddrSugg([]);}}
-                        style={{padding:"8px 12px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addrSugg.length-1?"1px solid #1B2D4F":"none"}}
-                        onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
-                        onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                        📍 {s.display}
-                      </div>
-                    ))}
-                  </div>}
-                </div>
-              </Section>
-
-              {/* ── 2. Marque ── */}
-              <Section n={2} title="Marque de la borne" icon="⚡" done={!!form.marque_borne}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
-                  {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee","Prise renforcée"].map(b=>(
-                    <button key={b} onClick={()=>setForm(p=>({...p,marque_borne:b,modele_borne:"",puissance_install:"",materiels:p.materiels.filter(m=>false),cables:[]}))}
-                      style={{padding:"10px 6px",borderRadius:10,border:`2px solid ${form.marque_borne===b?"#3B82F6":"#1B2D4F"}`,background:form.marque_borne===b?"#3B82F620":"#070D1A",color:form.marque_borne===b?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center",lineHeight:1.3}}>
-                      {b}
-                    </button>
-                  ))}
-                </div>
-              </Section>
-
-              {/* ── 3. Modèle ── */}
-              {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&(()=>{
-                const isborne=s=>s.sous_cat==="borne"||(s.sous_cat===""&&(s.article+" "+(s.cat||"")).toLowerCase().match(/borne|wallbox|chargeur|station|charge up|charge core|charge max/));
-                const bornesBrand=BORNES.filter(s=>(s.cat===form.marque_borne||(s.cat||"").toLowerCase()===form.marque_borne.toLowerCase())&&isborne(s));
-                if(!bornesBrand.length) return null;
-                return(
-                  <Section n={3} title={`Modèle ${form.marque_borne}`} icon="🔌" done={!!form.modele_borne}>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {bornesBrand.map(b=>(
-                        <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
-                          style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#1B2D4F"}`,background:form.modele_borne===b.article?"#3B82F620":"#070D1A",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center",transition:"border-color 0.12s"}}>
-                          <span style={{fontWeight:700,fontSize:14,color:form.modele_borne===b.article?"#E8F0FF":"#7B96C8"}}>{b.article}</span>
-                          <span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{fmt(b.prix)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </Section>
-                );
-              })()}
-
-              {/* ── 4. Puissance ── */}
-              {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&(
-                <Section n={4} title="Puissance d'installation" icon="🔋" done={!!form.puissance_install}>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                    {["7.4kW","11kW","22kW"].map(p=>{
-                      const cfg=(installConfigs||{})[p]||{};
-                      const active=form.puissance_install===p;
-                      return(
-                        <button key={p} onClick={()=>{
-                          const c=(installConfigs||{})[p]||{};
-                          const newMats=[...form.materiels];
-                          const allDisjIds=["7.4kW","11kW","22kW"].map(pw=>Number((installConfigs||{})[pw]?.disjoncteur_id)).filter(Boolean);
-                          const matsClean=newMats.filter(m=>!allDisjIds.includes(Number(m.id)));
-                          if(c.disjoncteur_id){const s=stock.find(x=>x.id===Number(c.disjoncteur_id));if(s)matsClean.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});}
-                          const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const cc=(installConfigs||{})[pw]||{};return[Number(cc.cable_id),Number(cc.cable2_id)].filter(Boolean);});
-                          const cabsClean=form.cables.filter(cab=>!allCableIds.includes(Number(cab.id)));
-                          setForm(pr=>({...pr,puissance_install:p,materiels:matsClean,cables:cabsClean}));
-                        }}
-                          style={{padding:"12px 8px",borderRadius:12,border:`2px solid ${active?"#A855F7":"#1B2D4F"}`,background:active?"#A855F720":"#070D1A",cursor:"pointer",textAlign:"center",fontFamily:'"Outfit",sans-serif',transition:"all 0.12s"}}>
-                          <div style={{fontWeight:900,fontSize:16,color:active?"#C084FC":"#7B96C8"}}>{cfg.label||p}</div>
-                          {cfg.disjoncteur&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:3}}>⚡ {cfg.disjoncteur}</div>}
-                          {cfg.cable&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔌 {cfg.cable}</div>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </Section>
-              )}
-
-              {/* ── 5. Câble ── */}
-              {form.marque_borne&&(()=>{
-                const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
-                const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
-                const cableAlimStock=cfg?.cable_id?stock.find(s=>s.id===Number(cfg.cable_id)):null;
-                const cableCommStock=mqCfg?.cable_comm_active&&mqCfg?.cable_comm_id?stock.find(s=>s.id===Number(mqCfg.cable_comm_id)):null;
-                const hasCables=form.cables.length>0;
-
-                const addCables=()=>{
-                  if(!cableMl||cableMl<=0)return;
-                  const newCabs=[];
-                  const alim=cableAlimStock||CABLES[0];
-                  if(alim) newCabs.push({id:alim.id,article:alim.article,cat:alim.cat,unite:"ml",qty:cableMl,prix_unit:alim.prix||0});
-                  if(cableCommStock) newCabs.push({id:cableCommStock.id,article:cableCommStock.article,cat:cableCommStock.cat,unite:cableCommStock.unite||"ml",qty:cableMl,prix_unit:cableCommStock.prix||0});
-                  setForm(p=>({...p,cables:newCabs}));
-                };
-
-                return(
-                  <Section n={5} title="Longueur de câble" icon="🔌" done={hasCables}>
-                    {/* Info câbles recommandés */}
-                    <div style={{background:"#1B2D4F22",borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:"#7B96C8"}}>
-                      🔌 {cableAlimStock?cableAlimStock.article:(cfg?.cable||"Câble d'alimentation — configurez dans Paramètres")}
-                      {cableCommStock&&<span style={{marginLeft:10,color:"#A855F7"}}>· 📡 {cableCommStock.article}</span>}
-                    </div>
-                    {/* Stepper ml */}
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                      <button onClick={()=>setCableMl(v=>Math.max(1,v-5))} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
-                      <div style={{flex:1,position:"relative"}}>
-                        <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value)||1)}
-                          style={{...INP(),textAlign:"center",fontSize:18,fontWeight:800,paddingRight:32}}/>
-                        <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#4A6A9E",fontWeight:700,fontSize:13}}>ml</span>
-                      </div>
-                      <button onClick={()=>setCableMl(v=>v+5)} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
-                      <button onClick={addCables} style={{...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)"),padding:"10px 18px",height:44,flexShrink:0}}>Ajouter</button>
-                    </div>
-                    {/* Câbles sélectionnés */}
-                    {form.cables.map(m=>(
-                      <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:4}}>
-                        <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          <span style={{fontSize:13,color:"#10B981",fontWeight:700}}>{m.qty} ml</span>
-                          <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </Section>
-                );
-              })()}
-
-              {/* ── 6. Composants suppl. ── */}
-              {form.marque_borne&&(
-                <Section n={6} title="Composants supplémentaires" icon="📦" done={false}>
-                  <div style={{display:"flex",gap:6,marginBottom:6}}>
-                    <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:13}}>
-                      <option value="">Ajouter un composant…</option>
-                      {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
-                    </select>
-                    <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:60,textAlign:"center"}}/>
-                    <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
-                  </div>
-                  {form.materiels.map(m=>(
-                    <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
-                      <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
-                        <span style={{fontSize:11,color:"#4A6A9E"}}>{fmt((m.prix_unit||0)*m.qty)}</span>
-                        <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-                </Section>
-              )}
-
-              {/* ── 7. Prix & Marge ── */}
-              <Section n={7} title="Prix de vente" icon="💶" done={!!form.prix_ht}>
-                <div style={{marginBottom:cout>0?12:0}}>
-                  <L c="PRIX HT (€)"/>
-                  <input type="number" step="0.01" value={form.prix_ht} onChange={e=>setForm(p=>({...p,prix_ht:e.target.value}))} placeholder="Ex: 1250.00" style={{...INP(),fontSize:18,fontWeight:800}}/>
-                </div>
-                {cout>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  {[
-                    {l:"Coût matériaux",v:fmt(cout),c:"#4A6A9E"},
-                    {l:"Marge brute",v:prixHT>0?fmt(marge):"—",c:marge>=0?"#10B981":"#EF4444"},
-                    {l:"Taux de marge",v:pctM!==null?pctM+"%":"—",c:pctM===null?"#4A6A9E":pctM>=40?"#10B981":pctM>=20?"#F59E0B":"#EF4444"},
-                  ].map(k=>(
-                    <div key={k.l} style={{background:"#070D1A",borderRadius:9,padding:"10px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div>
-                      <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
+            {/* 1. Client */}
+            <SCard n={1} title="Client" icon="👤" done={!!form.client}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:10,marginBottom:10}}>
+                <div><L c="NOM / SOCIÉTÉ"/><input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))} placeholder="Ex: Martin Jean" style={INP()}/></div>
+                <div><L c="DATE"/><input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={INP()}/></div>
+              </div>
+              <div style={{position:"relative"}}>
+                <L c="ADRESSE"/>
+                <input value={form.adresse||""} onChange={e=>{
+                  setForm(p=>({...p,adresse:e.target.value,coords:null}));
+                  clearTimeout(addrTimer.current);
+                  const v=e.target.value;
+                  if(v.length<3){setAddrSugg([]);return;}
+                  addrTimer.current=setTimeout(async()=>{
+                    try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(v)}&limit=5&countrycodes=fr`,{headers:{"Accept-Language":"fr"}});const d=await r.json();setAddrSugg(d.map(x=>({display:x.display_name,lat:parseFloat(x.lat),lng:parseFloat(x.lon)})));}catch(e2){}
+                  },400);
+                }} placeholder="Adresse d'installation" style={INP()}/>
+                {form.coords&&<div style={{position:"absolute",right:12,bottom:12,fontSize:12,color:"#10B981",fontWeight:700}}>📍</div>}
+                {addrSugg.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#0D1828",border:"1px solid #3B82F6",borderRadius:"0 0 10px 10px",zIndex:200,boxShadow:"0 8px 24px #0009",maxHeight:160,overflowY:"auto"}}>
+                  {addrSugg.map((s,i)=>(
+                    <div key={i} onClick={()=>{setForm(p=>({...p,adresse:s.display,coords:{lat:s.lat,lng:s.lng}}));setAddrSugg([]);}}
+                      style={{padding:"8px 12px",fontSize:12,color:"#C8D8F0",cursor:"pointer",borderBottom:i<addrSugg.length-1?"1px solid #1B2D4F":"none"}}
+                      onMouseOver={e=>e.currentTarget.style.background="#1B2D4F"}
+                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      📍 {s.display}
                     </div>
                   ))}
                 </div>}
-              </Section>
-
-              {/* ── 8. Infos finales ── */}
-              <Section n={8} title="Informations complémentaires" icon="📋" done={false}>
-                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
-                  <div>
-                    <L c="COMMERCIAL"/>
-                    {(()=>{
-                      const known=[...new Set([...(profile?.nom?[profile.nom]:[]),...ventes.map(v=>v.par).filter(Boolean)])].sort();
-                      return known.length>0
-                        ?<select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}>
-                          <option value="">Choisir…</option>
-                          {known.map(n=><option key={n} value={n}>{n}</option>)}
-                        </select>
-                        :<input value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom" style={INP()}/>;
-                    })()}
-                  </div>
-                  <div>
-                    <L c="DURÉE CHANTIER"/>
-                    <div style={{display:"flex",gap:6}}>
-                      {[["demi","🌅 ½ j"],["1j","☀️ 1 j"]].map(([v,l])=>(
-                        <button key={v} onClick={()=>setForm(p=>({...p,duree_chantier:v}))}
-                          style={{flex:1,padding:"11px 6px",borderRadius:10,border:`2px solid ${form.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:form.duree_chantier===v?"#3B82F620":"#070D1A",color:form.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div style={{marginBottom:10}}>
-                  <L c="NOTES"/>
-                  <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails, conditions particulières…" style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
-                </div>
-                {/* Photos */}
-                <div>
-                  <L c="PHOTOS DE VISITE"/>
-                  <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:`2px dashed ${uploadingVentePhotos?"#3B82F6":"#1B2D4F"}`,borderRadius:10,padding:"12px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8}}>
-                    <span style={{fontSize:18}}>{uploadingVentePhotos?"⏳":"📷"}</span>
-                    {uploadingVentePhotos?"Upload en cours…":"Ajouter des photos de visite"}
-                    <input type="file" accept="image/*" multiple onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}} disabled={uploadingVentePhotos}/>
-                  </label>
-                  {(form.photos_vente||[]).length>0&&(
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
-                      {(form.photos_vente||[]).map((url,i)=>(
-                        <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
-                          <img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                          <button onClick={()=>removeVentePhoto(url)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.8)",border:"none",borderRadius:"50%",color:"#fff",width:20,height:20,cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Section>
-
-              {/* ── Actions ── */}
-              <div style={{display:"flex",gap:8,marginTop:4}}>
-                <button onClick={cancelForm} style={BTN("#1B2D4F",{flex:1,padding:"14px"})}>Annuler</button>
-                <button onClick={saveVente} disabled={!form.client||!form.prix_ht}
-                  style={BTN(!form.client||!form.prix_ht?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"14px",fontSize:14,opacity:!form.client||!form.prix_ht?0.5:1})}>
-                  {editId?"💾 Mettre à jour":"💰 Enregistrer la vente"}
-                </button>
               </div>
-            </>);
-          })()}
-        </div>
-      );
+            </SCard>
+
+            {/* 2. Marque */}
+            <SCard n={2} title="Marque de la borne" icon="⚡" done={!!form.marque_borne}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
+                {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee","Prise renforcée"].map(b=>(
+                  <button key={b} onClick={()=>setForm(p=>({...p,marque_borne:b,modele_borne:"",puissance_install:"",materiels:[],cables:[]}))}
+                    style={{padding:"9px 6px",borderRadius:9,border:`2px solid ${form.marque_borne===b?"#3B82F6":"#1B2D4F"}`,background:form.marque_borne===b?"#3B82F620":"#070D1A",color:form.marque_borne===b?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center",lineHeight:1.3}}>
+                    {b}
+                  </button>
+                ))}
+              </div>
+            </SCard>
+
+            {/* 3. Modèle */}
+            {bornesBrand.length>0&&<SCard n={3} title={`Modèle ${form.marque_borne}`} icon="🔌" done={!!form.modele_borne}>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {bornesBrand.map(b=>(
+                  <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
+                    style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#1B2D4F"}`,background:form.modele_borne===b.article?"#3B82F620":"#070D1A",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontWeight:700,fontSize:14,color:form.modele_borne===b.article?"#E8F0FF":"#7B96C8"}}>{b.article}</span>
+                    <span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{fmt(b.prix)}</span>
+                  </button>
+                ))}
+              </div>
+            </SCard>}
+
+            {/* 4. Puissance */}
+            {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&<SCard n={4} title="Puissance" icon="🔋" done={!!form.puissance_install}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {["7.4kW","11kW","22kW"].map(p=>{
+                  const c=(installConfigs||{})[p]||{};
+                  const active=form.puissance_install===p;
+                  return(
+                    <button key={p} onClick={()=>{
+                      const cc=(installConfigs||{})[p]||{};
+                      const allDisjIds=["7.4kW","11kW","22kW"].map(pw=>Number((installConfigs||{})[pw]?.disjoncteur_id)).filter(Boolean);
+                      const matsClean=form.materiels.filter(m=>!allDisjIds.includes(Number(m.id)));
+                      if(cc.disjoncteur_id){const s=stock.find(x=>x.id===Number(cc.disjoncteur_id));if(s)matsClean.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});}
+                      const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const ccc=(installConfigs||{})[pw]||{};return[Number(ccc.cable_id)].filter(Boolean);});
+                      setForm(pr=>({...pr,puissance_install:p,materiels:matsClean,cables:pr.cables.filter(cab=>!allCableIds.includes(Number(cab.id)))}));
+                    }}
+                      style={{padding:"12px 8px",borderRadius:12,border:`2px solid ${active?"#A855F7":"#1B2D4F"}`,background:active?"#A855F720":"#070D1A",cursor:"pointer",textAlign:"center",fontFamily:'"Outfit",sans-serif'}}>
+                      <div style={{fontWeight:900,fontSize:16,color:active?"#C084FC":"#7B96C8"}}>{c.label||p}</div>
+                      {c.disjoncteur&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:3}}>⚡ {c.disjoncteur}</div>}
+                      {c.cable&&<div style={{fontSize:10,color:"#4A6A9E"}}>🔌 {c.cable}</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            </SCard>}
+
+            {/* 5. Câble */}
+            {form.marque_borne&&<SCard n={5} title="Longueur de câble" icon="🔌" done={form.cables.length>0}>
+              <div style={{background:"#1B2D4F22",borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:12,color:"#7B96C8"}}>
+                🔌 {cableAlimStock?cableAlimStock.article:(cfg?.cable||"Configurez le câble dans Paramètres")}
+                {cableCommStock&&<span style={{marginLeft:10,color:"#A855F7"}}>· 📡 {cableCommStock.article}</span>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <button onClick={()=>setCableMl(v=>Math.max(1,v-5))} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:22,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
+                <div style={{flex:1,position:"relative"}}>
+                  <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value)||1)} style={{...INP(),textAlign:"center",fontSize:18,fontWeight:800,paddingRight:32}}/>
+                  <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#4A6A9E",fontWeight:700,fontSize:13}}>ml</span>
+                </div>
+                <button onClick={()=>setCableMl(v=>v+5)} style={{width:44,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:22,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
+                <button onClick={addCables} style={{...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)"),padding:"10px 16px",height:44,flexShrink:0}}>Ajouter</button>
+              </div>
+              {form.cables.map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
+                  <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:13,color:"#10B981",fontWeight:700}}>{m.qty} ml</span>
+                    <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </SCard>}
+
+            {/* 6. Composants supplémentaires */}
+            {form.marque_borne&&<SCard n={6} title="Composants supplémentaires" icon="📦" done={false}>
+              <div style={{display:"flex",gap:6,marginBottom:6}}>
+                <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:13}}>
+                  <option value="">Ajouter un composant…</option>
+                  {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
+                </select>
+                <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:60,textAlign:"center"}}/>
+                <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
+              </div>
+              {form.materiels.map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#070D1A",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
+                  <span style={{fontSize:12,color:"#E8F0FF"}}>{m.article}</span>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
+                    <span style={{fontSize:11,color:"#4A6A9E"}}>{fmt((m.prix_unit||0)*m.qty)}</span>
+                    <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </SCard>}
+
+            {/* 7. Prix */}
+            <SCard n={7} title="Prix de vente" icon="💶" done={!!form.prix_ht}>
+              <div style={{marginBottom:cout>0?10:0}}>
+                <L c="PRIX HT (€)"/>
+                <input type="number" step="0.01" value={form.prix_ht} onChange={e=>setForm(p=>({...p,prix_ht:e.target.value}))} placeholder="Ex: 1250.00" style={{...INP(),fontSize:18,fontWeight:800}}/>
+              </div>
+              {cout>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10}}>
+                {[
+                  {l:"Coût matériaux",v:fmt(cout),c:"#4A6A9E"},
+                  {l:"Marge brute",v:prixHT>0?fmt(marge):"—",c:marge>=0?"#10B981":"#EF4444"},
+                  {l:"Taux marge",v:pctM!==null?pctM+"%":"—",c:pctM===null?"#4A6A9E":pctM>=40?"#10B981":pctM>=20?"#F59E0B":"#EF4444"},
+                ].map(k=>(
+                  <div key={k.l} style={{background:"#070D1A",borderRadius:9,padding:"9px 8px",textAlign:"center"}}>
+                    <div style={{fontSize:14,fontWeight:800,color:k.c}}>{k.v}</div>
+                    <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>{k.l}</div>
+                  </div>
+                ))}
+              </div>}
+            </SCard>
+
+            {/* 8. Infos */}
+            <SCard n={8} title="Informations complémentaires" icon="📋" done={false}>
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:10}}>
+                <div>
+                  <L c="COMMERCIAL"/>
+                  {(()=>{const known=[...new Set([...(profile?.nom?[profile.nom]:[]),...ventes.map(v=>v.par).filter(Boolean)])].sort();
+                  return known.length>0?<select value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} style={INP()}><option value="">Choisir…</option>{known.map(n=><option key={n} value={n}>{n}</option>)}</select>:<input value={form.par||""} onChange={e=>setForm(p=>({...p,par:e.target.value}))} placeholder="Nom" style={INP()}/>;})()}
+                </div>
+                <div>
+                  <L c="DURÉE CHANTIER"/>
+                  <div style={{display:"flex",gap:6}}>
+                    {[["demi","🌅 ½ j"],["1j","☀️ 1 j"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setForm(p=>({...p,duree_chantier:v}))}
+                        style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${form.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:form.duree_chantier===v?"#3B82F620":"#070D1A",color:form.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{marginBottom:10}}>
+                <L c="NOTES"/>
+                <textarea value={form.description||""} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Détails, conditions particulières…" style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
+              </div>
+              <div>
+                <L c="PHOTOS DE VISITE"/>
+                <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#070D1A",border:"2px dashed #1B2D4F",borderRadius:10,padding:"12px",cursor:"pointer",color:"#4A6A9E",fontSize:13,fontWeight:600,marginBottom:8}}>
+                  <span style={{fontSize:18}}>{uploadingVentePhotos?"⏳":"📷"}</span>
+                  {uploadingVentePhotos?"Upload…":"Ajouter des photos"}
+                  <input type="file" accept="image/*" multiple onChange={e=>uploadVentePhotos(e.target.files)} style={{display:"none"}} disabled={uploadingVentePhotos}/>
+                </label>
+                {(form.photos_vente||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                  {(form.photos_vente||[]).map((url,i)=>(
+                    <div key={i} style={{position:"relative",borderRadius:8,overflow:"hidden",aspectRatio:"1"}}>
+                      <img src={url} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      <button onClick={()=>removeVentePhoto(url)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,0.8)",border:"none",borderRadius:"50%",color:"#fff",width:20,height:20,cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                    </div>
+                  ))}
+                </div>}
+              </div>
+            </SCard>
+
+            {/* Actions */}
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <button onClick={cancelForm} style={BTN("#1B2D4F",{flex:1,padding:"14px"})}>Annuler</button>
+              <button onClick={saveVente} disabled={!form.client||!form.prix_ht}
+                style={BTN(!form.client||!form.prix_ht?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{flex:2,padding:"14px",fontSize:14,opacity:!form.client||!form.prix_ht?0.5:1})}>
+                {editId?"💾 Mettre à jour":"💰 Enregistrer la vente"}
+              </button>
+            </div>
+          </div>
+        );
+      }
 
       // ══ MODAL SUPPRESSION ══
       const DelModal = () => delConf&&(
