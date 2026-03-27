@@ -5564,11 +5564,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         }
         const entry={...form, prix_ht:Number(form.prix_ht), id:editId||Date.now(), coords};
         if(editId){
-          setVentes(p=>p.map(v=>v.id===editId?entry:v));
-          try{await sb.from("ventes").upsert(entry);}catch(e){console.error("saveVente update:",e);}
+          setVentes(p=>p.map(v=>v.id===editId?entry:v)); // setVentes = SV → persiste
         } else {
-          setVentes(p=>[entry,...p]);
-          try{await sb.from("ventes").upsert(entry);}catch(e){console.error("saveVente insert:",e);}
+          setVentes(p=>[entry,...p]); // setVentes = SV → persiste
           if(onVenteSaved) onVenteSaved(entry);
         }
         clearDraft();
@@ -7511,7 +7509,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[doSave]);
 
       const upd=(id,field,val)=>{const n=stock.map(s=>s.id===id?{...s,[field]:val}:s);setStock(n);saveDB(n,null,null,null,null,null,null,null,null);};
-      const SV=React.useCallback(v=>{const n=typeof v==="function"?v(ventes):v;setVentes(n);saveDB(null,null,null,n,null,null,null,null,null);},[ventes]);
+      const SV=React.useCallback(v=>{
+        setVentes(prev=>{
+          const n=typeof v==="function"?v(prev):v;
+          saveDB(null,null,null,n,null,null,null,null,null);
+          return n;
+        });
+      },[saveDB]);
       const SC2=React.useCallback(v=>{const n=typeof v==="function"?v(chantiersPipeline):v;setChantiersPipeline(n);saveDB(null,null,null,null,n,null,null,null,null);},[chantiersPipeline]);
       const SA=React.useCallback(v=>{const n=typeof v==="function"?v(acomptes):v;setAcomptes(n);saveDB(null,null,null,null,null,n,null,null,null);},[acomptes]);
       const SSAV=React.useCallback(v=>{const n=typeof v==="function"?v(savTickets):v;setSavTickets(n);saveDB(null,null,null,null,null,null,n,null,null);},[savTickets]);
