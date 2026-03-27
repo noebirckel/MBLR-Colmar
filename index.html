@@ -98,7 +98,7 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","stats","marges","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","administratif","factures","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
       commercial:["accueil","cartes","clients","ventes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
       secretaire:["accueil","cartes","clients","ventes","administratif","factures","chantier","sav","rapports"],
@@ -1670,600 +1670,573 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════════
     // ONGLET MARGES (admin only)
     // ══════════════════════════════════════════
-    function MargesTab({isMobile, ventes, savTickets}){
-      const [periode, setPeriode] = useState(3);
-      const [onglet, setOnglet]   = useState("ventes");
-      const fmt  = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
-      const pct  = (m,ca) => ca>0 ? Math.round((m/ca)*100) : 0;
-      const coutVente = v =>
-        (v.materiels||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0)
-       +(v.cables||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0);
-      const now = new Date();
-      const ventesFiltered = useMemo(()=>ventes.filter(v=>{
-        if(!v.date) return true;
-        const [d,mo,y]=(v.date||"").split("/");
-        if(!y) return true;
-        const vd=new Date(Number(y),Number(mo)-1,Number(d));
-        return (now-vd)/(1000*60*60*24*30)<=periode;
-      }),[ventes,periode]);
-
-      // SAV facturés aux marques dans la même période
-      const savFactures=useMemo(()=>(savTickets||[]).filter(t=>{
-        if(!Number(t.montant_facture_marque)) return false;
-        if(!t.date_ouverture||periode===999) return true;
-        const [d,mo,y]=(t.date_ouverture||"").split("/");
-        if(!y) return true;
-        const td=new Date(Number(y),Number(mo)-1,Number(d));
-        return (now-td)/(1000*60*60*24*30)<=periode;
-      }),[savTickets,periode]);
-      const caSAV=savFactures.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
-
-      const caTotal=ventesFiltered.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
-      const coutTotal=ventesFiltered.reduce((s,v)=>s+coutVente(v),0); // SAV = coût 0
-      const margeTotal=caTotal-coutTotal;
-      const txMarge=pct(margeTotal,caTotal);
-      const ventesAvecMarge=useMemo(()=>[...ventesFiltered].map(v=>{
-        const ca=Number(v.prix_ht||0),cout=coutVente(v),marge=ca-cout;
-        return {...v,_ca:ca,_cout:cout,_marge:marge,_tx:pct(marge,ca)};
-      }).sort((a,b)=>b._marge-a._marge),[ventesFiltered]);
-      const parTech=useMemo(()=>{
-        const map={};
-        ventesFiltered.forEach(v=>{
-          const k=v.par||"Inconnu";
-          if(!map[k])map[k]={nom:k,ca:0,cout:0,nb:0};
-          map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;
-        });
-        return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>b.marge-a.marge);
-      },[ventesFiltered]);
-      const parMois=useMemo(()=>{
-        const map={};
-        ventesFiltered.forEach(v=>{
-          const [,mo,y]=(v.date||"").split("/");
-          if(!mo||!y)return;
-          const k=`${y}-${mo}`;
-          if(!map[k])map[k]={label:`${mo}/${y}`,ca:0,cout:0,nb:0};
-          map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;
-        });
-        // Ajouter SAV dans les mois
-        savFactures.forEach(t=>{
-          const [,mo,y]=(t.date_ouverture||"").split("/");
-          if(!mo||!y)return;
-          const k=`${y}-${mo}`;
-          if(!map[k])map[k]={label:`${mo}/${y}`,ca:0,cout:0,nb:0};
-          map[k].ca+=Number(t.montant_facture_marque||0);
-        });
-        return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>a.label<b.label?-1:1);
-      },[ventesFiltered,savFactures]);
-      const parCat=useMemo(()=>{
-        const map={};
-        ventesFiltered.forEach(v=>{
-          (v.materiels||[]).forEach(m=>{
-            const k=m.cat||"Autre";
-            if(!map[k])map[k]={cat:k,cout:0,nb:0};
-            map[k].cout+=Number(m.qty||0)*Number(m.prix_unit||0);map[k].nb+=Number(m.qty||0);
-          });
-        });
-        return Object.values(map).sort((a,b)=>b.cout-a.cout);
-      },[ventesFiltered]);
-      const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px"};
-      const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
-      return(
-        <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-            <div>
-              <h2 style={{margin:"0 0 3px",fontSize:18,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>💰 Analyse des marges</h2>
-              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{ventesFiltered.length} vente(s){caSAV>0?` · ${savFactures.length} SAV facturé(s) à la marque`:""} · {periode===999?"Toutes périodes":periode+" mois"}</p>
-            </div>
-            <select value={periode} onChange={e=>setPeriode(Number(e.target.value))}
-              style={{background:"#0D1828",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"8px 12px",fontSize:13,fontFamily:'"Outfit",sans-serif',cursor:"pointer"}}>
-              <option value={1}>Ce mois</option><option value={3}>3 mois</option>
-              <option value={6}>6 mois</option><option value={12}>12 mois</option>
-              <option value={999}>Tout</option>
-            </select>
-          </div>
-          {caSAV>0&&<div style={{background:"#10B98112",border:"1px solid #10B98130",borderRadius:12,padding:"10px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:18}}>🛠️</span>
-            <div>
-              <div style={{fontWeight:700,fontSize:13,color:"#10B981"}}>SAV facturés aux marques : {fmt(caSAV)} — marge 100%</div>
-              <div style={{fontSize:11,color:"#4A6A9E"}}>{savFactures.length} ticket{savFactures.length>1?"s":""} · {savFactures.map(t=>`${t.marque||t.client} (${Number(t.montant_facture_marque||0).toLocaleString("fr-FR")} €)`).join(" · ")}</div>
-            </div>
-          </div>}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-            {[
-              {icon:"💰",label:"CA total",val:fmt(caTotal),color:"#3B82F6"},
-              {icon:"🏭",label:"Coût matériaux",val:fmt(coutTotal),color:"#F59E0B"},
-              {icon:"📈",label:"Marge brute",val:fmt(margeTotal),color:margeTotal>=0?"#10B981":"#EF4444"},
-              {icon:"🎯",label:"Taux de marge",val:txMarge+"%",color:txColor(txMarge)},
-            ].map(k=>(
-              <div key={k.label} style={{...CARD,borderLeft:`3px solid ${k.color}`}}>
-                <div style={{fontSize:20,marginBottom:6}}>{k.icon}</div>
-                <div style={{fontSize:isMobile?16:20,fontWeight:800,color:k.color}}>{k.val}</div>
-                <div style={{fontSize:11,color:"#4A6A9E",marginTop:3}}>{k.label}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
-            {[["ventes","🧾 Par vente"],["tech","👤 Par commercial"],["mois","📅 Par mois"],["cat","📦 Par catégorie"]].map(([k,l])=>(
-              <button key={k} onClick={()=>setOnglet(k)} style={{padding:"8px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',border:`1px solid ${onglet===k?"#3B82F6":"#1B2D4F"}`,background:onglet===k?"rgba(59,130,246,0.15)":"transparent",color:onglet===k?"#60A5FA":"#4A6A9E"}}>{l}</button>
-            ))}
-          </div>
-          {onglet==="ventes"&&<div style={CARD}><div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-              <thead><tr style={{borderBottom:"1px solid #1B2D4F"}}>
-                {["Client","Commercial","Date","CA","Coût","Marge","Taux"].map(h=>(
-                  <th key={h} style={{padding:"10px 12px",textAlign:"left",color:"#4A6A9E",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {ventesAvecMarge.length===0
-                  ?<tr><td colSpan={7} style={{padding:"40px",textAlign:"center",color:"#2E4D82"}}>Aucune vente sur cette période</td></tr>
-                  :ventesAvecMarge.map(v=>(
-                    <tr key={v.id} style={{borderBottom:"1px solid #0D1828"}}
-                      onMouseOver={e=>e.currentTarget.style.background="rgba(59,130,246,0.04)"}
-                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                      <td style={{padding:"10px 12px",color:"#F0F6FF",fontWeight:600}}>{v.client||"—"}</td>
-                      <td style={{padding:"10px 12px",color:"#A8C4E8"}}>{v.par||"—"}</td>
-                      <td style={{padding:"10px 12px",color:"#4A6A9E",whiteSpace:"nowrap"}}>{v.date||"—"}</td>
-                      <td style={{padding:"10px 12px",color:"#60A5FA",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(v._ca)}</td>
-                      <td style={{padding:"10px 12px",color:"#F59E0B",whiteSpace:"nowrap"}}>{fmt(v._cout)}</td>
-                      <td style={{padding:"10px 12px",fontWeight:800,whiteSpace:"nowrap",color:v._marge>=0?"#10B981":"#EF4444"}}>{fmt(v._marge)}</td>
-                      <td style={{padding:"10px 12px"}}><span style={{background:`${txColor(v._tx)}20`,color:txColor(v._tx),border:`1px solid ${txColor(v._tx)}40`,borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:700}}>{v._tx}%</span></td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div></div>}
-          {onglet==="tech"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {parTech.length===0
-              ?<div style={{...CARD,textAlign:"center",padding:"60px",color:"#2E4D82"}}>Aucune donnée</div>
-              :parTech.map(r=>(
-                <div key={r.nom} style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-                    <div><div style={{fontWeight:800,fontSize:15,color:"#F0F6FF",marginBottom:4}}>👤 {r.nom}</div><div style={{fontSize:12,color:"#4A6A9E"}}>{r.nb} vente(s)</div></div>
-                    <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>CA</div><div style={{fontSize:15,fontWeight:700,color:"#60A5FA"}}>{fmt(r.ca)}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>Coût</div><div style={{fontSize:15,fontWeight:700,color:"#F59E0B"}}>{fmt(r.cout)}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>Marge</div><div style={{fontSize:15,fontWeight:800,color:r.marge>=0?"#10B981":"#EF4444"}}>{fmt(r.marge)}</div></div>
-                      <span style={{background:`${txColor(r.tx)}20`,color:txColor(r.tx),border:`1px solid ${txColor(r.tx)}40`,borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:800}}>{r.tx}%</span>
-                    </div>
-                  </div>
-                  <div style={{marginTop:12,background:"#070D1A",borderRadius:6,height:6,overflow:"hidden"}}>
-                    <div style={{width:`${Math.min(100,Math.max(0,r.tx))}%`,height:"100%",borderRadius:6,background:`linear-gradient(90deg,${txColor(r.tx)},${txColor(r.tx)}88)`,transition:"width 0.6s ease"}}/>
-                  </div>
-                </div>
-              ))
-            }
-          </div>}
-          {onglet==="mois"&&<div style={CARD}>
-            {parMois.length===0
-              ?<div style={{textAlign:"center",padding:"60px",color:"#2E4D82"}}>Aucune donnée</div>
-              :<div style={{display:"flex",flexDirection:"column",gap:14}}>
-                {parMois.map(r=>{
-                  const maxCA=Math.max(...parMois.map(x=>x.ca),1);
-                  return(<div key={r.label}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6}}>
-                      <span style={{fontWeight:700,color:"#F0F6FF",fontSize:13}}>📅 {r.label} <span style={{color:"#4A6A9E",fontWeight:400}}>({r.nb} vente{r.nb>1?"s":""})</span></span>
-                      <div style={{display:"flex",gap:12,fontSize:12,flexWrap:"wrap"}}>
-                        <span style={{color:"#60A5FA"}}>CA : {fmt(r.ca)}</span>
-                        <span style={{color:"#F59E0B"}}>Coût : {fmt(r.cout)}</span>
-                        <span style={{color:r.marge>=0?"#10B981":"#EF4444",fontWeight:800}}>Marge : {fmt(r.marge)}</span>
-                        <span style={{color:txColor(r.tx),fontWeight:800}}>{r.tx}%</span>
-                      </div>
-                    </div>
-                    <div style={{background:"#070D1A",borderRadius:6,height:10,overflow:"hidden",position:"relative"}}>
-                      <div style={{position:"absolute",left:0,top:0,height:"100%",borderRadius:6,width:`${(r.ca/maxCA)*100}%`,background:"rgba(59,130,246,0.25)"}}/>
-                      <div style={{position:"absolute",left:0,top:0,height:"100%",borderRadius:6,width:`${(Math.max(0,r.marge)/maxCA)*100}%`,background:`linear-gradient(90deg,${txColor(r.tx)},${txColor(r.tx)}88)`}}/>
-                    </div>
-                  </div>);
-                })}
-              </div>
-            }
-          </div>}
-          {onglet==="cat"&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(2,1fr)",gap:10}}>
-            {parCat.length===0
-              ?<div style={{...CARD,textAlign:"center",padding:"60px",color:"#2E4D82",gridColumn:"1/-1"}}>Aucune donnée matériel</div>
-              :parCat.map(r=>{
-                const maxCout=Math.max(...parCat.map(x=>x.cout),1);
-                return(<div key={r.cat} style={CARD}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <span style={{fontWeight:800,color:"#F0F6FF",fontSize:14}}>📦 {r.cat}</span>
-                    <span style={{color:"#4A6A9E",fontSize:12}}>{r.nb} unité(s)</span>
-                  </div>
-                  <div style={{fontSize:18,fontWeight:800,color:"#F59E0B",marginBottom:8}}>{fmt(r.cout)}</div>
-                  <div style={{background:"#070D1A",borderRadius:6,height:6}}>
-                    <div style={{width:`${(r.cout/maxCout)*100}%`,height:"100%",borderRadius:6,background:"linear-gradient(90deg,#F59E0B,#F59E0B88)"}}/>
-                  </div>
-                </div>);
-              })
-            }
-          </div>}
-        </div>
-      );
-    }
-
     function VendeurRow({nom, mKey, mM_now, mY_now, ventes, objectifs, setObjectifs, canEdit, isMobile, fmt}) {
-      const oKey     = `${mKey}__${nom}`;
-      const obj      = objectifs[oKey] || {};
-      const objCA    = Number(obj.ca    || 0);
-      const objMarge = Number(obj.marge || 0);
-      const caReel = ventes
-        .filter(v=>(v.par||"Inconnu")===nom && v.date
-          && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
-        .reduce((s,v)=>s+Number(v.prix_ht||0),0);
-      const margeReelle = ventes
-        .filter(v=>(v.par||"Inconnu")===nom && v.date
-          && v.date.split("/")[1]===mM_now && v.date.split("/")[2]===mY_now)
-        .reduce((s,v)=>{
-          const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
-                    +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
-          return s+(Number(v.prix_ht||0)-cout);
-        },0);
-      const pctCA    = objCA    > 0 ? Math.min(100, Math.round((caReel/objCA)*100))    : null;
-      const pctMarge = objMarge > 0 ? Math.min(100, Math.round((margeReelle/objMarge)*100)) : null;
-      const colorCA    = pctCA===null?"#1B2D4F" : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
-      const colorMarge = pctMarge===null?"#1B2D4F" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
-      const[editMode,setEditMode]=useState(false);
-      const[draftCA,setDraftCA]  =useState(String(objCA||""));
-      const[draftMarge,setDraftMarge]=useState(String(objMarge||""));
-      const saveObj=()=>{
-        setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
-        setEditMode(false);
-      };
-      return (
+      const oKey=`${mKey}__${nom}`;
+      const obj=objectifs[oKey]||{};
+      const objCA=Number(obj.ca||0),objMarge=Number(obj.marge||0);
+      const ventesComm=ventes.filter(v=>(v.par||"Inconnu")===nom&&v.date&&v.date.split("/")[1]===mM_now&&v.date.split("/")[2]===mY_now);
+      const caReel=ventesComm.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const margeReelle=ventesComm.reduce((s,v)=>{const c=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)+(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);return s+(Number(v.prix_ht||0)-c);},0);
+      const pctCA=objCA>0?Math.min(100,Math.round((caReel/objCA)*100)):null;
+      const pctMarge=objMarge>0?Math.min(100,Math.round((margeReelle/objMarge)*100)):null;
+      const cCA=pctCA===null?"#1B2D4F":pctCA>=100?"#10B981":pctCA>=70?"#3B82F6":pctCA>=40?"#F59E0B":"#EF4444";
+      const cMg=pctMarge===null?"#1B2D4F":pctMarge>=100?"#10B981":pctMarge>=70?"#3B82F6":pctMarge>=40?"#F59E0B":"#EF4444";
+      const[em,setEm]=useState(false);
+      const[dCA,setDCA]=useState(String(objCA||""));
+      const[dMg,setDMg]=useState(String(objMarge||""));
+      return(
         <div style={{background:"#070D1A",borderRadius:12,padding:"14px 16px",border:"1px solid #1B2D4F"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#1B2D4F,#112038)",border:"1px solid #1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>💼</div>
-              <div>
-                <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{nom}</div>
-                <div style={{fontSize:11,color:"#4A6A9E"}}>
-                  {ventes.filter(v=>(v.par||"Inconnu")===nom&&v.date&&v.date.split("/")[1]===mM_now&&v.date.split("/")[2]===mY_now).length} vente(s) ce mois
-                </div>
-              </div>
+              <div style={{width:32,height:32,borderRadius:"50%",background:"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>💼</div>
+              <div><div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{nom}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{ventesComm.length} vente(s) ce mois</div></div>
             </div>
-            {canEdit&&(editMode
-              ? <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>setEditMode(false)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
-                  <button onClick={saveObj} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:8,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',boxShadow:"0 2px 10px rgba(59,130,246,0.3)"}}>💾 Sauver</button>
-                </div>
-              : <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditMode(true);}} style={{background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
-                  {objCA||objMarge?"✏️ Modifier":"➕ Fixer objectif"}
-                </button>
+            {canEdit&&(em
+              ?<div style={{display:"flex",gap:6}}>
+                <button onClick={()=>setEm(false)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                <button onClick={()=>{setObjectifs(p=>({...p,[oKey]:{ca:Number(dCA)||0,marge:Number(dMg)||0}}));setEm(false);}} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:8,color:"#FFF",padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>💾 Sauver</button>
+              </div>
+              :<button onClick={()=>{setDCA(String(objCA||""));setDMg(String(objMarge||""));setEm(true);}} style={{background:"rgba(59,130,246,0.08)",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>{objCA||objMarge?"✏️ Modifier":"➕ Objectif"}</button>
             )}
           </div>
-          {editMode&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14,padding:"12px",background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F"}}>
-              <div>
-                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>Objectif CA (€ HT)</label>
-                <input type="number" value={draftCA} onChange={e=>setDraftCA(e.target.value)} placeholder="Ex: 15000" style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
+          {em&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12,padding:"10px",background:"#0D1828",borderRadius:10,border:"1px solid #1B2D4F"}}>
+            <div><label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:4,textTransform:"uppercase"}}>Objectif CA (€)</label><input type="number" value={dCA} onChange={e=>setDCA(e.target.value)} style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"8px 10px",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+            <div><label style={{fontSize:10,fontWeight:700,color:"#4A6A9E",display:"block",marginBottom:4,textTransform:"uppercase"}}>Objectif marge (€)</label><input type="number" value={dMg} onChange={e=>setDMg(e.target.value)} style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"8px 10px",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/></div>
+          </div>}
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10}}>
+            {[{label:"💶 CA",reel:caReel,obj:objCA,pct:pctCA,col:cCA,bg:"linear-gradient(90deg,#3B82F6,#1D4ED8)"},{label:"📈 Marge",reel:margeReelle,obj:objMarge,pct:pctMarge,col:cMg,bg:"linear-gradient(90deg,#8B5CF6,#6D28D9)"}].map(r=>(
+              <div key={r.label}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                  <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>{r.label}</span>
+                  {r.pct!==null&&<span style={{fontSize:12,fontWeight:800,color:r.col}}>{r.pct}%</span>}
+                </div>
+                <div style={{background:"#1B2D4F",borderRadius:8,height:8,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:8,borderRadius:8,width:(r.pct||0)+"%",background:r.pct>=100?"linear-gradient(90deg,#10B981,#059669)":r.bg,transition:"width 0.6s"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:r.col,fontWeight:700}}>{fmt(r.reel)}</span>
+                  <span style={{color:"#2E4D82"}}>{r.obj>0?`/ ${fmt(r.obj)}`:"Pas d'objectif"}</span>
+                </div>
+                {r.pct>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:3}}>🎉 Objectif atteint !</div>}
               </div>
-              <div>
-                <label style={{display:"block",fontSize:10,fontWeight:700,color:"#4A6A9E",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>Objectif marge (€)</label>
-                <input type="number" value={draftMarge} onChange={e=>setDraftMarge(e.target.value)} placeholder="Ex: 3000" style={{width:"100%",background:"#070D1A",border:"1px solid #1B2D4F",borderRadius:8,color:"#F0F6FF",padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif'}}/>
-              </div>
-            </div>
-          )}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
-            <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>💶 Chiffre d'affaires</span>
-                {pctCA!==null&&<span style={{fontSize:12,fontWeight:800,color:colorCA}}>{pctCA}%</span>}
-              </div>
-              <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
-                <div style={{height:10,borderRadius:8,width:(pctCA||0)+"%",background:pctCA>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#3B82F6,#1D4ED8)",transition:"width 0.6s cubic-bezier(.4,0,.2,1)",boxShadow:pctCA>0?`0 0 8px ${colorCA}60`:"none"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                <span style={{color:colorCA,fontWeight:700}}>{fmt(caReel)}</span>
-                <span style={{color:"#2E4D82"}}>{objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif fixé"}</span>
-              </div>
-              {pctCA>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>🎉 Objectif atteint !</div>}
-              {pctCA!==null&&pctCA<100&&objCA>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>{fmt(objCA-caReel)} restants</div>}
-            </div>
-            <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#7B96C8"}}>📈 Marge</span>
-                {pctMarge!==null&&<span style={{fontSize:12,fontWeight:800,color:colorMarge}}>{pctMarge}%</span>}
-              </div>
-              <div style={{background:"#1B2D4F",borderRadius:8,height:10,overflow:"hidden",marginBottom:5}}>
-                <div style={{height:10,borderRadius:8,width:(pctMarge||0)+"%",background:pctMarge>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,#8B5CF6,#6D28D9)",transition:"width 0.6s cubic-bezier(.4,0,.2,1)",boxShadow:pctMarge>0?`0 0 8px ${colorMarge}60`:"none"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                <span style={{color:colorMarge,fontWeight:700}}>{fmt(margeReelle)}</span>
-                <span style={{color:"#2E4D82"}}>{objMarge>0?`/ ${fmt(objMarge)}`:"Pas d'objectif fixé"}</span>
-              </div>
-              {pctMarge>=100&&<div style={{fontSize:10,color:"#10B981",fontWeight:700,marginTop:4}}>🎉 Objectif atteint !</div>}
-              {pctMarge!==null&&pctMarge<100&&objMarge>0&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:4}}>{fmt(objMarge-margeReelle)} restants</div>}
-            </div>
+            ))}
           </div>
         </div>
       );
     }
 
     function StatsTab({isMobile, ventes, chantiers, acomptes, stock, savTickets, fmt, objectifs, setObjectifs, role, addNotif}) {
-      const[period,setPeriod]=useState(6); // nb de mois à afficher
-      const[showBloquesStat,setShowBloquesStat]=useState(false);
+      const[section,setSection]=useState("global");
+      const[period,setPeriod]=useState(6);
+      const[selectedMonth,setSelectedMonth]=useState(null);
+      const canEdit=role==="administrateur";
+      const now=new Date();
+      const mM=String(now.getMonth()+1).padStart(2,"0");
+      const mY=String(now.getFullYear());
 
-      // Calculs CA par mois
+      const coutVente=v=>(v.materiels||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0)+(v.cables||[]).reduce((s,m)=>s+Number(m.qty||0)*Number(m.prix_unit||0),0);
+      const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
+      const pct=(m,ca)=>ca>0?Math.round((m/ca)*100):0;
+
+      // Filtre période
+      const ventesPeriod=useMemo(()=>ventes.filter(v=>{
+        if(period===999)return true;
+        if(!v.date)return true;
+        const[d,mo,y]=(v.date||"").split("/");if(!y)return true;
+        return (now-new Date(Number(y),Number(mo)-1,Number(d)))/(1000*60*60*24*30)<=period;
+      }),[ventes,period]);
+
+      const savPeriod=useMemo(()=>(savTickets||[]).filter(t=>{
+        if(period===999||!Number(t.montant_facture_marque))return Number(t.montant_facture_marque)>0;
+        const[d,mo,y]=(t.date_ouverture||"").split("/");if(!y)return true;
+        return (now-new Date(Number(y),Number(mo)-1,Number(d)))/(1000*60*60*24*30)<=period;
+      }),[savTickets,period]);
+
+      const caSAV=savPeriod.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
+      const caTotal=ventesPeriod.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
+      const coutTotal=ventesPeriod.reduce((s,v)=>s+coutVente(v),0);
+      const margeTotal=caTotal-coutTotal;
+      const txMarge=pct(margeTotal,caTotal);
+      const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+      const nbVentes=ventesPeriod.length;
+      const nbActifs=chantiers.filter(c=>c.statut!=="termine").length;
+      const totalAcomptes=acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const totalPaye=acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
+      const tauxEnc=totalAcomptes>0?Math.round((totalPaye/totalAcomptes)*100):0;
+      const valStock=stock.reduce((s,a)=>s+Number(a.stock||0)*Number(a.prix||0),0);
+
+      // CA par mois
       const caParMois=useMemo(()=>{
         const months=[];
-        for(let i=period-1;i>=0;i--){
-          const d=new Date();d.setMonth(d.getMonth()-i);
-          const m=String(d.getMonth()+1).padStart(2,"0");
-          const y=String(d.getFullYear());
-          const label=d.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"});
-          const ca=ventes.filter(v=>v.date&&v.date.split("/")[1]===m&&v.date.split("/")[2]===y).reduce((s,v)=>s+Number(v.prix_ht||0),0);
-          const nb=ventes.filter(v=>v.date&&v.date.split("/")[1]===m&&v.date.split("/")[2]===y).length;
-          months.push({label,ca,nb,m,y});
+        for(let i=period===999?11:period-1;i>=0;i--){
+          const d2=new Date();d2.setMonth(d2.getMonth()-i);
+          const mo=String(d2.getMonth()+1).padStart(2,"0"),y=String(d2.getFullYear());
+          const label=d2.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"});
+          const vv=ventes.filter(v=>v.date&&v.date.split("/")[1]===mo&&v.date.split("/")[2]===y);
+          const ca=vv.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+          const cout=vv.reduce((s,v)=>s+coutVente(v),0);
+          months.push({label,ca,marge:ca-cout,nb:vv.length,mo,y});
         }
         return months;
       },[ventes,period]);
-
       const maxCA=Math.max(...caParMois.map(m=>m.ca),1);
 
       // CA par commercial
-      const caParVendeur=useMemo(()=>{
+      const caParComm=useMemo(()=>{
         const map={};
-        ventes.forEach(v=>{const k=v.par||"Inconnu";if(!map[k])map[k]={nom:k,ca:0,nb:0};map[k].ca+=Number(v.prix_ht||0);map[k].nb++;});
+        ventesPeriod.forEach(v=>{const k=v.par||"Inconnu";if(!map[k])map[k]={nom:k,ca:0,marge:0,nb:0};map[k].ca+=Number(v.prix_ht||0);map[k].marge+=Number(v.prix_ht||0)-coutVente(v);map[k].nb++;});
         return Object.values(map).sort((a,b)=>b.ca-a.ca);
+      },[ventesPeriod]);
+      const maxComm=Math.max(...caParComm.map(v=>v.ca),1);
+      const medals=["🥇","🥈","🥉"];
+
+      // Marges par marque
+      const marParMarque=useMemo(()=>{
+        const map={};
+        ventesPeriod.forEach(v=>{const k=v.marque_borne||"Autre";if(!map[k])map[k]={marque:k,ca:0,cout:0,nb:0};map[k].ca+=Number(v.prix_ht||0);map[k].cout+=coutVente(v);map[k].nb++;});
+        return Object.values(map).map(r=>({...r,marge:r.ca-r.cout,tx:pct(r.ca-r.cout,r.ca)})).sort((a,b)=>b.marge-a.marge);
+      },[ventesPeriod]);
+
+      // Pipeline conversion
+      const nbSigne=ventesPeriod.length;
+      const nbPlan=chantiers.filter(c=>c.statut==="planifie").length;
+      const nbCours=chantiers.filter(c=>c.statut==="en_cours").length;
+      const nbTermine=chantiers.filter(c=>c.statut==="termine").length;
+      const nbFacture=chantiers.filter(c=>c.statut==="termine"&&["facture","paye"].includes(c.facture?.statut)).length;
+      const nbPaye=chantiers.filter(c=>c.statut==="termine"&&c.facture?.statut==="paye").length;
+
+      // SAV stats
+      const allSAV=savTickets||[];
+      const savParMarque=useMemo(()=>{
+        const map={};
+        allSAV.forEach(t=>{const k=t.marque||t.client||"Autre";if(!map[k])map[k]={marque:k,total:0,resolus:0,temps:0,montant:0};map[k].total++;if(t.statut==="resolu")map[k].resolus++;map[k].montant+=Number(t.montant_facture_marque||0);});
+        return Object.values(map).sort((a,b)=>b.total-a.total);
+      },[allSAV]);
+      const savParCause=useMemo(()=>{
+        const map={};
+        allSAV.filter(t=>t.cause_origine).forEach(t=>{const k=t.cause_origine;if(!map[k])map[k]=0;map[k]++;});
+        return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+      },[allSAV]);
+
+      // Stock rotation
+      const stockRot=useMemo(()=>{
+        const map={};
+        ventes.forEach(v=>{(v.materiels||[]).forEach(m=>{const k=m.id;if(!map[k])map[k]={article:m.article,cat:m.cat,qty:0};map[k].qty+=Number(m.qty||0);});});
+        return Object.values(map).sort((a,b)=>b.qty-a.qty).slice(0,8);
       },[ventes]);
-      const maxVendeur=Math.max(...caParVendeur.map(v=>v.ca),1);
 
-      // Chantiers par statut
-      const STATUTS_CH={a_planifier:{label:"À planifier",color:"#F59E0B"},planifie:{label:"Planifié",color:"#3B82F6"},en_cours:{label:"En cours",color:"#A855F7"},termine:{label:"Terminé",color:"#10B981"}};
-      const chantiersParStatut=Object.entries(STATUTS_CH).map(([k,s])=>({...s,key:k,nb:chantiers.filter(c=>c.statut===k).length}));
-      const totalChantiers=chantiers.length||1;
+      const SECTIONS=[["global","📊","Vue globale"],["ca_marges","💰","CA & Marges"],["chantiers","🔧","Chantiers"],["commerciaux","👤","Commerciaux"],["sav","🛠️","SAV"],["stock_section","📦","Stock"]];
 
-      // Acomptes
-      const totalAcomptes=acomptes.reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-      const totalPaye=acomptes.filter(a=>a.statut==="paye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-      const totalEnvoy=acomptes.filter(a=>a.statut==="envoye").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-      const totalAttente=acomptes.filter(a=>a.statut==="a_envoyer").reduce((s,a)=>s+Number(a.montant_acompte||0),0);
-
-      // Stock valeur
-      const valeurStock=stock.reduce((s,a)=>s+Number(a.stock||0)*Number(a.prix||0),0);
-      const nbAlerts=stock.filter(s=>s.stock<=s.seuil).length;
-
-      // KPIs globaux
-      const caSAV=(savTickets||[]).reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
-      const caTotal=ventes.reduce((s,v)=>s+Number(v.prix_ht||0),0)+caSAV;
-      const mM=String(new Date().getMonth()+1).padStart(2,"0");
-      const mY=String(new Date().getFullYear());
-      const caMois=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).reduce((s,v)=>s+Number(v.prix_ht||0),0)
-        +(savTickets||[]).filter(t=>Number(t.montant_facture_marque)>0&&t.date_ouverture&&t.date_ouverture.split("/")[1]===mM&&t.date_ouverture.split("/")[2]===mY).reduce((s,t)=>s+Number(t.montant_facture_marque||0),0);
-
-      const Card=({icon,label,value,sub,color})=>(
-        <div style={{background:"#0D1828",borderRadius:12,padding:"14px 16px",border:`1px solid ${color}25`}}>
-          <div style={{fontSize:22,marginBottom:6}}>{icon}</div>
-          <div style={{fontSize:isMobile?16:20,fontWeight:800,color:color}}>{value}</div>
+      const CARD={background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"};
+      const KPI=({icon,label,value,sub,color,onClick})=>(
+        <div onClick={onClick} style={{...CARD,borderLeft:`3px solid ${color}`,cursor:onClick?"pointer":"default",transition:"border-color 0.15s"}}>
+          <div style={{fontSize:20,marginBottom:6}}>{icon}</div>
+          <div style={{fontSize:isMobile?16:21,fontWeight:800,color}}>{value}</div>
           <div style={{fontSize:11,color:"#7B96C8",marginTop:2}}>{label}</div>
           {sub&&<div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{sub}</div>}
+        </div>
+      );
+      const Bar=({w,color,h=8})=>(
+        <div style={{background:"#070D1A",borderRadius:h/2,height:h,overflow:"hidden"}}>
+          <div style={{height:h,borderRadius:h/2,width:Math.max(0,Math.min(100,w))+"%",background:color,transition:"width 0.4s"}}/>
+        </div>
+      );
+
+      const PipeStep=({label,nb,color,arrow})=>(
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:isMobile?"wrap":"nowrap"}}>
+          <div style={{background:color+"20",border:`1px solid ${color}40`,borderRadius:10,padding:"10px 14px",textAlign:"center",minWidth:90,flex:1}}>
+            <div style={{fontWeight:900,fontSize:18,color}}>{nb}</div>
+            <div style={{fontSize:10,color:"#4A6A9E",marginTop:2}}>{label}</div>
+          </div>
+          {arrow&&<div style={{color:"#2E4D82",fontSize:16,flexShrink:0}}>{isMobile?"↓":"→"}</div>}
         </div>
       );
 
       return(
         <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+          {/* Header + filtres */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
             <div>
-              <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📊 Tableau de bord</h2>
-              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>Vue globale de l'activité</p>
+              <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800}}>📊 Statistiques</h2>
+              <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{nbVentes} vente(s) · {period===999?"Tout":period+" mois"}</p>
             </div>
-            <div style={{display:"flex",gap:5}}>
-              {[3,6,12].map(p=>(
-                <button key={p} onClick={()=>setPeriod(p)} style={{padding:"6px 12px",borderRadius:20,border:`1px solid ${period===p?"#3B82F6":"#1B2D4F"}`,background:period===p?"#3B82F625":"transparent",color:period===p?"#3B82F6":"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer"}}>{p} mois</button>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {[[1,"1m"],[3,"3m"],[6,"6m"],[12,"12m"],[999,"Tout"]].map(([p,l])=>(
+                <button key={p} onClick={()=>setPeriod(p)} style={{padding:"5px 11px",borderRadius:20,border:`1px solid ${period===p?"#3B82F6":"#1B2D4F"}`,background:period===p?"#3B82F625":"transparent",color:period===p?"#3B82F6":"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>{l}</button>
               ))}
             </div>
           </div>
 
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-            <Card icon="💶" label="CA total" value={fmt(caTotal)} sub={`${ventes.length} ventes`} color="#10B981"/>
-            <Card icon="📅" label="CA ce mois" value={fmt(caMois)} sub={`${ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).length} ventes`} color="#3B82F6"/>
-            <Card icon="🔧" label="Chantiers actifs" value={chantiers.filter(c=>c.statut!=="termine").length} sub={`${chantiers.filter(c=>c.statut==="termine").length} terminés`} color="#A855F7"/>
-            <Card icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${Math.round(totalAcomptes>0?(totalPaye/totalAcomptes)*100:0)}% du total`} color="#F59E0B"/>
+          {/* Nav sections */}
+          <div style={{display:"flex",gap:5,marginBottom:16,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+            {SECTIONS.map(([k,ic,lbl])=>(
+              <button key={k} onClick={()=>setSection(k)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${section===k?"#3B82F6":"#1B2D4F"}`,background:section===k?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0D1828",color:section===k?"#FFF":"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif',whiteSpace:"nowrap"}}>{ic} {lbl}</button>
+            ))}
           </div>
 
-          {/* Facturations en attente de validation — admin */}
-          {(()=>{
-            const bloques=chantiers.filter(ch=>ch.statut==="termine"&&ch.facture?.statut==="bloque");
-            if(!bloques.length||!["administrateur","secretaire"].includes(role)) return null;
-            const fmtB=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
-            return(
-              <div style={{background:"#0D1828",border:"1px solid #2E4D82",borderRadius:14,padding:"12px 16px",marginBottom:16}}>
-                <button onClick={()=>setShowBloquesStat(p=>!p)}
-                  style={{width:"100%",background:"transparent",border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:12,padding:0}}>
-                  <div style={{width:40,height:40,borderRadius:10,background:"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>⏸️</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,color:"#A8C4E8",fontSize:13,marginBottom:2}}>
-                      {bloques.length} facturation{bloques.length>1?"s":""} en attente de validation
+          {/* ── SECTION : VUE GLOBALE ── */}
+          {section==="global"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+              <KPI icon="💶" label="CA total" value={fmt(caTotal)} sub={`${nbVentes} vente(s)`} color="#10B981" onClick={()=>setSection("ca_marges")}/>
+              <KPI icon="📅" label="CA ce mois" value={fmt(caMois)} sub={new Date().toLocaleDateString("fr-FR",{month:"long"})} color="#3B82F6" onClick={()=>setSection("ca_marges")}/>
+              <KPI icon="📈" label="Taux de marge" value={txMarge+"%"} sub={fmt(margeTotal)+" de marge"} color={txColor(txMarge)} onClick={()=>setSection("ca_marges")}/>
+              <KPI icon="🔧" label="Chantiers actifs" value={nbActifs} sub={`${nbTermine} terminés`} color="#A855F7" onClick={()=>setSection("chantiers")}/>
+              <KPI icon="✅" label="Acomptes encaissés" value={fmt(totalPaye)} sub={`${tauxEnc}% encaissé`} color="#F59E0B"/>
+              <KPI icon="📦" label="Valeur stock" value={fmt(valStock)} sub={`${stock.length} références`} color="#7B96C8" onClick={()=>setSection("stock_section")}/>
+              <KPI icon="🛠️" label="SAV ouverts" value={allSAV.filter(t=>t.statut==="ouvert").length} sub={`${allSAV.filter(t=>t.statut==="resolu").length} résolus`} color="#EF4444" onClick={()=>setSection("sav")}/>
+              <KPI icon="👤" label="Commerciaux actifs" value={caParComm.length} sub="ce trimestre" color="#06B6D4" onClick={()=>setSection("commerciaux")}/>
+            </div>
+
+            {/* Mini graphe CA */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>💶 CA mensuel — {period===999?12:period} derniers mois</h3>
+              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:120,paddingBottom:24,position:"relative"}}>
+                {caParMois.map((m,i)=>(
+                  <div key={i} onClick={()=>{setSelectedMonth(selectedMonth===m.label?null:m.label);setSection("ca_marges");}} title={`${m.label}: ${fmt(m.ca)} · ${m.nb} vente(s)`}
+                    style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",position:"relative"}}>
+                    <div style={{width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:2,justifyContent:"flex-end",height:96}}>
+                      {m.ca>0&&<div style={{width:"60%",background:selectedMonth===m.label?"#10B981":"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(4,(m.ca/maxCA)*90)+"%",transition:"all 0.3s"}}/>}
+                      {m.marge>0&&<div style={{width:"40%",background:"#10B98160",borderRadius:"2px 2px 0 0",position:"absolute",bottom:0,left:"30%",height:Math.max(2,(m.marge/maxCA)*90)+"%"}}/>}
                     </div>
-                    <div style={{fontSize:11,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{bloques.map(ch=>`${ch.client} (${ch.date_fin||"—"})`).join(" · ")}</div>
+                    <div style={{fontSize:9,color:"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
                   </div>
-                  <span style={{background:"#1B2D4F",color:"#7B96C8",borderRadius:20,fontWeight:700,fontSize:12,padding:"2px 10px",flexShrink:0}}>{bloques.length}</span>
-                  <span style={{fontSize:11,color:"#4A6A9E",marginLeft:4}}>{showBloquesStat?"▲":"▼"}</span>
-                </button>
-                {showBloquesStat&&<div style={{marginTop:10,display:"flex",flexDirection:"column",gap:5}}>
-                  {bloques.map((ch,i)=>(
-                    <div key={ch.id} style={{padding:"9px 12px",background:"#070D1A",borderRadius:9,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:700,fontSize:13,color:"#F0F6FF"}}>{ch.client}</div>
-                        <div style={{fontSize:11,color:"#4A6A9E"}}>✅ {ch.date_fin||"—"} · 👤 {ch.technicien||"—"}</div>
-                        {ch.facture?.raison&&<div style={{fontSize:10,color:"#7B96C8"}}>ℹ️ {ch.facture.raison}</div>}
-                      </div>
-                      <span style={{fontSize:10,color:"#60A5FA",fontWeight:600,flexShrink:0}}>→ Onglet Factures</span>
-                    </div>
-                  ))}
-                </div>}
+                ))}
+                <div style={{position:"absolute",bottom:20,left:0,right:0,height:1,background:"#1B2D4F"}}/>
               </div>
-            );
-          })()}
+              <div style={{display:"flex",gap:16,marginTop:4,fontSize:11,color:"#4A6A9E"}}>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#1D4ED8",display:"inline-block"}}/> CA</span>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,background:"#10B98160",display:"inline-block"}}/> Marge</span>
+                <span style={{color:"#2E4D82"}}>Cliquer sur une barre pour filtrer</span>
+              </div>
+            </div>
 
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:14,marginBottom:14}}>
+            {/* Pipeline */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Pipeline de conversion</h3>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <PipeStep label="Ventes" nb={nbSigne} color="#3B82F6" arrow/>
+                <PipeStep label="Planifiés" nb={nbPlan} color="#A855F7" arrow/>
+                <PipeStep label="En cours" nb={nbCours} color="#F59E0B" arrow/>
+                <PipeStep label="Terminés" nb={nbTermine} color="#10B981" arrow/>
+                <PipeStep label="Facturés" nb={nbFacture} color="#06B6D4" arrow/>
+                <PipeStep label="Payés" nb={nbPaye} color="#10B981"/>
+              </div>
+            </div>
 
-            {/* GRAPHIQUE CA PAR MOIS */}
-            <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 CA mensuel</h3>
-              <div style={{display:"flex",alignItems:"flex-end",gap:6,height:140,paddingBottom:24,position:"relative"}}>
-                {caParMois.map((m,i)=>{
-                  const h=maxCA>0?Math.round((m.ca/maxCA)*120):0;
-                  const isCurrent=m.m===mM&&m.y===mY;
+            {/* Top commerciaux - résumé */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>👤 Top commerciaux</h3>
+              {caParComm.slice(0,3).map((v,i)=>(
+                <div key={v.nom} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                  <span style={{fontSize:20,width:28,flexShrink:0}}>{medals[i]||"·"}</span>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.nom}</span>
+                      <span style={{fontSize:13,fontWeight:800,color:["#F59E0B","#C8C8C8","#CD7F32"][i]||"#3B82F6"}}>{fmt(v.ca)}</span>
+                    </div>
+                    <Bar w={maxComm>0?(v.ca/maxComm)*100:0} color={["#F59E0B","#7B96C8","#C07850"][i]||"#3B82F6"}/>
+                    <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{v.nb} vente(s) · marge {pct(v.marge,v.ca)}%</div>
+                  </div>
+                </div>
+              ))}
+              {caParComm.length===0&&<div style={{textAlign:"center",color:"#2E4D82",padding:"20px 0",fontSize:12}}>Aucune vente enregistrée</div>}
+            </div>
+          </>}
+
+          {/* ── SECTION : CA & MARGES ── */}
+          {section==="ca_marges"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+              <KPI icon="💶" label="CA total" value={fmt(caTotal)} sub={`${nbVentes} ventes`} color="#3B82F6"/>
+              <KPI icon="🏭" label="Coût matériaux" value={fmt(coutTotal)} color="#F59E0B"/>
+              <KPI icon="📈" label="Marge brute" value={fmt(margeTotal)} color={margeTotal>=0?"#10B981":"#EF4444"}/>
+              <KPI icon="🎯" label="Taux de marge" value={txMarge+"%"} color={txColor(txMarge)}/>
+            </div>
+
+            {/* Graphe CA+Marge par mois */}
+            <div style={{...CARD,marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800}}>📅 Évolution CA & Marge</h3>
+                {selectedMonth&&<button onClick={()=>setSelectedMonth(null)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>✕ Effacer filtre</button>}
+              </div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:5,height:140,paddingBottom:28,position:"relative"}}>
+                {caParMois.map((m,i)=>(
+                  <div key={i} onClick={()=>setSelectedMonth(selectedMonth===m.label?null:m.label)}
+                    title={`${m.label}\nCA: ${fmt(m.ca)}\nMarge: ${fmt(m.marge)}\nVentes: ${m.nb}`}
+                    style={{flex:1,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",gap:2,position:"relative"}}>
+                    <div style={{width:"100%",display:"flex",justifyContent:"center",gap:2,height:112,alignItems:"flex-end"}}>
+                      <div style={{width:"42%",background:selectedMonth===m.label?"#1D9E75":"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*110)+"%",transition:"all 0.25s",opacity:selectedMonth&&selectedMonth!==m.label?0.4:1}}/>
+                      <div style={{width:"35%",background:selectedMonth===m.label?"#10B981":"#10B98170",borderRadius:"3px 3px 0 0",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*110)+"%",transition:"all 0.25s",opacity:selectedMonth&&selectedMonth!==m.label?0.4:1}}/>
+                    </div>
+                    <div style={{fontSize:9,color:selectedMonth===m.label?"#60A5FA":"#4A6A9E",position:"absolute",bottom:0,whiteSpace:"nowrap",fontWeight:selectedMonth===m.label?700:400}}>{m.label}</div>
+                  </div>
+                ))}
+                <div style={{position:"absolute",bottom:22,left:0,right:0,height:1,background:"#1B2D4F"}}/>
+              </div>
+              <div style={{display:"flex",gap:16,fontSize:11,color:"#4A6A9E"}}>
+                <span><span style={{display:"inline-block",width:10,height:10,background:"#1D4ED8",borderRadius:2,marginRight:4}}/>CA</span>
+                <span><span style={{display:"inline-block",width:10,height:10,background:"#10B98170",borderRadius:2,marginRight:4}}/>Marge</span>
+              </div>
+            </div>
+
+            {/* Marges par marque */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Marges par marque</h3>
+              {marParMarque.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune donnée (renseignez la marque dans les ventes)</div>
+                :marParMarque.map(r=>{
+                  const maxM=Math.max(...marParMarque.map(x=>x.marge),1);
+                  const colors={"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Tesla":"#E31937","Smappee":"#FF6B35"};
+                  const col=colors[r.marque]||"#3B82F6";
                   return(
-                    <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,height:"100%",justifyContent:"flex-end"}}>
-                      <div title={`${fmt(m.ca)} — ${m.nb} vente(s)`} style={{width:"100%",height:h||2,background:isCurrent?"linear-gradient(180deg,#3B82F6,#1D4ED8)":"#1B2D4F",borderRadius:"4px 4px 0 0",minHeight:2,cursor:"default",transition:"height 0.3s"}}/>
-                      <div style={{fontSize:9,color:isCurrent?"#3B82F6":"#2E4D82",fontWeight:isCurrent?700:400,textAlign:"center",lineHeight:1.2,position:"absolute",bottom:0}}>{m.label}</div>
+                    <div key={r.marque} style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                        <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{r.marque}</span>
+                        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                          <span style={{fontSize:11,color:"#4A6A9E"}}>{r.nb} vente(s)</span>
+                          <span style={{fontSize:12,fontWeight:800,color:txColor(r.tx)}}>{r.tx}%</span>
+                          <span style={{fontSize:13,fontWeight:800,color:r.marge>=0?"#10B981":"#EF4444"}}>{fmt(r.marge)}</span>
+                        </div>
+                      </div>
+                      <Bar w={maxM>0?(r.marge/maxM)*100:0} color={col}/>
+                    </div>
+                  );
+                })
+              }
+            </div>
+
+            {/* Ventes détail */}
+            <div style={{...CARD}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🧾 Détail par vente{selectedMonth?` — ${selectedMonth}`:""}</h3>
+              {ventesPeriod.filter(v=>!selectedMonth||v.date?.includes(selectedMonth.split("/").reverse().join("/"))||v.date?.endsWith(selectedMonth.replace("/","/")))
+                .map(v=>{const ca=Number(v.prix_ht||0),cout=coutVente(v),marge=ca-cout,tx=pct(marge,ca);return(
+                <div key={v.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1B2D4F13"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{v.client}</div>
+                    <div style={{fontSize:11,color:"#4A6A9E"}}>{v.date} · {v.par||"—"} {v.marque_borne&&`· ${v.marque_borne}`}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:13,fontWeight:800,color:"#3B82F6"}}>{fmt(ca)}</div>
+                    <div style={{fontSize:11,color:txColor(tx)}}>{tx}% marge</div>
+                  </div>
+                </div>
+              );})}
+              {ventesPeriod.length===0&&<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune vente sur la période</div>}
+            </div>
+          </>}
+
+          {/* ── SECTION : CHANTIERS ── */}
+          {section==="chantiers"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+              {[
+                {label:"À planifier",nb:chantiers.filter(c=>c.statut==="a_planifier").length,color:"#F59E0B"},
+                {label:"Planifiés",nb:chantiers.filter(c=>c.statut==="planifie").length,color:"#3B82F6"},
+                {label:"En cours",nb:chantiers.filter(c=>c.statut==="en_cours").length,color:"#A855F7"},
+                {label:"Terminés",nb:chantiers.filter(c=>c.statut==="termine").length,color:"#10B981"},
+              ].map(s=><KPI key={s.label} icon="🔧" label={s.label} value={s.nb} color={s.color}/>)}
+            </div>
+
+            {/* Barre segmentée */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:800}}>Distribution des chantiers</h3>
+              <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:24,marginBottom:14}}>
+                {[{k:"a_planifier",c:"#F59E0B"},{k:"planifie",c:"#3B82F6"},{k:"en_cours",c:"#A855F7"},{k:"termine",c:"#10B981"}].map(s=>{
+                  const nb=chantiers.filter(c=>c.statut===s.k).length;
+                  return nb>0?<div key={s.k} title={s.k+": "+nb} style={{width:`${(nb/Math.max(chantiers.length,1))*100}%`,background:s.c,minWidth:4}}/>:null;
+                })}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {[{k:"a_planifier",l:"À planifier",c:"#F59E0B"},{k:"planifie",l:"Planifié",c:"#3B82F6"},{k:"en_cours",l:"En cours",c:"#A855F7"},{k:"termine",l:"Terminé",c:"#10B981"}].map(s=>{
+                  const nb=chantiers.filter(c=>c.statut===s.k).length;
+                  return(
+                    <div key={s.k} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:s.c}}/><span style={{fontSize:12,color:"#7B96C8"}}>{s.l}</span></div>
+                      <div style={{display:"flex",gap:8}}><span style={{fontSize:14,fontWeight:800,color:s.c}}>{nb}</span><span style={{fontSize:10,color:"#2E4D82"}}>{Math.round((nb/Math.max(chantiers.length,1))*100)}%</span></div>
                     </div>
                   );
                 })}
               </div>
-              {/* Légende valeurs */}
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
-                {caParMois.filter(m=>m.ca>0).slice(-3).map((m,i)=>(
-                  <span key={i} style={{fontSize:10,color:"#4A6A9E"}}>{m.label}: <strong style={{color:"#10B981"}}>{fmt(m.ca)}</strong></span>
-                ))}
+            </div>
+
+            {/* Pipeline */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Pipeline complet</h3>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <PipeStep label="Ventes signées" nb={nbSigne} color="#3B82F6" arrow/>
+                <PipeStep label="Planifiés" nb={nbPlan} color="#A855F7" arrow/>
+                <PipeStep label="En cours" nb={nbCours} color="#F59E0B" arrow/>
+                <PipeStep label="Terminés" nb={nbTermine} color="#10B981" arrow/>
+                <PipeStep label="Facturés" nb={nbFacture} color="#06B6D4" arrow/>
+                <PipeStep label="Payés" nb={nbPaye} color="#10B981"/>
               </div>
             </div>
 
-            {/* CA PAR COMMERCIAL */}
-            <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>👤 CA par commercial</h3>
-              {caParVendeur.length===0?<div style={{textAlign:"center",color:"#2E4D82",padding:"30px 0",fontSize:12}}>Aucune vente enregistrée</div>
-                :<div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {caParVendeur.map((v,i)=>{
-                    const pct=maxVendeur>0?Math.round((v.ca/maxVendeur)*100):0;
-                    const colors=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444"];
-                    const col=colors[i%colors.length];
-                    return(
-                      <div key={v.nom}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                          <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{v.nom}</span>
-                          <span style={{fontSize:12,color:col,fontWeight:800}}>{fmt(v.ca)}</span>
-                        </div>
-                        <div style={{background:"#070D1A",borderRadius:6,height:8,overflow:"hidden"}}>
-                          <div style={{height:8,borderRadius:6,width:pct+"%",background:col,transition:"width 0.4s"}}/>
-                        </div>
-                        <div style={{fontSize:10,color:"#2E4D82",marginTop:2}}>{v.nb} vente{v.nb>1?"s":""}</div>
-                      </div>
-                    );
-                  })}
+            {/* Facturations bloquées */}
+            {(()=>{const bl=chantiers.filter(c=>c.statut==="termine"&&c.facture?.statut==="bloque");if(!bl.length)return null;
+            return(<div style={{...CARD,border:"1px solid #F59E0B30"}}>
+              <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:800,color:"#F59E0B"}}>⏸️ Facturations bloquées ({bl.length})</h3>
+              {bl.map(ch=><div key={ch.id} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #1B2D4F20"}}>
+                <div><div style={{fontSize:13,fontWeight:700,color:"#F0F6FF"}}>{ch.client}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{ch.date_fin||"—"} · {ch.technicien||"—"}</div></div>
+                <span style={{fontSize:11,color:"#F59E0B",alignSelf:"center"}}>→ Onglet Factures</span>
+              </div>)}
+            </div>);})()}
+          </>}
+
+          {/* ── SECTION : COMMERCIAUX ── */}
+          {section==="commerciaux"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:10,marginBottom:14}}>
+              {caParComm.map((v,i)=>(
+                <div key={v.nom} style={{...CARD}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <span style={{fontSize:22}}>{medals[i]||"💼"}</span>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{v.nom}</div>
+                      <div style={{fontSize:11,color:"#4A6A9E"}}>{v.nb} vente(s) · marge {pct(v.marge,v.ca)}%</div>
+                    </div>
+                    <div style={{marginLeft:"auto",textAlign:"right"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:["#F59E0B","#7B96C8","#C07850"][i]||"#3B82F6"}}>{fmt(v.ca)}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:10}}>
+                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:14,fontWeight:800,color:"#3B82F6"}}>{fmt(v.ca)}</div>
+                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>CA</div>
+                    </div>
+                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:14,fontWeight:800,color:"#10B981"}}>{fmt(v.marge)}</div>
+                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>Marge</div>
+                    </div>
+                    <div style={{flex:1,background:"#070D1A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:14,fontWeight:800,color:txColor(pct(v.marge,v.ca))}}>{pct(v.marge,v.ca)}%</div>
+                      <div style={{fontSize:9,color:"#4A6A9E",marginTop:2}}>Taux</div>
+                    </div>
+                  </div>
                 </div>
-              }
+              ))}
             </div>
 
-            {/* CHANTIERS PAR STATUT */}
-            <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>🔧 Chantiers par statut</h3>
-              {chantiers.length===0?<div style={{textAlign:"center",color:"#2E4D82",padding:"30px 0",fontSize:12}}>Aucun chantier</div>
-                :<>
-                  {/* Barre segmentée */}
-                  <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:20,marginBottom:16}}>
-                    {chantiersParStatut.filter(s=>s.nb>0).map(s=>(
-                      <div key={s.key} title={`${s.label}: ${s.nb}`} style={{width:`${(s.nb/totalChantiers)*100}%`,background:s.color,minWidth:s.nb>0?4:0}}/>
-                    ))}
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {chantiersParStatut.map(s=>(
-                      <div key={s.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{width:10,height:10,borderRadius:"50%",background:s.color,flexShrink:0}}/>
-                          <span style={{fontSize:12,color:"#7B96C8"}}>{s.label}</span>
-                        </div>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          <span style={{fontSize:13,fontWeight:800,color:s.color}}>{s.nb}</span>
-                          <span style={{fontSize:10,color:"#2E4D82"}}>{Math.round((s.nb/totalChantiers)*100)}%</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              }
-            </div>
-
-            {/* ACOMPTES */}
-            <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,fontWeight:800}}>💶 Suivi des acomptes</h3>
-              {/* Barre segmentée */}
-              {totalAcomptes>0&&<>
-                <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:20,marginBottom:12}}>
-                  {[{v:totalPaye,c:"#10B981"},{v:totalEnvoy,c:"#3B82F6"},{v:totalAttente,c:"#F59E0B"}].filter(x=>x.v>0).map((x,i)=>(
-                    <div key={i} style={{width:`${(x.v/totalAcomptes)*100}%`,background:x.c}}/>
-                  ))}
-                </div>
-              </>}
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {[
-                  {label:"✅ Payés",value:totalPaye,color:"#10B981",nb:acomptes.filter(a=>a.statut==="paye").length},
-                  {label:"📨 Envoyés",value:totalEnvoy,color:"#3B82F6",nb:acomptes.filter(a=>a.statut==="envoye").length},
-                  {label:"📤 À envoyer",value:totalAttente,color:"#F59E0B",nb:acomptes.filter(a=>a.statut==="a_envoyer").length},
-                ].map(row=>(
-                  <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:12,color:"#7B96C8"}}>{row.label} <span style={{color:"#2E4D82"}}>({row.nb})</span></span>
-                    <span style={{fontSize:13,fontWeight:800,color:row.color}}>{fmt(row.value)}</span>
-                  </div>
-                ))}
-                <div style={{borderTop:"1px solid #1B2D4F",paddingTop:8,display:"flex",justifyContent:"space-between"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:"#7B96C8"}}>Total</span>
-                  <span style={{fontSize:14,fontWeight:800,color:"#E8F0FF"}}>{fmt(totalAcomptes)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-
-          {/* ══ OBJECTIFS COMMERCIAUX ══ */}
-          {(() => {
-            const mM_now = String(new Date().getMonth()+1).padStart(2,"0");
-            const mY_now = String(new Date().getFullYear());
-            const mKey   = `${mY_now}-${mM_now}`;
-            const canEdit = role === "administrateur";
-
-            // Vendeurs actifs sur les 3 derniers mois
-            const vendeurs = [...new Set(ventes.map(v=>v.par||"Inconnu"))].sort();
-
-            return (
-              <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"18px 20px",marginBottom:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+            {/* Objectifs commerciaux */}
+            {(()=>{
+              const mM_now=mM,mY_now=mY,mKey=`${mY_now}-${mM_now}`;
+              const vendeurs=[...new Set(ventes.map(v=>v.par||"Inconnu"))].sort();
+              return(<div style={{...CARD}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
                   <div>
-                    <h3 style={{margin:"0 0 3px",fontSize:15,fontWeight:800,color:"#F0F6FF",letterSpacing:"-0.3px"}}>
-                      🎯 Objectifs commerciaux
-                    </h3>
-                    <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>
-                      {new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}
-                      {canEdit&&<span style={{marginLeft:8,color:"#2E4D82"}}>— Cliquez pour modifier</span>}
-                    </p>
+                    <h3 style={{margin:0,fontSize:14,fontWeight:800}}>🎯 Objectifs — {new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
+                    {canEdit&&<p style={{margin:"4px 0 0",fontSize:11,color:"#2E4D82"}}>Cliquez ✏️ pour modifier les objectifs</p>}
                   </div>
                 </div>
+                {vendeurs.length===0?<div style={{textAlign:"center",padding:"20px 0",color:"#2E4D82",fontSize:12}}>Aucun commercial — enregistrez des ventes d'abord</div>
+                  :<div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {vendeurs.map(nom=><VendeurRow key={nom} nom={nom} mKey={mKey} mM_now={mM_now} mY_now={mY_now} ventes={ventes} objectifs={objectifs} setObjectifs={setObjectifs} canEdit={canEdit} isMobile={isMobile} fmt={fmt}/>)}
+                  </div>}
+              </div>);
+            })()}
+          </>}
 
-                {vendeurs.length===0
-                  ? <div style={{textAlign:"center",padding:"24px 0",color:"#2E4D82",fontSize:13}}>
-                      Aucun commercial — enregistrez des ventes d'abord
-                    </div>
-                  : <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      {vendeurs.map(nom => (
-                        <VendeurRow key={nom} nom={nom} mKey={mKey} mM_now={mM_now} mY_now={mY_now}
-                          ventes={ventes} objectifs={objectifs} setObjectifs={setObjectifs}
-                          canEdit={canEdit} isMobile={isMobile} fmt={fmt}/>
-                      ))}
-                    </div>
-                }
-              </div>
-            );
-          })()}
-
-          {/* STOCK */}
-          <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"16px"}}>
-            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>📦 Stock</h3>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
-              <Card icon="📦" label="Valeur totale stock" value={fmt(valeurStock)} sub={`${stock.length} références`} color="#3B82F6"/>
-              <Card icon="🔴" label="Articles à commander" value={stock.filter(s=>s.stock<=s.seuil&&s.stock>0).length} sub="sous le seuil" color="#EF4444"/>
-              <Card icon="⛔" label="Ruptures" value={stock.filter(s=>s.stock===0).length} sub="stock à zéro" color="#7C3AED"/>
-              <Card icon="✅" label="Articles OK" value={stock.filter(s=>s.stock>s.seuil).length} sub="au-dessus du seuil" color="#10B981"/>
+          {/* ── SECTION : SAV ── */}
+          {section==="sav"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+              <KPI icon="🛠️" label="SAV total" value={allSAV.length} color="#EF4444"/>
+              <KPI icon="✅" label="Résolus" value={allSAV.filter(t=>t.statut==="resolu").length} sub={pct(allSAV.filter(t=>t.statut==="resolu").length,allSAV.length)+"%"} color="#10B981"/>
+              <KPI icon="⏳" label="En cours" value={allSAV.filter(t=>t.statut==="ouvert").length} color="#F59E0B"/>
+              <KPI icon="💶" label="Facturé marques" value={fmt(allSAV.reduce((s,t)=>s+Number(t.montant_facture_marque||0),0))} color="#A855F7"/>
             </div>
-          </div>
+
+            {/* SAV par marque */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>📊 SAV par marque</h3>
+              {savParMarque.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucun ticket SAV</div>
+                :savParMarque.map((r,i)=>{
+                  const maxT=Math.max(...savParMarque.map(x=>x.total),1);
+                  const txRes=pct(r.resolus,r.total);
+                  return(
+                    <div key={r.marque} style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                        <span style={{fontSize:13,fontWeight:700,color:"#E8F0FF"}}>{r.marque}</span>
+                        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                          <span style={{fontSize:11,color:"#10B981"}}>{txRes}% résolu</span>
+                          {r.montant>0&&<span style={{fontSize:11,color:"#A855F7"}}>{fmt(r.montant)} facturé</span>}
+                          <span style={{fontSize:13,fontWeight:800,color:"#EF4444"}}>{r.total}</span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:3,height:8}}>
+                        <div style={{flex:r.resolus||0,background:"#10B981",borderRadius:"4px 0 0 4px"}}/>
+                        <div style={{flex:r.total-r.resolus||0,background:"#EF444440",borderRadius:"0 4px 4px 0"}}/>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
+
+            {/* Causes */}
+            {savParCause.length>0&&<div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🔍 Causes identifiées</h3>
+              {savParCause.map(([cause,nb])=>{
+                const labels={marque:"Défaut marque",installation:"Erreur installation",direction:"Décision direction",externe:"Cause externe"};
+                const colors={marque:"#EF4444",installation:"#F59E0B",direction:"#3B82F6",externe:"#10B981"};
+                return(
+                  <div key={cause} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #1B2D4F20"}}>
+                    <span style={{fontSize:13,color:"#E8F0FF"}}>{labels[cause]||cause}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <Bar w={pct(nb,allSAV.length)} color={colors[cause]||"#3B82F6"}/>
+                      <span style={{fontSize:13,fontWeight:800,color:colors[cause]||"#3B82F6",width:24,textAlign:"right"}}>{nb}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>}
+          </>}
+
+          {/* ── SECTION : STOCK ── */}
+          {section==="stock_section"&&<>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+              <KPI icon="📦" label="Valeur totale" value={fmt(valStock)} sub={`${stock.length} références`} color="#3B82F6"/>
+              <KPI icon="🔴" label="À commander" value={stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil&&s.stock>0).length} sub="sous le seuil" color="#EF4444"/>
+              <KPI icon="⛔" label="Ruptures" value={stock.filter(s=>!s.sans_gestion&&s.stock===0).length} sub="stock à zéro" color="#7C3AED"/>
+              <KPI icon="✅" label="Articles OK" value={stock.filter(s=>s.sans_gestion||s.stock>s.seuil).length} sub="au-dessus du seuil" color="#10B981"/>
+            </div>
+
+            {/* Rotation articles */}
+            <div style={{...CARD,marginBottom:14}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>🔄 Top articles utilisés en chantier</h3>
+              {stockRot.length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>Aucune donnée de vente</div>
+                :stockRot.map((r,i)=>{
+                  const maxQ=stockRot[0]?.qty||1;
+                  return(
+                    <div key={r.article} style={{marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#E8F0FF"}}>{r.article}</span>
+                        <span style={{fontSize:12,fontWeight:800,color:"#3B82F6"}}>{r.qty} unité(s)</span>
+                      </div>
+                      <Bar w={(r.qty/maxQ)*100} color="#3B82F6" h={6}/>
+                    </div>
+                  );
+                })
+              }
+            </div>
+
+            {/* Alertes */}
+            <div style={{...CARD}}>
+              <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚠️ Articles à surveiller</h3>
+              {stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil).length===0?<div style={{color:"#2E4D82",fontSize:12,textAlign:"center",padding:"20px 0"}}>✅ Tout le stock est au-dessus des seuils</div>
+                :stock.filter(s=>!s.sans_gestion&&s.stock<=s.seuil).map(s=>(
+                  <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1B2D4F20"}}>
+                    <div><div style={{fontSize:13,fontWeight:700,color:"#F0F6FF"}}>{s.article}</div><div style={{fontSize:11,color:"#4A6A9E"}}>{s.cat}</div></div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:13,fontWeight:800,color:s.stock===0?"#EF4444":"#F59E0B"}}>{s.stock===0?"Rupture":`${s.stock} / ${s.seuil}`}</div>
+                      <div style={{fontSize:10,color:"#4A6A9E"}}>{s.stock===0?"Stock épuisé":"Sous le seuil"}</div>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </>}
         </div>
       );
     }
 
-    // ══════════════════════════════════════
+
+        // ══════════════════════════════════════
     // ONGLET SAV
     // ══════════════════════════════════════
 
@@ -7690,14 +7663,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
-        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","marges","suivi_chantier"]},
+        {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Stats",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_LABELS={accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
       const TAB_ICONS={accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
@@ -8012,7 +7985,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} profile={profile} role={role}/>}
 
-                {view==="marges"&&<MargesTab isMobile={isMobile} ventes={ventes} savTickets={savTickets} role={role}/>}
+                
 
                 {view==="suivi_chantier"&&(()=>{
                   // ── Données croisées ────────────────────────────────────────
