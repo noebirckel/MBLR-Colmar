@@ -5530,7 +5530,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[rapportModal,setRapportModal]=useState(null);
       const[convertModal,setConvertModal]=useState(null);
       const[newForm,setNewForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",par:profile?.nom||""});
-      const[editForm,setEditForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",par:""});
+      const[editForm,setEditForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",par:"",canal:""});
       const[rdvForm,setRdvForm]=useState({date_rdv:"",heure_rdv:""});
       const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""});
 
@@ -5566,7 +5566,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const saveEditLead=()=>{
         if(!editForm.nom.trim())return;
-        updateLead(editLeadModal.id,{nom:editForm.nom,prenom:editForm.prenom,email:editForm.email,telephone:editForm.telephone,adresse:editForm.adresse,message:editForm.message,par:editForm.par});
+        updateLead(editLeadModal.id,{nom:editForm.nom,prenom:editForm.prenom,email:editForm.email,telephone:editForm.telephone,adresse:editForm.adresse,message:editForm.message,par:editForm.par,canal:editForm.canal});
         setEditLeadModal(null);
       };
 
@@ -5602,6 +5602,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:10}}><L c="Email"/><input type="email" value={editForm.email} onChange={e=>setEditForm(p=>({...p,email:e.target.value}))} style={INP()}/></div>
             <div style={{marginBottom:10}}><L c="Téléphone"/><input type="tel" value={editForm.telephone} onChange={e=>setEditForm(p=>({...p,telephone:e.target.value}))} style={INP()}/></div>
             <div style={{marginBottom:10}}><L c="Adresse"/><input value={editForm.adresse} onChange={e=>setEditForm(p=>({...p,adresse:e.target.value}))} style={INP()}/></div>
+            <div style={{marginBottom:10}}><L c="Canal d'acquisition"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {["Site web","Téléphone","Recommandation","Contact perso","Visite agence"].map(c=>(
+                  <button key={c} onClick={()=>setEditForm(p=>({...p,canal:c}))}
+                    style={{padding:"8px 10px",borderRadius:9,border:`2px solid ${editForm.canal===c?"#3B82F6":"#1B2D4F"}`,background:editForm.canal===c?"#3B82F620":"#070D1A",color:editForm.canal===c?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                    {c==="Site web"?"🌐":c==="Téléphone"?"📞":c==="Recommandation"?"🤝":c==="Contact perso"?"👤":"🏢"} {c}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={{marginBottom:16}}><L c="Message / Demande"/><textarea value={editForm.message} onChange={e=>setEditForm(p=>({...p,message:e.target.value}))} style={{...INP(),height:80,resize:"none",lineHeight:1.6}}/></div>
             <div style={{marginBottom:16}}><L c="Assigné à"/>
               <select value={editForm.par} onChange={e=>setEditForm(p=>({...p,par:e.target.value}))} style={INP()}>
@@ -5626,6 +5636,16 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:10}}><L c="Email"/><input type="email" value={newForm.email} onChange={e=>setNewForm(p=>({...p,email:e.target.value}))} placeholder="jean.martin@email.fr" style={INP()}/></div>
             <div style={{marginBottom:10}}><L c="Téléphone"/><input type="tel" value={newForm.telephone} onChange={e=>setNewForm(p=>({...p,telephone:e.target.value}))} placeholder="06 12 34 56 78" style={INP()}/></div>
             <div style={{marginBottom:10}}><L c="Adresse"/><input value={newForm.adresse} onChange={e=>setNewForm(p=>({...p,adresse:e.target.value}))} placeholder="12 rue des Lilas, 67000 Strasbourg" style={INP()}/></div>
+            <div style={{marginBottom:10}}><L c="Canal d'acquisition"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {["Site web","Téléphone","Recommandation","Contact perso","Visite agence"].map(c=>(
+                  <button key={c} onClick={()=>setNewForm(p=>({...p,canal:c}))}
+                    style={{padding:"8px 10px",borderRadius:9,border:`2px solid ${newForm.canal===c?"#3B82F6":"#1B2D4F"}`,background:newForm.canal===c?"#3B82F620":"#070D1A",color:newForm.canal===c?"#60A5FA":"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                    {c==="Site web"?"🌐":c==="Téléphone"?"📞":c==="Recommandation"?"🤝":c==="Contact perso"?"👤":"🏢"} {c}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={{marginBottom:16}}><L c="Message / Demande"/><textarea value={newForm.message} onChange={e=>setNewForm(p=>({...p,message:e.target.value}))} placeholder="Description de la demande…" style={{...INP(),height:80,resize:"none",lineHeight:1.6}}/></div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setNewModal(false)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
@@ -5723,6 +5743,10 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <span style={{fontSize:12,color:"#4A6A9E"}}>👤 Assigné</span>
                 <span style={{fontSize:12,color:"#E8F0FF"}}>{detailModal.par}</span>
               </div>}
+              {detailModal.canal&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:"1px solid #1B2D4F20"}}>
+                <span style={{fontSize:12,color:"#4A6A9E"}}>📡 Canal</span>
+                <span style={{fontSize:12,color:"#E8F0FF",fontWeight:600}}>{detailModal.canal==="Site web"?"🌐":detailModal.canal==="Téléphone"?"📞":detailModal.canal==="Recommandation"?"🤝":detailModal.canal==="Contact perso"?"👤":"🏢"} {detailModal.canal}</span>
+              </div>}
             </div>
 
             {detailModal.message&&<div style={{background:"#070D1A",borderRadius:10,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#C8D8F0",lineHeight:1.6,fontStyle:"italic"}}>"{detailModal.message}"</div>}
@@ -5755,7 +5779,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {["rdv_fait","relance","rdv_fixe","converti"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer une vente":"Convertir en vente"}</button>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{setEditLeadModal(detailModal);setEditForm({nom:detailModal.nom||"",prenom:detailModal.prenom||"",email:detailModal.email||"",telephone:detailModal.telephone||"",adresse:detailModal.adresse||"",message:detailModal.message||"",par:detailModal.par||""});setDetailModal(null);}} style={BTN("#1B2D4F",{flex:1,fontSize:12})}>✏️ Modifier</button>
+                <button onClick={()=>{setEditLeadModal(detailModal);setEditForm({nom:detailModal.nom||"",prenom:detailModal.prenom||"",email:detailModal.email||"",telephone:detailModal.telephone||"",adresse:detailModal.adresse||"",message:detailModal.message||"",par:detailModal.par||"",canal:detailModal.canal||""});setDetailModal(null);}} style={BTN("#1B2D4F",{flex:1,fontSize:12})}>✏️ Modifier</button>
                 <select value={detailModal.statut} onChange={e=>{updateLead(detailModal.id,{statut:e.target.value});setDetailModal(p=>({...p,statut:e.target.value}));}}
                   style={{...INP(),flex:1,fontSize:12,padding:"8px 10px"}}>
                   {Object.entries(LEAD_STATUTS).map(([k,s])=><option key={k} value={k}>{s.icon} {s.label}</option>)}
@@ -5846,7 +5870,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:"#4A6A9E"}}>
                         {lead.telephone&&<span>📞 {lead.telephone}</span>}
                         {lead.email&&<span>✉️ {lead.email}</span>}
-                        {lead.date_rdv&&<span style={{color:"#A855F7"}}>📅 RDV: {lead.date_rdv} {lead.heure_rdv&&lead.heure_rdv}</span>}
+                        {lead.canal&&<span style={{color:"#7B96C8"}}>{lead.canal==="Site web"?"🌐":lead.canal==="Téléphone"?"📞":lead.canal==="Recommandation"?"🤝":lead.canal==="Contact perso"?"👤":"🏢"} {lead.canal}</span>}
+                        {lead.date_rdv&&<span style={{color:"#A855F7"}}>📅 {lead.date_rdv} {lead.heure_rdv&&lead.heure_rdv}</span>}
                         {lead.rapport_rdv&&<span style={{color:"#06B6D4"}}>📝 {lead.rapport_rdv.nb_ml}ml · {lead.rapport_rdv.duree_chantier==="demi"?"½j":"1j"}</span>}
                         <span>Le {lead.date_creation}</span>
                       </div>
