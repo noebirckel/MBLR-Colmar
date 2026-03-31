@@ -5568,9 +5568,18 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Relances du jour et en retard
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{
-        if(!l.date_relance||["converti","perdu"].includes(l.statut)) return false;
+        if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut)) return false;
         return parseD(l.date_relance)<=Date.now();
       }).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
+
+      // RDV du jour (date_rdv = aujourd'hui, format dd/mm/yyyy ou yyyy-mm-dd)
+      const todayISO=new Date().toISOString().split("T")[0]; // yyyy-mm-dd
+      const rdvDuJour=useMemo(()=>leads.filter(l=>{
+        if(!l.date_rdv) return false;
+        // Supporte les deux formats
+        const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");
+        return rdv===todayISO;
+      }).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||"")),[leads]);
 
       const updateLead=(id,patch)=>setLeads(p=>p.map(l=>l.id===id?{...l,...patch}:l));
 
@@ -5919,37 +5928,89 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
           {/* ── VUE RELANCES ── */}
           {view==="relances"&&<>
-            {relancesUrgentes.length===0?<div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}>
-              <div style={{fontSize:36,marginBottom:8}}>✅</div>
-              <div style={{fontWeight:700,fontSize:14}}>Aucune relance en attente !</div>
-            </div>
-            :relancesUrgentes.map(lead=>{
-              const S=LEAD_STATUTS[lead.statut]||LEAD_STATUTS.relance;
-              const jRetard=Math.floor((Date.now()-parseD(lead.date_relance))/(1000*60*60*24));
-              return(
-                <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:`1px solid #EF444440`,padding:"13px 16px",marginBottom:8,cursor:"pointer"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
-                        <span style={{background:"#EF444420",color:"#EF4444",padding:"2px 10px",borderRadius:20,fontSize:10,fontWeight:700}}>
-                          {jRetard===0?"Aujourd'hui":jRetard>0?`${jRetard}j de retard`:"À venir"}
-                        </span>
+
+            {/* RDV du jour */}
+            <div style={{marginBottom:20}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{width:4,height:18,borderRadius:2,background:"#A855F7"}}/>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800,color:"#F0F6FF"}}>📅 RDV du jour</h3>
+                <span style={{fontSize:11,color:"#4A6A9E"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</span>
+              </div>
+              {rdvDuJour.length===0
+                ?<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"20px",textAlign:"center",color:"#2E4D82",fontSize:13}}>Aucun RDV prévu aujourd'hui</div>
+                :rdvDuJour.map(lead=>(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #A855F740",padding:"13px 16px",marginBottom:8,cursor:"pointer"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                          {lead.heure_rdv&&<span style={{background:"#A855F720",color:"#C084FC",padding:"2px 10px",borderRadius:20,fontSize:12,fontWeight:800}}>{lead.heure_rdv}</span>}
+                          <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
+                          {lead.statut==="rdv_fait"&&<span style={{background:"#10B98120",color:"#10B981",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>✅ Rapport fait</span>}
+                        </div>
+                        {lead.telephone&&<div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>📞 {lead.telephone}</div>}
+                        {lead.adresse&&<div style={{fontSize:11,color:"#4A6A9E",marginBottom:4}}>📍 {lead.adresse}</div>}
+                        {/* Rapport RDV si déjà rempli */}
+                        {lead.rapport_rdv
+                          ?<div style={{background:"#06B6D420",border:"1px solid #06B6D430",borderRadius:8,padding:"8px 10px",fontSize:11}}>
+                            <div style={{color:"#06B6D4",fontWeight:700,marginBottom:3}}>📝 Rapport de visite</div>
+                            <div style={{color:"#C8D8F0",lineHeight:1.5}}>{lead.rapport_rdv.description}</div>
+                            <div style={{display:"flex",gap:12,marginTop:5,color:"#7B96C8"}}>
+                              <span>🔌 {lead.rapport_rdv.nb_ml} ml</span>
+                              <span>⏱️ {lead.rapport_rdv.duree_chantier==="demi"?"½ journée":"1 journée"}</span>
+                            </div>
+                          </div>
+                          :<div style={{background:"#F59E0B15",border:"1px solid #F59E0B30",borderRadius:8,padding:"7px 10px",fontSize:11,color:"#F59E0B",fontWeight:600}}>
+                            ⚠️ Rapport de visite non rempli
+                          </div>
+                        }
                       </div>
-                      <div style={{fontSize:11,color:"#4A6A9E"}}>
-                        🔔 Relance prévue le {lead.date_relance}
-                        {lead.telephone&&<span> · 📞 {lead.telephone}</span>}
+                      <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                        {lead.telephone&&<a href={`tel:${lead.telephone}`} onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞</a>}
+                        {!lead.rapport_rdv&&<button onClick={e=>{e.stopPropagation();setRapportModal(lead);setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""}); }} style={{background:"linear-gradient(135deg,#06B6D4,#0891B2)",border:"none",borderRadius:8,color:"#FFF",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝 Rapport</button>}
                       </div>
-                      {lead.rapport_rdv&&<div style={{fontSize:11,color:"#06B6D4",marginTop:3}}>📝 {lead.rapport_rdv.nb_ml}ml · {lead.rapport_rdv.description?.substring(0,60)}{lead.rapport_rdv.description?.length>60?"…":""}</div>}
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                      {lead.telephone&&<a href={`tel:${lead.telephone}`} onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞 Appeler</a>}
-                      <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{date_relance:"",statut:"rdv_fait"});}} style={{background:"#10B98120",border:"none",borderRadius:8,color:"#10B981",padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✅ Fait</button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                ))
+              }
+            </div>
+
+            {/* Relances à effectuer */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{width:4,height:18,borderRadius:2,background:"#EF4444"}}/>
+                <h3 style={{margin:0,fontSize:14,fontWeight:800,color:"#F0F6FF"}}>🔔 Relances à effectuer</h3>
+                {relancesUrgentes.length>0&&<span style={{background:"#EF444425",color:"#EF4444",borderRadius:20,padding:"1px 10px",fontSize:11,fontWeight:700}}>{relancesUrgentes.length}</span>}
+              </div>
+              {relancesUrgentes.length===0
+                ?<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"20px",textAlign:"center",color:"#2E4D82",fontSize:13}}>✅ Aucune relance en attente</div>
+                :relancesUrgentes.map(lead=>{
+                  const jRetard=Math.floor((Date.now()-parseD(lead.date_relance))/(1000*60*60*24));
+                  return(
+                    <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #EF444430",padding:"13px 16px",marginBottom:8,cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
+                            <span style={{background:"#EF444420",color:"#EF4444",padding:"2px 10px",borderRadius:20,fontSize:10,fontWeight:700}}>
+                              {jRetard===0?"Aujourd'hui":jRetard>0?`${jRetard}j de retard`:"À venir"}
+                            </span>
+                          </div>
+                          <div style={{fontSize:11,color:"#4A6A9E",marginBottom:3}}>
+                            🔔 Relance prévue le {lead.date_relance}
+                            {lead.telephone&&<span> · 📞 {lead.telephone}</span>}
+                          </div>
+                          {lead.rapport_rdv&&<div style={{fontSize:11,color:"#06B6D4"}}>📝 {lead.rapport_rdv.nb_ml}ml · {lead.rapport_rdv.description?.substring(0,60)}{lead.rapport_rdv.description?.length>60?"…":""}</div>}
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                          {lead.telephone&&<a href={`tel:${lead.telephone}`} onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞</a>}
+                          <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{date_relance:"",statut:"rdv_fait"});}} style={{background:"#10B98120",border:"none",borderRadius:8,color:"#10B981",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✅ Fait</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              }
+            </div>
           </>}
 
           {/* ── VUE SANS RÉPONSE ── */}
