@@ -7404,6 +7404,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                             <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#4A6A9E"}}>
                               {ch.technicien?<span>👤 {ch.technicien}</span>:<span style={{color:"#EF4444"}}>⚠️ Sans tech.</span>}
                               {ch.date_installation&&<span style={{color:"#3B82F6",fontWeight:600}}>📅 {ch.date_installation}</span>}
+                              {ch.duree_chantier&&<span style={{color:"#A855F7",fontWeight:600}}>{ch.duree_chantier==="demi"?"🌅 ½ journée":"☀️ 1 journée"}</span>}
                               {ch.adresse&&!isMobile&&<span>📍 {ch.adresse.split(",")[0]}</span>}
                               {(ch.materiels||[]).length>0&&<span>📦 {(ch.materiels||[]).length+(ch.cables||[]).length} article{(ch.materiels||[]).length+(ch.cables||[]).length>1?"s":""}</span>}
                             </div>
