@@ -7989,18 +7989,18 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           }catch(e){setSync("error");setSyncErr(e.message||"Erreur inconnue");console.error("saveDB:",e.message);}
               },[]);
       const pendingSave=React.useRef({});
-      const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp)=>{
+      const saveDB=React.useCallback((ns,no,nh,nv,nc,na,nsav,nobj,nrapp,nleads)=>{
         if(firstLoad.current)return;
-        // Fusionner avec les données en attente au lieu de remplacer
         const p=pendingSave.current;
         if(ns)p.ns=ns; if(no)p.no=no; if(nh)p.nh=nh;
         if(nv)p.nv=nv; if(nc)p.nc=nc; if(na)p.na=na;
         if(nsav)p.nsav=nsav; if(nobj)p.nobj=nobj; if(nrapp)p.nrapp=nrapp;
+        if(nleads)p.nleads=nleads;
         if(timer.current)clearTimeout(timer.current);
         timer.current=setTimeout(()=>{
           const d=pendingSave.current;
           pendingSave.current={};
-          doSave(d.ns,d.no,d.nh,d.nv,d.nc,d.na,d.nsav,d.nobj,d.nrapp);
+          doSave(d.ns,d.no,d.nh,d.nv,d.nc,d.na,d.nsav,d.nobj,d.nrapp,d.nleads);
         },300);
       },[doSave]);
 
