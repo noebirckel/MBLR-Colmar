@@ -5503,12 +5503,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     // ══════════════════════════════════════
 
     const LEAD_STATUTS = {
-      a_appeler:  {label:"À appeler",   color:"#F59E0B", icon:"📞"},
-      rdv_fixe:   {label:"RDV fixé",    color:"#A855F7", icon:"📅"},
-      rdv_fait:   {label:"RDV effectué",color:"#06B6D4", icon:"✅"},
-      relance:    {label:"À relancer",  color:"#EF4444", icon:"🔔"},
-      converti:   {label:"Converti",    color:"#10B981", icon:"💰"},
-      perdu:      {label:"Perdu",       color:"#4A6A9E", icon:"❌"},
+      a_appeler:    {label:"À appeler",    color:"#F59E0B", icon:"📞"},
+      rdv_fixe:     {label:"RDV fixé",     color:"#A855F7", icon:"📅"},
+      rdv_fait:     {label:"RDV effectué", color:"#06B6D4", icon:"✅"},
+      relance:      {label:"À relancer",   color:"#EF4444", icon:"🔔"},
+      sans_reponse: {label:"Sans réponse", color:"#4A6A9E", icon:"📵"},
+      converti:     {label:"Converti",     color:"#10B981", icon:"💰"},
+      perdu:        {label:"Perdu",        color:"#4A6A9E", icon:"❌"},
     };
 
     function LeadsTab({isMobile, leads, setLeads, ventes, setVentes, profile, fmt, role, installConfigs, marqueConfigs, stock, onLeadConverted, onDeleteLead}) {
@@ -5538,15 +5539,32 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
 
       const filteredLeads=useMemo(()=>{
-        let l=leads;
+        let l=leads.filter(x=>x.statut!=="sans_reponse"); // exclure sans réponse de la liste principale
         if(filtre!=="tous") l=l.filter(x=>x.statut===filtre);
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+x.email+" "+x.telephone).toLowerCase().includes(search.toLowerCase()));
         return [...l].sort((a,b)=>{
+          // Trier par nb_appels desc (plus d'appels = en bas), puis par statut
           const ORDER={a_appeler:0,rdv_fixe:1,relance:2,rdv_fait:3,converti:4,perdu:5};
           if((ORDER[a.statut]??9)!==(ORDER[b.statut]??9)) return (ORDER[a.statut]??9)-(ORDER[b.statut]??9);
+          // Dans "à appeler" : trier par nb_appels asc (moins d'appels en haut)
+          if(a.statut==="a_appeler"&&b.statut==="a_appeler") return (a.nb_appels||0)-(b.nb_appels||0);
           return parseD(b.date_creation)-parseD(a.date_creation);
         });
       },[leads,filtre,search]);
+
+      const sansReponseleads=useMemo(()=>leads.filter(l=>l.statut==="sans_reponse")
+        .sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
+
+      const pasDeReponse=(lead)=>{
+        const nb=(lead.nb_appels||0)+1;
+        if(nb>=4){
+          // 4ème appel sans réponse → onglet sans réponse
+          updateLead(lead.id,{nb_appels:nb,statut:"sans_reponse"});
+        } else {
+          updateLead(lead.id,{nb_appels:nb});
+        }
+        if(detailModal) setDetailModal(p=>({...p,nb_appels:nb,statut:nb>=4?"sans_reponse":p.statut}));
+      };
 
       // Relances du jour et en retard
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{
@@ -5587,7 +5605,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""});
       };
 
-      const kpiTotals=Object.entries(LEAD_STATUTS).map(([k,s])=>({...s,key:k,nb:leads.filter(l=>l.statut===k).length}));
+      const kpiTotals=Object.entries(LEAD_STATUTS).filter(([k])=>k!=="sans_reponse").map(([k,s])=>({...s,key:k,nb:leads.filter(l=>l.statut===k).length}));
 
       return(
         <div>
@@ -5772,6 +5790,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             {/* Actions */}
             {canEdit(role)&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {/* Bouton Pas de réponse */}
+              {["a_appeler","relance"].includes(detailModal.statut)&&<button onClick={()=>pasDeReponse(detailModal)}
+                style={{...BTN("#1B2D4F",{fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}),border:"1px solid #2E4D82"}}>
+                <span>📵 Pas de réponse</span>
+                <span style={{background:"#2E4D82",borderRadius:20,padding:"1px 8px",fontSize:10}}>
+                  {(detailModal.nb_appels||0)}/4 — {3-(detailModal.nb_appels||0)>0?`encore ${3-(detailModal.nb_appels||0)} tentative${3-(detailModal.nb_appels||0)>1?"s":""}`:  "dernier appel"}
+                </span>
+              </button>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {["a_appeler"].includes(detailModal.statut)&&<button onClick={()=>{setRdvModal(detailModal);setDetailModal(null);setRdvForm({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{flex:1,fontSize:12})}>📅 Fixer RDV</button>}
                 {["rdv_fixe","rdv_fait","relance"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
@@ -5819,10 +5845,11 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <p style={{margin:0,fontSize:12,color:"#4A6A9E"}}>{leads.length} lead{leads.length>1?"s":""} · {relancesUrgentes.length>0&&<span style={{color:"#EF4444",fontWeight:700}}>{relancesUrgentes.length} relance{relancesUrgentes.length>1?"s":""} urgente{relancesUrgentes.length>1?"s":""}</span>}</p>
             </div>
             <div style={{display:"flex",gap:6}}>
-              {["liste","relances"].map(v=>(
+              {["liste","relances","sans_reponse"].map(v=>(
                 <button key={v} onClick={()=>setView(v)} style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${view===v?"#3B82F6":"#1B2D4F"}`,background:view===v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#0D1828",color:view===v?"#FFF":"#4A6A9E",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',position:"relative"}}>
-                  {v==="liste"?"📋 Leads":"🔔 Relances"}
+                  {v==="liste"?"📋 Leads":v==="relances"?"🔔 Relances":"📵 Sans réponse"}
                   {v==="relances"&&relancesUrgentes.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{relancesUrgentes.length}</span>}
+                  {v==="sans_reponse"&&sansReponseleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#4A6A9E",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{sansReponseleads.length}</span>}
                 </button>
               ))}
               {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"8px 14px",fontSize:13})}>➕ Nouveau</button>}
@@ -5864,6 +5891,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                         <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
                         <span style={{background:S.color+"20",color:S.color,padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
                         {isUrgent&&<span style={{background:"#EF444420",color:"#EF4444",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>🔔 Relance due</span>}
+                        {(lead.nb_appels||0)>0&&lead.statut==="a_appeler"&&<span style={{background:"#2E4D8240",color:"#7B96C8",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 {lead.nb_appels}/4</span>}
                         {lead.vente_id&&<span style={{background:"#10B98120",color:"#10B981",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>💰 Converti</span>}
                       </div>
                       <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:"#4A6A9E"}}>
@@ -5923,12 +5951,46 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               );
             })}
           </>}
+
+          {/* ── VUE SANS RÉPONSE ── */}
+          {view==="sans_reponse"&&<>
+            {sansReponseleads.length===0
+              ?<div style={{textAlign:"center",padding:"50px 0",color:"#2E4D82"}}>
+                <div style={{fontSize:36,marginBottom:8}}>✅</div>
+                <div style={{fontWeight:700,fontSize:14}}>Aucun lead sans réponse</div>
+              </div>
+              :<>
+                <div style={{background:"#4A6A9E18",border:"1px solid #4A6A9E30",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#7B96C8"}}>
+                  📵 Ces leads n'ont pas répondu après 4 tentatives d'appel. Vous pouvez les relancer manuellement ou les marquer comme perdus.
+                </div>
+                {sansReponseleads.map(lead=>(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #4A6A9E30",padding:"13px 16px",marginBottom:8,cursor:"pointer"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                      <div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
+                          <span style={{background:"#4A6A9E20",color:"#7B96C8",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 4 appels sans réponse</span>
+                        </div>
+                        <div style={{fontSize:11,color:"#4A6A9E"}}>
+                          {lead.telephone&&<span>📞 {lead.telephone} · </span>}
+                          <span>Le {lead.date_creation}</span>
+                          {lead.canal&&<span> · {lead.canal}</span>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6,flexShrink:0}}>
+                        {lead.telephone&&<a href={`tel:${lead.telephone}`} onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞</a>}
+                        <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{statut:"a_appeler",nb_appels:0});}} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Relancer</button>
+                        <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{statut:"perdu"});}} style={{background:"transparent",border:"1px solid #2E4D82",borderRadius:8,color:"#4A6A9E",padding:"6px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>❌ Perdu</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            }
+          </>}
         </div>
       );
-    }
-
-
-    function SCard({n,title,icon,done,children}){return(<div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10}}>
+    }({n,title,icon,done,children}){return(<div style={{background:"#0D1828",borderRadius:14,border:`1px solid ${done?"#10B98130":"#1B2D4F"}`,marginBottom:10}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",borderBottom:children?"1px solid #1B2D4F22":"none"}}>
         <div style={{width:24,height:24,borderRadius:"50%",background:done?"#10B981":"#1B2D4F",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:done?"#fff":"#4A6A9E",flexShrink:0}}>{done?"✓":n}</div>
         <span style={{fontWeight:700,fontSize:13,color:done?"#10B981":"#E8F0FF"}}>{icon} {title}</span>
