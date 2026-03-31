@@ -5627,12 +5627,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             <div style={{marginBottom:10}}><L c="Téléphone"/><input type="tel" value={newForm.telephone} onChange={e=>setNewForm(p=>({...p,telephone:e.target.value}))} placeholder="06 12 34 56 78" style={INP()}/></div>
             <div style={{marginBottom:10}}><L c="Adresse"/><input value={newForm.adresse} onChange={e=>setNewForm(p=>({...p,adresse:e.target.value}))} placeholder="12 rue des Lilas, 67000 Strasbourg" style={INP()}/></div>
             <div style={{marginBottom:16}}><L c="Message / Demande"/><textarea value={newForm.message} onChange={e=>setNewForm(p=>({...p,message:e.target.value}))} placeholder="Description de la demande…" style={{...INP(),height:80,resize:"none",lineHeight:1.6}}/></div>
-            <div style={{marginBottom:16}}><L c="Assigné à"/>
-              <select value={newForm.par} onChange={e=>setNewForm(p=>({...p,par:e.target.value}))} style={INP()}>
-                <option value="">— Choisir —</option>
-                {[...new Set([profile?.nom,...(leads.map(l=>l.par).filter(Boolean))].filter(Boolean))].map(n=><option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setNewModal(false)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
               <button onClick={saveLead} disabled={!newForm.nom.trim()} style={BTN(!newForm.nom.trim()?"#0D1828":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,opacity:!newForm.nom.trim()?0.5:1})}>💾 Enregistrer</button>
