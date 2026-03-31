@@ -7194,11 +7194,19 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           "22kW":   {label:"22 kW", disjoncteur:"Disjoncteur 32A triphasé",cable:"Câble 5G6"},
         };}catch(e){return {};}
       });
-      const saveInstallConfigs=c=>{setInstallConfigs(c);try{localStorage.setItem("install_configs",JSON.stringify(c));}catch(e){}};
+      const saveInstallConfigs=c=>{
+        setInstallConfigs(c);
+        try{localStorage.setItem("install_configs",JSON.stringify(c));}catch(e){}
+        sb.from("app_configs").upsert({key:"install_configs",value:c,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>{if(error)console.error("saveInstallConfigs:",error.message);});
+      };
       const[marqueConfigs,setMarqueConfigs]=React.useState(()=>{
         try{const s=localStorage.getItem("marque_configs");return s?JSON.parse(s):{};}catch(e){return {};}
       });
-      const saveMarqueConfigs=c=>{setMarqueConfigs(c);try{localStorage.setItem("marque_configs",JSON.stringify(c));}catch(e){}};
+      const saveMarqueConfigs=c=>{
+        setMarqueConfigs(c);
+        try{localStorage.setItem("marque_configs",JSON.stringify(c));}catch(e){}
+        sb.from("app_configs").upsert({key:"marque_configs",value:c,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>{if(error)console.error("saveMarqueConfigs:",error.message);});
+      };
       const[rapports,setRapports]=React.useState([]);
       const[view,setView]=React.useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
       const[fCat,setFCat]=React.useState("Toutes");
@@ -7416,6 +7424,23 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             cacheSet("objectifs",robj);
           }
           if(rrapp){setRapports(rrapp);cacheSet("rapports",rrapp);}
+
+          // Configs partagées (install_configs, marque_configs)
+          try{
+            const{data:cfgs}=await sb.from("app_configs").select("key,value");
+            if(cfgs){
+              cfgs.forEach(row=>{
+                if(row.key==="install_configs"&&row.value){
+                  setInstallConfigs(row.value);
+                  try{localStorage.setItem("install_configs",JSON.stringify(row.value));}catch(e){}
+                }
+                if(row.key==="marque_configs"&&row.value){
+                  setMarqueConfigs(row.value);
+                  try{localStorage.setItem("marque_configs",JSON.stringify(row.value));}catch(e){}
+                }
+              });
+            }
+          }catch(e){console.error("loadConfigs:",e);}
 
           firstLoad.current=false;
         };
