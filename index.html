@@ -5727,9 +5727,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             {/* Infos contact */}
             <div style={{background:"#070D1A",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-              {detailModal.telephone&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1B2D4F20"}}>
+              {detailModal.telephone&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid #1B2D4F20"}}>
                 <span style={{fontSize:12,color:"#4A6A9E"}}>📞 Téléphone</span>
-                <a href={`tel:${detailModal.telephone}`} style={{fontSize:13,fontWeight:700,color:"#3B82F6",textDecoration:"none"}}>{detailModal.telephone}</a>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <a href={`tel:${detailModal.telephone}`} style={{fontSize:13,fontWeight:700,color:"#3B82F6",textDecoration:"none"}}>{detailModal.telephone}</a>
+                  <a href={`tel:${detailModal.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"4px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞 Appeler</a>
+                </div>
               </div>}
               {detailModal.email&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1B2D4F20"}}>
                 <span style={{fontSize:12,color:"#4A6A9E"}}>✉️ Email</span>
@@ -5738,10 +5741,6 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               {detailModal.adresse&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1B2D4F20"}}>
                 <span style={{fontSize:12,color:"#4A6A9E"}}>📍 Adresse</span>
                 <span style={{fontSize:12,color:"#E8F0FF",textAlign:"right",maxWidth:"60%"}}>{detailModal.adresse}</span>
-              </div>}
-              {detailModal.par&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0"}}>
-                <span style={{fontSize:12,color:"#4A6A9E"}}>👤 Assigné</span>
-                <span style={{fontSize:12,color:"#E8F0FF"}}>{detailModal.par}</span>
               </div>}
               {detailModal.canal&&<div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:"1px solid #1B2D4F20"}}>
                 <span style={{fontSize:12,color:"#4A6A9E"}}>📡 Canal</span>
