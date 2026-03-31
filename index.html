@@ -98,10 +98,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","leads","relances","administratif","factures","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","cartes","clients","ventes","leads","relances","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","leads","administratif","factures","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","cartes","clients","ventes","leads","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","cartes","clients","ventes","leads","relances","administratif","factures","chantier","sav","rapports"],
+      secretaire:["accueil","cartes","clients","ventes","leads","administratif","factures","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -8339,14 +8339,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
-        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","relances","ventes","mes_objectifs","suivi_comm"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={leads:"Leads",relances:"Relances",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
-      const TAB_ICONS={leads:"📥",relances:"🔔",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
+      const TAB_LABELS={leads:"Leads",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_ICONS={leads:"📥",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -8634,7 +8634,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 
 
-                {(view==="leads"||view==="relances")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock}
+                {(view==="leads")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock}
                   onDeleteLead={async(id)=>{
                     await sb.from("leads").delete().eq("id",id);
                     setLeads(prev=>{
