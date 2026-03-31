@@ -5909,7 +5909,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       {children&&<div style={{padding:"13px 16px"}}>{children}</div>}
     </div>);}
 
-    function VentesTab({isMobile, ventes, setVentes, stock, profile, fmt, role, installConfigs, marqueConfigs, onVenteSaved, onDeleteVente}) {
+    function VentesTab({isMobile, ventes, setVentes, setVentesRaw, stock, profile, fmt, role, installConfigs, marqueConfigs, onVenteSaved, onDeleteVente}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
@@ -6353,11 +6353,13 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           <p style={{color:"#4A6A9E",fontSize:13,margin:"0 0 20px"}}><strong style={{color:"#E8F0FF"}}>{delConf.client}</strong> — {fmt(delConf.prix_ht)}</p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setDelConf(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-            <button onClick={()=>{
+            <button onClick={async()=>{
               const id=delConf.id;
-              setVentes(p=>p.filter(v=>v.id!==id));
-              if(onDeleteVente) onDeleteVente(id);
-              else sb.from("ventes").delete().eq("id",id).then(({error})=>{if(error)console.error("delete ventes:",error.message);});
+              if(onDeleteVente) await onDeleteVente(id);
+              else await sb.from("ventes").delete().eq("id",id);
+              // Utiliser setVentesRaw pour éviter de re-upsert via SV
+              const rawSetter = setVentesRaw || setVentes;
+              rawSetter(p=>p.filter(v=>v.id!==id));
               setDelConf(null);
             }} style={BTN("#EF4444",{flex:1})}>Supprimer</button>
           </div>
@@ -8491,7 +8493,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       window._leadToConvert=lead;
                     },100);
                   }}/>}
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs}
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} setVentesRaw={setVentes} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs}
                   onVenteSaved={v=>{
                     SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:"",technicien:installerName||"",duree_chantier:v.duree_chantier||"1j"},...p]);
                     SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
