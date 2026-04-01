@@ -5505,7 +5505,8 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
     const LEAD_STATUTS = {
       a_appeler:    {label:"À appeler",    color:"#F59E0B", icon:"📞"},
       rdv_fixe:     {label:"RDV fixé",     color:"#A855F7", icon:"📅"},
-      rdv_fait:     {label:"RDV effectué", color:"#06B6D4", icon:"✅"},
+      devis_ligne:  {label:"Devis en ligne",color:"#06B6D4", icon:"📄"},
+      rdv_fait:     {label:"RDV effectué", color:"#10B981", icon:"✅"},
       relance:      {label:"À relancer",   color:"#EF4444", icon:"🔔"},
       sans_reponse: {label:"Sans réponse", color:"#4A6A9E", icon:"📵"},
       converti:     {label:"Converti",     color:"#10B981", icon:"💰"},
@@ -5544,7 +5545,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+x.email+" "+x.telephone).toLowerCase().includes(search.toLowerCase()));
         return [...l].sort((a,b)=>{
           // Trier par nb_appels desc (plus d'appels = en bas), puis par statut
-          const ORDER={a_appeler:0,rdv_fixe:1,relance:2,rdv_fait:3,converti:4,perdu:5};
+          const ORDER={a_appeler:0,rdv_fixe:1,devis_ligne:2,relance:3,rdv_fait:4,converti:5,perdu:6};
           if((ORDER[a.statut]??9)!==(ORDER[b.statut]??9)) return (ORDER[a.statut]??9)-(ORDER[b.statut]??9);
           // Dans "à appeler" : trier par nb_appels asc (moins d'appels en haut)
           if(a.statut==="a_appeler"&&b.statut==="a_appeler") return (a.nb_appels||0)-(b.nb_appels||0);
@@ -5557,13 +5558,14 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const pasDeReponse=(lead)=>{
         const nb=(lead.nb_appels||0)+1;
-        if(nb>=4){
-          // 4ème appel sans réponse → onglet sans réponse
-          updateLead(lead.id,{nb_appels:nb,statut:"sans_reponse"});
-        } else {
-          updateLead(lead.id,{nb_appels:nb});
-        }
-        if(detailModal) setDetailModal(p=>({...p,nb_appels:nb,statut:nb>=4?"sans_reponse":p.statut}));
+        const now=new Date();
+        const callLog={date:now.toLocaleDateString("fr-FR"),heure:now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})};
+        const historique_appels=[...(lead.historique_appels||[]),callLog];
+        const patch=nb>=4
+          ?{nb_appels:nb,statut:"sans_reponse",historique_appels}
+          :{nb_appels:nb,historique_appels};
+        updateLead(lead.id,patch);
+        if(detailModal) setDetailModal(p=>({...p,...patch}));
       };
 
       // Relances du jour et en retard
@@ -5797,6 +5799,17 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
             {/* Vente liée */}
             {detailModal.vente_id&&(()=>{const v=ventes.find(x=>x.id===detailModal.vente_id);return v?<div style={{background:"#10B98120",border:"1px solid #10B98140",borderRadius:10,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#10B981",fontWeight:700}}>💰 Vente liée : {v.client} — {fmt(v.prix_ht)}</div>:null;})()}
 
+            {/* Historique appels sans réponse */}
+            {(detailModal.historique_appels||[]).length>0&&<div style={{background:"#4A6A9E15",border:"1px solid #4A6A9E25",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:11,color:"#7B96C8",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.06em"}}>📵 Historique des appels sans réponse</div>
+              {(detailModal.historique_appels||[]).map((c,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#4A6A9E",padding:"2px 0",borderBottom:i<(detailModal.historique_appels.length-1)?"1px solid #1B2D4F20":"none"}}>
+                  <span>📞 Tentative {i+1}</span>
+                  <span style={{color:"#7B96C8"}}>{c.date} à {c.heure}</span>
+                </div>
+              ))}
+            </div>}
+
             {/* Actions */}
             {canEdit(role)&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
               {/* Bouton Pas de réponse */}
@@ -5809,8 +5822,9 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </button>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {["a_appeler"].includes(detailModal.statut)&&<button onClick={()=>{setRdvModal(detailModal);setDetailModal(null);setRdvForm({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{flex:1,fontSize:12})}>📅 Fixer RDV</button>}
-                {["rdv_fixe","rdv_fait","relance"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
-                {["rdv_fait","relance","rdv_fixe","converti"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer une vente":"Convertir en vente"}</button>}
+                {["a_appeler"].includes(detailModal.statut)&&<button onClick={()=>{updateLead(detailModal.id,{statut:"devis_ligne"});setDetailModal(p=>({...p,statut:"devis_ligne"}));}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📄 Devis en ligne</button>}
+                {["rdv_fixe","rdv_fait","relance","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
+                {["rdv_fait","relance","rdv_fixe","converti","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer une vente":"Convertir en vente"}</button>}
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>{setEditLeadModal(detailModal);setEditForm({nom:detailModal.nom||"",prenom:detailModal.prenom||"",email:detailModal.email||"",telephone:detailModal.telephone||"",adresse:detailModal.adresse||"",message:detailModal.message||"",par:detailModal.par||"",canal:detailModal.canal||""});setDetailModal(null);}} style={BTN("#1B2D4F",{flex:1,fontSize:12})}>✏️ Modifier</button>
@@ -6026,21 +6040,28 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 </div>
                 {sansReponseleads.map(lead=>(
                   <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #4A6A9E30",padding:"13px 16px",marginBottom:8,cursor:"pointer"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-                      <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                      <div style={{flex:1}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                           <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
-                          <span style={{background:"#4A6A9E20",color:"#7B96C8",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 4 appels sans réponse</span>
+                          <span style={{background:"#4A6A9E20",color:"#7B96C8",padding:"1px 8px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 {lead.nb_appels||4} appels</span>
                         </div>
-                        <div style={{fontSize:11,color:"#4A6A9E"}}>
+                        <div style={{fontSize:11,color:"#4A6A9E",marginBottom:4}}>
                           {lead.telephone&&<span>📞 {lead.telephone} · </span>}
-                          <span>Le {lead.date_creation}</span>
+                          <span>Créé le {lead.date_creation}</span>
                           {lead.canal&&<span> · {lead.canal}</span>}
                         </div>
+                        {(lead.historique_appels||[]).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {(lead.historique_appels||[]).map((c,i)=>(
+                            <span key={i} style={{fontSize:10,color:"#4A6A9E",background:"#1B2D4F",borderRadius:6,padding:"2px 7px"}}>
+                              {i+1}. {c.date} {c.heure}
+                            </span>
+                          ))}
+                        </div>}
                       </div>
                       <div style={{display:"flex",gap:6,flexShrink:0}}>
                         {lead.telephone&&<a href={`tel:${lead.telephone}`} onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞</a>}
-                        <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{statut:"a_appeler",nb_appels:0});}} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Relancer</button>
+                        <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{statut:"a_appeler",nb_appels:0,historique_appels:[]});}} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Relancer</button>
                         <button onClick={e=>{e.stopPropagation();updateLead(lead.id,{statut:"perdu"});}} style={{background:"transparent",border:"1px solid #2E4D82",borderRadius:8,color:"#4A6A9E",padding:"6px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>❌ Perdu</button>
                       </div>
                     </div>
