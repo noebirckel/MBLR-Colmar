@@ -9156,6 +9156,90 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>
           )}
 
+          {/* ── BLOC RDV + INSTALLATIONS DU JOUR — ADMIN ── */}
+          {role==="administrateur"&&(()=>{
+            const todayISO=new Date().toISOString().split("T")[0];
+            const today=new Date().toLocaleDateString("fr-FR");
+            const rdvDuJour=(leads||[]).filter(l=>{
+              if(!l.date_rdv) return false;
+              const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");
+              return rdv===todayISO;
+            }).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||""));
+            const installDuJour=chantiersPipeline.filter(ch=>ch.date_installation===today&&ch.statut!=="termine");
+            return(
+              <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:10,marginBottom:16}}>
+                {/* RDV du jour */}
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #A855F730",padding:"14px 16px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontWeight:800,fontSize:13,color:"#C084FC"}}>📅 RDV du jour</div>
+                    <span style={{background:"#A855F720",color:"#A855F7",borderRadius:20,padding:"1px 9px",fontSize:11,fontWeight:700}}>{rdvDuJour.length}</span>
+                  </div>
+                  {rdvDuJour.length===0
+                    ?<div style={{fontSize:12,color:"#2E4D82",textAlign:"center",padding:"10px 0"}}>Aucun RDV aujourd'hui</div>
+                    :rdvDuJour.map(lead=>{
+                      const mapsUrl=lead.adresse?`https://maps.google.com/?q=${encodeURIComponent(lead.adresse)}`:null;
+                      return(
+                        <div key={lead.id} style={{background:"#070D1A",borderRadius:9,padding:"9px 11px",marginBottom:6,border:`1px solid ${lead.rapport_rdv?"#10B98120":"#1B2D4F"}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2,flexWrap:"wrap"}}>
+                                {lead.heure_rdv&&<span style={{background:"#A855F720",color:"#C084FC",borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:800}}>{lead.heure_rdv}</span>}
+                                <span style={{fontWeight:700,fontSize:12,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
+                                {lead.rapport_rdv&&<span style={{background:"#10B98120",color:"#10B981",borderRadius:20,padding:"1px 6px",fontSize:9,fontWeight:700}}>✅</span>}
+                              </div>
+                              {lead.par&&<div style={{fontSize:10,color:"#F59E0B"}}>💼 {lead.par}</div>}
+                              {lead.telephone&&<div style={{fontSize:10,color:"#4A6A9E"}}>📞 {lead.telephone}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:4,flexShrink:0}}>
+                              {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"#3B82F620",borderRadius:7,color:"#3B82F6",padding:"4px 7px",fontSize:11,textDecoration:"none"}}>📞</a>}
+                              {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener" style={{background:"#10B98120",borderRadius:7,color:"#10B981",padding:"4px 7px",fontSize:11,textDecoration:"none"}}>📍</a>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                  <button onClick={()=>goTo("leads")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",padding:"7px",width:"100%",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',marginTop:6}}>
+                    Tous les leads →
+                  </button>
+                </div>
+
+                {/* Installations du jour */}
+                <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #3B82F630",padding:"14px 16px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontWeight:800,fontSize:13,color:"#60A5FA"}}>🔧 Installations du jour</div>
+                    <span style={{background:"#3B82F620",color:"#3B82F6",borderRadius:20,padding:"1px 9px",fontSize:11,fontWeight:700}}>{installDuJour.length}</span>
+                  </div>
+                  {installDuJour.length===0
+                    ?<div style={{fontSize:12,color:"#2E4D82",textAlign:"center",padding:"10px 0"}}>Aucune installation aujourd'hui</div>
+                    :installDuJour.map(ch=>{
+                      const mapsUrl=ch.adresse?`https://maps.google.com/?q=${encodeURIComponent(ch.adresse)}`:null;
+                      return(
+                        <div key={ch.id} style={{background:"#070D1A",borderRadius:9,padding:"9px 11px",marginBottom:6,border:"1px solid #1B2D4F"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:700,fontSize:12,color:"#F0F6FF",marginBottom:2}}>{ch.client}</div>
+                              {ch.technicien&&<div style={{fontSize:10,color:"#06B6D4"}}>👤 {ch.technicien}</div>}
+                              {ch.duree_chantier&&<div style={{fontSize:10,color:"#A855F7"}}>{ch.duree_chantier==="demi"?"🌅 ½ journée":"☀️ 1 journée"}</div>}
+                              {ch.adresse&&<div style={{fontSize:10,color:"#4A6A9E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📍 {ch.adresse}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:4,flexShrink:0}}>
+                              {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener" style={{background:"#10B98120",borderRadius:7,color:"#10B981",padding:"4px 7px",fontSize:11,textDecoration:"none"}}>📍</a>}
+                              <button onClick={()=>goTo("chantier")} style={{background:"#3B82F620",border:"none",borderRadius:7,color:"#3B82F6",padding:"4px 7px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>›</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  }
+                  <button onClick={()=>goTo("chantier")} style={{background:"transparent",border:"1px solid #1B2D4F",borderRadius:8,color:"#4A6A9E",padding:"7px",width:"100%",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',marginTop:6}}>
+                    Tous les chantiers →
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Accueil commercial dédié */}
           {role==="commercial"&&(()=>{
             const now=new Date();
@@ -9214,7 +9298,15 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                     const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");
                     return rdv===todayISO;
                   }).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||""));
-                  if(rdvDuJour.length===0) return null;
+                  if(rdvDuJour.length===0) return(
+                    <div style={{background:"#0D1828",borderRadius:14,border:"1px solid #1B2D4F",padding:"14px 16px",marginBottom:12}}>
+                      <div style={{fontWeight:800,fontSize:14,color:"#C084FC",marginBottom:6}}>📅 Mes RDV du jour</div>
+                      <div style={{fontSize:12,color:"#2E4D82",textAlign:"center",padding:"12px 0"}}>Aucun RDV prévu aujourd'hui</div>
+                      <button onClick={()=>goTo("leads")} style={{background:"#A855F715",border:"1px solid #A855F730",borderRadius:8,color:"#C084FC",padding:"8px",width:"100%",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',marginTop:4}}>
+                        📅 Fixer un RDV →
+                      </button>
+                    </div>
+                  );
                   return(
                     <div style={{background:"linear-gradient(135deg,#1A0A3A,#0D1828)",borderRadius:14,border:"2px solid #A855F740",padding:"14px 16px",marginBottom:12}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
