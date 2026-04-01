@@ -1292,7 +1292,7 @@
     // ══════════════════════════════════════════
     // ONGLET SUIVI COMMERCIAL
     // ══════════════════════════════════════════
-    function SuiviCommercialTab({isMobile, chantiers, setChantiers, rapports, profile, role}){
+    function SuiviCommercialTab({isMobile, chantiers, setChantiers, rapports, ventes, profile, role}){
       const GOOGLE_REVIEW = "https://g.page/r/CYKYMv6dsT55EBM/review";
       const ETATS = {
         a_appeler:   {label:"À appeler",      color:"#3B82F6", icon:"📞"},
@@ -1321,7 +1321,12 @@ L'équipe Ma Borne LR`;
       const [confirmDel, setConfirmDel]  = useState(null);
       const [alertModal, setAlertModal]  = useState(null); // {ch, rapport, problemes}
 
-      // Récupère les alertes d'un chantier (rapport à revoir/urgence + problèmes admin)
+      // Récupère le commercial d'un chantier via sa vente liée
+      const getCommercial=(ch)=>{
+        if(ch.commercial) return ch.commercial;
+        const v=(ventes||[]).find(v=>v.id===ch.vente_id);
+        return v?.par||null;
+      };
       const getAlertes = (ch) => {
         const rapport = (rapports||[]).find(r=>r.chantier_id===ch.id||r.chantier_id===String(ch.id));
         const hasRapportAlert = rapport && (rapport.etat_final==="a_revoir"||rapport.etat_final==="urgence");
@@ -1366,7 +1371,10 @@ L'équipe Ma Borne LR`;
               <button onClick={()=>setSelected(null)} style={{background:"#112038",border:"1px solid #1B2D4F",borderRadius:8,color:"#7B96C8",padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>← Retour</button>
               <div>
                 <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#F0F6FF"}}>📞 {detail.client}</h2>
-                <div style={{fontSize:12,color:"#4A6A9E"}}>Terminé le {detail.date_fin||"—"}</div>
+                <div style={{display:"flex",gap:10,alignItems:"center",fontSize:12,color:"#4A6A9E",flexWrap:"wrap"}}>
+                  <span>Terminé le {detail.date_fin||"—"}</span>
+                  {getCommercial(detail)&&<span style={{background:"#F59E0B20",color:"#F59E0B",padding:"1px 9px",borderRadius:20,fontWeight:700,fontSize:11}}>💼 À appeler par {getCommercial(detail)}</span>}
+                </div>
               </div>
             </div>
 
@@ -1585,6 +1593,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:12,color:"#4A6A9E"}}>
                         {ch.date_fin&&<span>✅ Terminé le {ch.date_fin}</span>}
                         {ch.technicien&&<span>🔧 {ch.technicien}</span>}
+                        {getCommercial(ch)&&<span style={{color:"#F59E0B",fontWeight:700}}>💼 {getCommercial(ch)}</span>}
                         {suivi.observation&&<span style={{color:"#60A5FA"}}>📝 Observation</span>}
                       </div>
                     </div>
@@ -5540,15 +5549,26 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[rdvModal,setRdvModal]=useState(null);
       const[rapportModal,setRapportModal]=useState(null);
       const[convertModal,setConvertModal]=useState(null);
+      const[rapportStep,setRapportStep]=useState(1);
       const[noteModal,setNoteModal]=useState(null);
       const[noteDraft,setNoteDraft]=useState("");
       const[newForm,setNewForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
       const[editForm,setEditForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
       const[rdvForm,setRdvForm]=useState({date_rdv:"",heure_rdv:""});
-      const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""});
+      const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
 
       const today=new Date().toLocaleDateString("fr-FR");
       const todayISO=new Date().toISOString().split("T")[0];
+
+      // Expose rapport opener globally for accueil commercial
+      React.useEffect(()=>{
+        window._openRdvRapport=(lead)=>{
+          setRapportModal(lead);
+          setRapportStep(1);
+          setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
+        };
+        return()=>{delete window._openRdvRapport;};
+      },[]);
       const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
 
       // Calculs pipeline
@@ -5609,8 +5629,20 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
         setRdvModal(null);setRdvForm({date_rdv:"",heure_rdv:""});
       };
       const saveRapport=()=>{
-        updateLead(rapportModal.id,{rapport_rdv:rapportForm,statut:rapportForm.date_relance?"relance":"rdv_fait",date_relance:rapportForm.date_relance||""});
-        setRapportModal(null);setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""});
+        const statut=rapportForm.date_relance?"relance":"rdv_fait";
+        updateLead(rapportModal.id,{
+          rapport_rdv:{
+            description:rapportForm.description,
+            nb_ml:rapportForm.nb_ml,
+            duree_chantier:rapportForm.duree_chantier,
+            type_logement:rapportForm.type_logement,
+            tableau:rapportForm.tableau,
+          },
+          statut,
+          date_relance:rapportForm.date_relance||"",
+        });
+        setRapportModal(null);
+        setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
       };
 
       const kpiTotals=Object.entries(LEAD_STATUTS).filter(([k])=>k!=="sans_reponse").map(([k,s])=>({...s,key:k,nb:leads.filter(l=>l.statut===k).length}));
@@ -5735,40 +5767,128 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div></div>}
 
           {/* Rapport RDV */}
-          {rapportModal&&<div style={OVL} onClick={()=>setRapportModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
+          {/* ── RAPPORT RDV — WIZARD 3 ÉTAPES ── */}
+          {rapportModal&&<div style={OVL} onClick={()=>{setRapportModal(null);setRapportStep(1);}}><div style={MBX} onClick={e=>e.stopPropagation()}>
             <Handle/>
-            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:16}}>📝 Rapport de RDV</h3>
-            <p style={{margin:"0 0 16px",fontSize:12,color:"#4A6A9E"}}>{rapportModal.prenom} {rapportModal.nom}{rapportModal.date_rdv&&" — "+rapportModal.date_rdv}</p>
-            <div style={{marginBottom:12}}><L c="Description du chantier"/><textarea value={rapportForm.description} onChange={e=>setRapportForm(p=>({...p,description:e.target.value}))} style={{...INP(),height:90,resize:"none",lineHeight:1.6}}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-              <div>
-                <L c="Câble estimé (ml)"/>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <button onClick={()=>setRapportForm(p=>({...p,nb_ml:Math.max(1,p.nb_ml-5)}))} style={{width:40,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
-                  <div style={{flex:1,position:"relative"}}>
-                    <input type="number" min="1" value={rapportForm.nb_ml} onChange={e=>setRapportForm(p=>({...p,nb_ml:Number(e.target.value)||1}))} style={{...INP(),textAlign:"center",fontWeight:800}}/>
-                    <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#4A6A9E",fontSize:12}}>ml</span>
-                  </div>
-                  <button onClick={()=>setRapportForm(p=>({...p,nb_ml:p.nb_ml+5}))} style={{width:40,height:44,borderRadius:10,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:20,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
+            {/* Header + étapes */}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+              {rapportStep>1&&<button onClick={()=>setRapportStep(s=>s-1)} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>←</button>}
+              <div style={{flex:1}}>
+                <div style={{fontWeight:800,fontSize:15,color:"#F0F6FF"}}>{rapportModal.prenom} {rapportModal.nom}</div>
+                <div style={{fontSize:11,color:"#4A6A9E"}}>{rapportModal.date_rdv&&rapportModal.date_rdv}{rapportModal.heure_rdv&&" à "+rapportModal.heure_rdv}</div>
+              </div>
+              <button onClick={()=>{setRapportModal(null);setRapportStep(1);}} style={{background:"#1B2D4F",border:"none",borderRadius:8,color:"#7B96C8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+            </div>
+            {/* Barre de progression */}
+            <div style={{display:"flex",gap:6,marginBottom:18}}>
+              {[1,2,3].map(s=>(
+                <div key={s} style={{flex:1,height:4,borderRadius:2,background:s<=rapportStep?"#A855F7":"#1B2D4F",transition:"background 0.3s"}}/>
+              ))}
+            </div>
+            {/* Étape 1 — Contexte */}
+            {rapportStep===1&&<>
+              <div style={{fontWeight:800,fontSize:14,color:"#C084FC",marginBottom:14}}>① Contexte de la visite</div>
+              <div style={{marginBottom:12}}>
+                <L c="Type d'installation"/>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                  {["Maison","Appartement","Copropriété","Professionnel"].map(t=>(
+                    <button key={t} onClick={()=>setRapportForm(p=>({...p,type_logement:t}))}
+                      style={{padding:"12px 8px",borderRadius:10,border:`2px solid ${rapportForm.type_logement===t?"#A855F7":"#1B2D4F"}`,background:rapportForm.type_logement===t?"#A855F720":"#070D1A",color:rapportForm.type_logement===t?"#C084FC":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                      {t==="Maison"?"🏠":t==="Appartement"?"🏢":t==="Copropriété"?"🏗️":"🏭"} {t}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div>
-                <L c="Durée chantier"/>
-                <div style={{display:"flex",gap:6}}>
-                  {[["demi","🌅 ½ j"],["1j","☀️ 1 j"]].map(([v,l])=>(
-                    <button key={v} onClick={()=>setRapportForm(p=>({...p,duree_chantier:v}))}
-                      style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${rapportForm.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:rapportForm.duree_chantier===v?"#3B82F620":"#070D1A",color:rapportForm.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif'}}>
+              <div style={{marginBottom:14}}>
+                <L c="Tableau électrique accessible"/>
+                <div style={{display:"flex",gap:8}}>
+                  {[["oui","✅ Oui"],["non","❌ Non"],["accessible_travaux","⚠️ Travaux"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setRapportForm(p=>({...p,tableau:v}))}
+                      style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${rapportForm.tableau===v?"#3B82F6":"#1B2D4F"}`,background:rapportForm.tableau===v?"#3B82F620":"#070D1A",color:rapportForm.tableau===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
                       {l}
                     </button>
                   ))}
                 </div>
               </div>
-            </div>
-            <div style={{marginBottom:16}}><L c="Date de relance (optionnel)"/><input type="date" value={rapportForm.date_relance} onChange={e=>setRapportForm(p=>({...p,date_relance:e.target.value}))} style={INP()}/></div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setRapportModal(null)} style={BTN("#1B2D4F",{flex:1})}>Annuler</button>
-              <button onClick={saveRapport} disabled={!rapportForm.description.trim()} style={BTN(!rapportForm.description.trim()?"#0D1828":"linear-gradient(135deg,#06B6D4,#0891B2)",{flex:2,opacity:!rapportForm.description.trim()?0.5:1})}>💾 Enregistrer</button>
-            </div>
+              <div style={{marginBottom:16}}>
+                <L c="Notes rapides (optionnel)"/>
+                <textarea value={rapportForm.description} onChange={e=>setRapportForm(p=>({...p,description:e.target.value}))} placeholder="Situation, remarques particulières…" style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/>
+              </div>
+              <button onClick={()=>setRapportStep(2)} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{width:"100%",padding:"14px",fontSize:14})}>Suivant →</button>
+            </>}
+            {/* Étape 2 — Câble & durée */}
+            {rapportStep===2&&<>
+              <div style={{fontWeight:800,fontSize:14,color:"#C084FC",marginBottom:14}}>② Câble & durée d'intervention</div>
+              <div style={{marginBottom:18}}>
+                <L c="Longueur de câble estimée"/>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <button onClick={()=>setRapportForm(p=>({...p,nb_ml:Math.max(1,p.nb_ml-5)}))} style={{width:52,height:52,borderRadius:12,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:24,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
+                  <div style={{flex:1,position:"relative"}}>
+                    <input type="number" min="1" value={rapportForm.nb_ml} onChange={e=>setRapportForm(p=>({...p,nb_ml:Number(e.target.value)||1}))} style={{...INP(),textAlign:"center",fontSize:22,fontWeight:900,paddingRight:36,height:52}}/>
+                    <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",color:"#4A6A9E",fontSize:14,fontWeight:700}}>ml</span>
+                  </div>
+                  <button onClick={()=>setRapportForm(p=>({...p,nb_ml:p.nb_ml+5}))} style={{width:52,height:52,borderRadius:12,background:"#1B2D4F",border:"none",color:"#E8F0FF",fontSize:24,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:8,gap:6}}>
+                  {[10,15,20,25,30,40].map(v=>(
+                    <button key={v} onClick={()=>setRapportForm(p=>({...p,nb_ml:v}))}
+                      style={{flex:1,padding:"7px 0",borderRadius:8,border:`1px solid ${rapportForm.nb_ml===v?"#A855F7":"#1B2D4F"}`,background:rapportForm.nb_ml===v?"#A855F720":"#070D1A",color:rapportForm.nb_ml===v?"#C084FC":"#4A6A9E",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginBottom:18}}>
+                <L c="Durée d'intervention prévue"/>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {[["demi","🌅 Demi-journée"],["1j","☀️ 1 journée"]].map(([v,l])=>(
+                    <button key={v} onClick={()=>setRapportForm(p=>({...p,duree_chantier:v}))}
+                      style={{padding:"14px",borderRadius:12,border:`2px solid ${rapportForm.duree_chantier===v?"#3B82F6":"#1B2D4F"}`,background:rapportForm.duree_chantier===v?"#3B82F620":"#070D1A",color:rapportForm.duree_chantier===v?"#60A5FA":"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={()=>setRapportStep(3)} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{width:"100%",padding:"14px",fontSize:14})}>Suivant →</button>
+            </>}
+            {/* Étape 3 — Suite & action */}
+            {rapportStep===3&&<>
+              <div style={{fontWeight:800,fontSize:14,color:"#C084FC",marginBottom:14}}>③ Suite et action</div>
+              <div style={{background:"#0D1828",borderRadius:10,padding:"12px",marginBottom:14,fontSize:12,color:"#7B96C8"}}>
+                <div style={{fontWeight:700,color:"#E8F0FF",marginBottom:6}}>Récapitulatif</div>
+                {rapportForm.type_logement&&<div>🏠 {rapportForm.type_logement}</div>}
+                <div>🔌 {rapportForm.nb_ml} ml · ⏱️ {rapportForm.duree_chantier==="demi"?"½ journée":"1 journée"}</div>
+                {rapportForm.description&&<div style={{marginTop:4,fontStyle:"italic",color:"#4A6A9E"}}>"{rapportForm.description}"</div>}
+              </div>
+              <div style={{marginBottom:14}}>
+                <L c="Quelle est la suite ?"/>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {[
+                    ["convertir","💰 Envoyer un devis / Convertir en vente","#10B981"],
+                    ["relance","🔔 Relance à prévoir","#F59E0B"],
+                    ["perdu","❌ Ne donne pas suite","#EF4444"],
+                  ].map(([v,l,c])=>(
+                    <button key={v} onClick={()=>setRapportForm(p=>({...p,suite:v}))}
+                      style={{padding:"12px 14px",borderRadius:10,border:`2px solid ${rapportForm.suite===v?c:"#1B2D4F"}`,background:rapportForm.suite===v?c+"20":"#070D1A",color:rapportForm.suite===v?c:"#4A6A9E",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',textAlign:"left"}}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {rapportForm.suite==="relance"&&<div style={{marginBottom:14}}>
+                <L c="Date de relance"/>
+                <input type="date" value={rapportForm.date_relance} onChange={e=>setRapportForm(p=>({...p,date_relance:e.target.value}))} style={INP()}/>
+              </div>}
+              <button onClick={()=>{
+                saveRapport();
+                setRapportStep(1);
+                if(rapportForm.suite==="convertir"&&rapportModal){setConvertModal(rapportModal);}
+                if(rapportForm.suite==="perdu"&&rapportModal){updateLead(rapportModal.id,{statut:"perdu"});}
+              }} disabled={!rapportForm.suite}
+                style={BTN(!rapportForm.suite?"#0D1828":"linear-gradient(135deg,#10B981,#059669)",{width:"100%",padding:"14px",fontSize:14,opacity:!rapportForm.suite?0.5:1})}>
+                ✅ Terminer le rapport
+              </button>
+            </>}
           </div></div>}
 
           {/* Note rapide */}
@@ -5887,7 +6007,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {detailModal.statut==="a_appeler"&&<button onClick={()=>{setRdvModal(detailModal);setDetailModal(null);setRdvForm({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{flex:1,fontSize:12})}>📅 Fixer RDV</button>}
                 {detailModal.statut==="a_appeler"&&<button onClick={()=>{updateLead(detailModal.id,{statut:"devis_ligne"});setDetailModal(p=>({...p,statut:"devis_ligne"}));}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📄 Devis en ligne</button>}
-                {["rdv_fixe","rdv_fait","relance","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
+                {["rdv_fixe","rdv_fait","relance","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportStep(1);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:detailModal.rapport_rdv?.type_logement||"",tableau:detailModal.rapport_rdv?.tableau||"",suite:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
                 {["rdv_fait","relance","rdv_fixe","converti","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer vente":"Convertir"}</button>}
               </div>
               <div style={{display:"flex",gap:6}}>
@@ -5995,34 +6115,37 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
               {rdvDuJour.length===0
                 ?<div style={{background:"#0D1828",borderRadius:12,border:"1px solid #1B2D4F",padding:"16px",textAlign:"center",color:"#2E4D82",fontSize:13}}>Aucun RDV aujourd'hui</div>
-                :rdvDuJour.map(lead=>(
-                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:"1px solid #A855F730",padding:"12px 14px",marginBottom:7,cursor:"pointer"}}>
+                :rdvDuJour.map(lead=>{
+                  const mapsUrl=lead.adresse?`https://maps.google.com/?q=${encodeURIComponent(lead.adresse)}`:null;
+                  return(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#0D1828",borderRadius:12,border:`1px solid ${lead.rapport_rdv?"#10B98120":"#A855F730"}`,padding:"12px 14px",marginBottom:7,cursor:"pointer"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
                       <div style={{display:"flex",gap:10,flex:1}}>
                         <div style={{width:36,height:36,borderRadius:"50%",background:avatarColor(lead.prenom||lead.nom)+"30",border:`1.5px solid ${avatarColor(lead.prenom||lead.nom)}60`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:avatarColor(lead.prenom||lead.nom),flexShrink:0}}>
                           {initials(lead.prenom,lead.nom)}
                         </div>
                         <div style={{flex:1}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
                             {lead.heure_rdv&&<span style={{background:"#A855F720",color:"#C084FC",padding:"1px 9px",borderRadius:20,fontSize:12,fontWeight:800}}>{lead.heure_rdv}</span>}
                             <span style={{fontWeight:800,fontSize:13,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
-                            {lead.statut==="rdv_fait"&&<span style={{background:"#10B98120",color:"#10B981",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>✅ Rapport</span>}
+                            {lead.rapport_rdv&&<span style={{background:"#10B98120",color:"#10B981",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>✅ Rapport</span>}
                           </div>
-                          {lead.telephone&&<div style={{fontSize:11,color:"#4A6A9E"}}>{lead.adresse||lead.telephone}</div>}
+                          {lead.telephone&&<div style={{fontSize:11,color:"#4A6A9E",marginBottom:1}}>📞 {lead.telephone}</div>}
+                          {lead.adresse&&<div style={{fontSize:11,color:"#4A6A9E",marginBottom:2}}>📍 {lead.adresse}</div>}
                           {lead.rapport_rdv
-                            ?<div style={{fontSize:11,color:"#06B6D4",marginTop:4}}>📝 {lead.rapport_rdv.description?.substring(0,70)}{lead.rapport_rdv.description?.length>70?"…":""} · {lead.rapport_rdv.nb_ml}ml</div>
-                            :<div style={{fontSize:11,color:"#F59E0B",marginTop:4}}>⚠️ Rapport non rempli</div>
+                            ?<div style={{fontSize:11,color:"#06B6D4",marginTop:2}}>📝 {lead.rapport_rdv.description?.substring(0,70)}{lead.rapport_rdv.description?.length>70?"…":""} · {lead.rapport_rdv.nb_ml}ml</div>
+                            :<div style={{fontSize:11,color:"#F59E0B",marginTop:2,fontWeight:600}}>⚠️ Rapport non rempli</div>
                           }
                         </div>
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞</a>}
-                        {!lead.rapport_rdv&&<button onClick={()=>{setRapportModal(lead);setRapportForm({description:"",nb_ml:20,duree_chantier:"1j",date_relance:""}); }} style={{background:"linear-gradient(135deg,#06B6D4,#0891B2)",border:"none",borderRadius:8,color:"#FFF",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝</button>}
+                        {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener" style={{background:"#10B98120",border:"1px solid #10B98130",borderRadius:8,color:"#10B981",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📍</a>}
+                        <button onClick={()=>{setRapportModal(lead);setRapportStep(1);setRapportForm({description:lead.rapport_rdv?.description||"",nb_ml:lead.rapport_rdv?.nb_ml||20,duree_chantier:lead.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:lead.rapport_rdv?.type_logement||"",tableau:lead.rapport_rdv?.tableau||"",suite:""}); }} style={{background:lead.rapport_rdv?"#1B2D4F":"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝</button>
                       </div>
                     </div>
                   </div>
-                ))
-              }
+                );})}
             </div>
 
             {/* Relances */}
@@ -8729,7 +8852,7 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
-                {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} profile={profile} role={role}/>}
+                {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} ventes={ventes} profile={profile} role={role}/>}
 
                 
 
@@ -9083,6 +9206,54 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             return(
               <div>
+                {/* ── RDV DU JOUR — BLOC PRIORITAIRE ── */}
+                {(()=>{
+                  const todayISO=new Date().toISOString().split("T")[0];
+                  const rdvDuJour=(leads||[]).filter(l=>{
+                    if(!l.date_rdv) return false;
+                    const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");
+                    return rdv===todayISO;
+                  }).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||""));
+                  if(rdvDuJour.length===0) return null;
+                  return(
+                    <div style={{background:"linear-gradient(135deg,#1A0A3A,#0D1828)",borderRadius:14,border:"2px solid #A855F740",padding:"14px 16px",marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{fontWeight:800,fontSize:14,color:"#C084FC"}}>📅 Mes RDV du jour</div>
+                        <span style={{background:"#A855F720",color:"#A855F7",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{rdvDuJour.length} RDV</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {rdvDuJour.map(lead=>{
+                          const hasRapport=!!lead.rapport_rdv;
+                          const mapsUrl=lead.adresse?`https://maps.google.com/?q=${encodeURIComponent(lead.adresse)}`:null;
+                          return(
+                            <div key={lead.id} style={{background:"#0D1828",borderRadius:10,padding:"11px 13px",border:`1px solid ${hasRapport?"#10B98130":"#A855F730"}`}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                                <div style={{flex:1}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                                    {lead.heure_rdv&&<span style={{background:"#A855F730",color:"#C084FC",borderRadius:20,padding:"1px 8px",fontSize:12,fontWeight:800}}>{lead.heure_rdv}</span>}
+                                    <span style={{fontWeight:800,fontSize:14,color:"#F0F6FF"}}>{lead.prenom} {lead.nom}</span>
+                                    {hasRapport&&<span style={{background:"#10B98120",color:"#10B981",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>✅ Rapport</span>}
+                                  </div>
+                                  {lead.telephone&&<div style={{fontSize:11,color:"#4A6A9E"}}>📞 {lead.telephone}</div>}
+                                  {lead.adresse&&<div style={{fontSize:11,color:"#4A6A9E",marginTop:2}}>📍 {lead.adresse}</div>}
+                                </div>
+                                <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                                  {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"6px 10px",fontSize:11,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞</a>}
+                                  {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener" style={{background:"#10B98120",border:"1px solid #10B98130",borderRadius:8,color:"#10B981",padding:"6px 10px",fontSize:11,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📍</a>}
+                                  <button onClick={()=>{if(window._openRdvRapport)window._openRdvRapport(lead);else goTo("leads");}}
+                                    style={{background:hasRapport?"#1B2D4F":"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center"}}>
+                                    📝 {hasRapport?"Modifier":"Rapport"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── OBJECTIF PERSO ── */}
                 <div style={CARD}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
@@ -10157,6 +10328,12 @@ style={{background:"#0D1828",borderRadius:10,padding:"10px 14px",border:`1px sol
                   if(t==="administratif")return{n:acomptes.filter(a=>a.statut==="a_envoyer").length,c:"#F59E0B"};
                   if(t==="suivi_comm")return{n:chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length,c:"#3B82F6"};
                   if(t==="ventes")return{n:ventes.filter(v=>(Date.now()-v.id)/3600000<24).length,c:"#10B981"};
+                  if(t==="leads"){
+                    const todayISO2=new Date().toISOString().split("T")[0];
+                    const rdvSansRapport=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return rdv===todayISO2&&!l.rapport_rdv;}).length;
+                    const relancesRetard=(leads||[]).filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;const[j,m,a]=(l.date_relance||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime()<=Date.now();}).length;
+                    return{n:rdvSansRapport+relancesRetard,c:rdvSansRapport>0?"#A855F7":"#EF4444"};
+                  }
                   return{n:0,c:"#EF4444"};
                 };
 
