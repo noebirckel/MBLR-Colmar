@@ -1553,7 +1553,7 @@
           {/* ════════════════════════════════════════
               VUE PERSO (commercial ou admin vue perso)
           ════════════════════════════════════════ */}
-          {(!isAdmin||adminView==="perso")&&(
+          {(!isAdmin||adminView==="perso")&&(<>
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8,marginBottom:14}}>
             {[
               {icon:"💶",label:"CA ce mois",val:fmt(caMonth),color:colorCA,sub:objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif"},
@@ -1735,7 +1735,7 @@
             </div>
 
           </div>{/* fin grille 2 colonnes */}
-          )}
+          </>)}
         </div>
       );
     }
