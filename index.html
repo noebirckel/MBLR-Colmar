@@ -489,6 +489,8 @@
       const [filterAlerte,setFilterAlerte]=useState("tous");
       const [noteModal,setNoteModal]=useState(null);
       const [noteDraft,setNoteDraft]=useState("");
+      const [confirmPay,setConfirmPay]=useState(null);
+      const [lastPaid,setLastPaid]=useState(null); // pour annuler
 
       const filtered=impayes.filter(ch=>{
         if(search&&!(ch.client||"").toLowerCase().includes(search.toLowerCase())) return false;
@@ -519,6 +521,32 @@
 
       return(
         <div>
+          {/* Modal confirmation paiement */}
+          {confirmPay&&<div style={OVL} onClick={()=>setConfirmPay(null)}><div style={{...MBX,maxWidth:380,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <div style={{fontSize:36,marginBottom:10}}>✅</div>
+            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:16,color:"#0F172A"}}>Confirmer le paiement ?</h3>
+            <p style={{margin:"0 0 6px",fontSize:13,color:"#475569"}}><strong style={{color:"#0F172A"}}>{confirmPay.client}</strong></p>
+            <p style={{margin:"0 0 20px",fontSize:13,color:"#64748B"}}>Cette facture sera marquée comme payée.</p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setConfirmPay(null)} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button onClick={()=>{
+                const prev={...confirmPay.facture};
+                updateFacture(confirmPay.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")});
+                setLastPaid({id:confirmPay.id,client:confirmPay.client,prev});
+                setConfirmPay(null);
+                setTimeout(()=>setLastPaid(null),8000);
+              }} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:2})}>✅ Confirmer payé</button>
+            </div>
+          </div></div>}
+
+          {/* Toast annulation (8 secondes) */}
+          {lastPaid&&<div style={{position:"fixed",bottom:isMobile?80:24,left:"50%",transform:"translateX(-50%)",background:"#0F172A",color:"#FFF",borderRadius:10,padding:"12px 20px",zIndex:998,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 20px rgba(0,0,0,0.25)",whiteSpace:"nowrap"}}>
+            <span style={{fontSize:13}}>✅ {lastPaid.client} marqué payé</span>
+            <button onClick={()=>{updateFacture(lastPaid.id,{...lastPaid.prev});setLastPaid(null);}}
+              style={{background:"#3B82F6",border:"none",borderRadius:6,color:"#FFF",padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Annuler</button>
+          </div>}
+
           {/* Modal note relance */}
           {noteModal&&<div style={OVL} onClick={()=>setNoteModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
             {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
@@ -625,7 +653,7 @@
                       {canAct(role)&&<div style={{display:"flex",gap:5,marginTop:6,justifyContent:"flex-end"}}>
                         <button onClick={()=>{setNoteModal(ch);setNoteDraft(ch.facture?.note_relance||"");}}
                           style={{background:"#EFF6FF",border:"none",borderRadius:7,color:"#3B82F6",padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝 Note</button>
-                        <button onClick={()=>updateFacture(ch.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})}
+                        <button onClick={()=>setConfirmPay(ch)}
                           style={{background:"#F0FDF4",border:"none",borderRadius:7,color:"#16A34A",padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✅ Payé</button>
                       </div>}
                     </div>
@@ -8812,7 +8840,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
       const TAB_LABELS={leads:"Leads",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
-      const TAB_ICONS={leads:"📥",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
+      const TAB_ICONS={leads:"📥",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
