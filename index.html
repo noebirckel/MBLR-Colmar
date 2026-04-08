@@ -100,10 +100,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","leads","administratif","factures","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","cartes","clients","ventes","leads","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","leads","administratif","factures","impayes","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","cartes","clients","ventes","leads","impayes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","cartes","clients","ventes","leads","administratif","factures","chantier","sav","rapports"],
+      secretaire:["accueil","cartes","clients","ventes","leads","administratif","factures","impayes","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -451,6 +451,194 @@
     // ══════════════════════════════════════════
     // ONGLET FACTURES
     // ══════════════════════════════════════════
+    // ══════════════════════════════════════
+    // ONGLET IMPAYÉS
+    // ══════════════════════════════════════
+    function ImpaiesTab({isMobile, chantiers, setChantiers, ventes, profile, role, fmt}){
+      const canAct = r => ["administrateur","secretaire"].includes(r);
+
+      const parseD=d=>{
+        if(!d)return 0;
+        const[j,m,a]=(d||"").split("/");
+        return new Date(Number(a),Number(m)-1,Number(j)).getTime();
+      };
+      const todayMs=Date.now();
+      const joursDepuis=d=>{if(!d)return null;return Math.floor((todayMs-parseD(d))/(1000*60*60*24));};
+
+      const getAlerte=(jours)=>{
+        if(jours===null) return null;
+        if(jours>=21) return{label:"3 semaines",color:"#7C3AED",bg:"#FAF5FF",border:"#DDD6FE",icon:"🚨"};
+        if(jours>=14) return{label:"2 semaines",color:"#DC2626",bg:"#FEF2F2",border:"#FECACA",icon:"🔴"};
+        if(jours>=7)  return{label:"1 semaine", color:"#D97706",bg:"#FFFBEB",border:"#FDE68A",icon:"🟡"};
+        return null;
+      };
+
+      // Factures envoyées non payées
+      const impayes=chantiers.filter(ch=>{
+        const f=ch.facture;
+        if(!f||f.statut!=="facture") return false;
+        return true;
+      }).map(ch=>{
+        const jours=joursDepuis(ch.facture?.date_envoi_facture||ch.facture?.date_maj);
+        const alerte=getAlerte(jours);
+        const vente=ventes?.find(v=>v.id===ch.vente_id);
+        return{...ch,jours,alerte,vente};
+      }).sort((a,b)=>(b.jours||0)-(a.jours||0));
+
+      const [search,setSearch]=useState("");
+      const [filterAlerte,setFilterAlerte]=useState("tous");
+      const [noteModal,setNoteModal]=useState(null);
+      const [noteDraft,setNoteDraft]=useState("");
+
+      const filtered=impayes.filter(ch=>{
+        if(search&&!(ch.client||"").toLowerCase().includes(search.toLowerCase())) return false;
+        if(filterAlerte==="alerte"&&!ch.alerte) return false;
+        if(filterAlerte==="semaine1"&&(ch.jours||0)<7) return false;
+        if(filterAlerte==="semaine2"&&(ch.jours||0)<14) return false;
+        if(filterAlerte==="semaine3"&&(ch.jours||0)<21) return false;
+        return true;
+      });
+
+      const totalImpaye=impayes.reduce((s,ch)=>{
+        const v=ch.vente||ventes?.find(v=>v.id===ch.vente_id);
+        return s+Number(v?.prix_ht||0);
+      },0);
+      const nbAlerte=impayes.filter(c=>c.alerte).length;
+
+      const updateFacture=(id,patch)=>setChantiers(p=>p.map(ch=>ch.id===id?{...ch,facture:{...(ch.facture||{}), ...patch}}:ch));
+
+      const saveNote=()=>{
+        updateFacture(noteModal.id,{note_relance:noteDraft,date_derniere_relance:new Date().toLocaleDateString("fr-FR")});
+        setNoteModal(null);
+      };
+
+      const INP=(e={})=>({background:"#FFFFFF",border:"1px solid #E2E8F0",borderRadius:8,color:"#1E293B",padding:"8px 12px",fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:8,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+      const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"};
+      const MBX=isMobile?{background:"#FFFFFF",borderRadius:"20px 20px 0 0",padding:"16px 20px 32px",width:"100%",border:"1px solid #E2E8F0",maxHeight:"80vh",overflowY:"auto"}:{background:"#FFFFFF",borderRadius:16,padding:24,width:480,maxWidth:"96vw",border:"1px solid #E2E8F0",boxShadow:"0 8px 32px rgba(0,0,0,0.12)"};
+
+      return(
+        <div>
+          {/* Modal note relance */}
+          {noteModal&&<div style={OVL} onClick={()=>setNoteModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,color:"#0F172A"}}>📝 Note de relance</h3>
+            <p style={{margin:"0 0 14px",fontSize:12,color:"#64748B"}}>{noteModal.client}</p>
+            <textarea value={noteDraft} onChange={e=>setNoteDraft(e.target.value)}
+              placeholder="Appel effectué le…, promesse de paiement le…, contact : …"
+              style={{...INP({width:"100%",height:90,resize:"none",lineHeight:1.6,marginBottom:14})}}/>
+            {noteModal.facture?.date_derniere_relance&&<div style={{fontSize:11,color:"#64748B",marginBottom:12}}>
+              Dernière relance : {noteModal.facture.date_derniere_relance}
+            </div>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setNoteModal(null)} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button onClick={saveNote} style={BTN("linear-gradient(135deg,#3B82F6,#2563EB)",{flex:2})}>💾 Enregistrer</button>
+            </div>
+          </div></div>}
+
+          {/* Header */}
+          <div style={{marginBottom:16}}>
+            <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>⏳ Factures impayées</h2>
+            <p style={{margin:0,fontSize:12,color:"#64748B"}}>{impayes.length} facture{impayes.length>1?"s":""} en attente · {nbAlerte>0&&<span style={{color:"#DC2626",fontWeight:700}}>{nbAlerte} alerte{nbAlerte>1?"s":""}</span>}</p>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+            {[
+              {label:"Total impayé",val:fmt(totalImpaye),color:"#DC2626",icon:"💶",bg:"#FEF2F2"},
+              {label:"1 semaine+",val:impayes.filter(c=>(c.jours||0)>=7).length,color:"#D97706",icon:"🟡",bg:"#FFFBEB"},
+              {label:"2 semaines+",val:impayes.filter(c=>(c.jours||0)>=14).length,color:"#7C3AED",icon:"🚨",bg:"#FAF5FF"},
+            ].map(k=>(
+              <div key={k.label} style={{background:k.bg,borderRadius:10,padding:"12px",border:`1px solid ${k.color}20`}}>
+                <div style={{fontSize:18,fontWeight:800,color:k.color}}>{k.val}</div>
+                <div style={{fontSize:10,color:"#64748B",marginTop:2,fontWeight:600}}>{k.icon} {k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Alertes timeline */}
+          <div style={{background:"#FFFFFF",borderRadius:10,border:"1px solid #E2E8F0",padding:"12px 14px",marginBottom:14,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+            <div style={{fontWeight:700,fontSize:12,color:"#0F172A",marginBottom:10}}>Échéances de relance</div>
+            <div style={{display:"flex",gap:0}}>
+              {[
+                {seuil:"Envoyée",jours:"0j",color:"#3B82F6",nb:impayes.filter(c=>(c.jours||0)<7).length},
+                {seuil:"1 semaine",jours:"+7j",color:"#D97706",nb:impayes.filter(c=>(c.jours||0)>=7&&(c.jours||0)<14).length},
+                {seuil:"2 semaines",jours:"+14j",color:"#DC2626",nb:impayes.filter(c=>(c.jours||0)>=14&&(c.jours||0)<21).length},
+                {seuil:"3 semaines",jours:"+21j",color:"#7C3AED",nb:impayes.filter(c=>(c.jours||0)>=21).length},
+              ].map((e,i,arr)=>(
+                <React.Fragment key={e.seuil}>
+                  <div style={{flex:1,textAlign:"center"}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:e.color,color:"#FFF",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 4px"}}>{e.nb}</div>
+                    <div style={{fontSize:9,color:"#64748B",fontWeight:600}}>{e.seuil}</div>
+                    <div style={{fontSize:9,color:e.color,fontWeight:700}}>{e.jours}</div>
+                  </div>
+                  {i<arr.length-1&&<div style={{width:24,display:"flex",alignItems:"center",paddingBottom:20}}><div style={{width:"100%",height:2,background:"#E2E8F0"}}/></div>}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtres */}
+          <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher client…"
+              style={{...INP({flex:1,maxWidth:200,fontSize:12})}}/>
+            <select value={filterAlerte} onChange={e=>setFilterAlerte(e.target.value)} style={{...INP({fontSize:12,padding:"8px 10px"})}}>
+              <option value="tous">Toutes</option>
+              <option value="alerte">⚠️ En alerte</option>
+              <option value="semaine1">🟡 +7 jours</option>
+              <option value="semaine2">🔴 +14 jours</option>
+              <option value="semaine3">🚨 +21 jours</option>
+            </select>
+          </div>
+
+          {/* Liste */}
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"50px 0",color:"#94A3B8"}}>
+              <div style={{fontSize:40,marginBottom:8}}>✅</div>
+              <div style={{fontWeight:700,fontSize:14}}>Aucune facture impayée{filterAlerte!=="tous"?" dans ce filtre":""}</div>
+            </div>
+            :filtered.map(ch=>{
+              const vente=ch.vente||ventes?.find(v=>v.id===ch.vente_id);
+              const montant=Number(vente?.prix_ht||0);
+              const a=ch.alerte;
+              return(
+                <div key={ch.id} style={{background:"#FFFFFF",borderRadius:12,border:`1px solid ${a?a.border:"#E2E8F0"}`,padding:"14px 16px",marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>{ch.client}</span>
+                        {a&&<span style={{background:a.bg,color:a.color,border:`1px solid ${a.border}`,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>{a.icon} {a.label}</span>}
+                        {!a&&ch.jours!==null&&<span style={{background:"#EFF6FF",color:"#3B82F6",borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>📄 Récent</span>}
+                      </div>
+                      <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:11,color:"#64748B"}}>
+                        {ch.facture?.date_envoi_facture&&<span>📤 Envoyée le {ch.facture.date_envoi_facture}</span>}
+                        {ch.jours!==null&&<span style={{fontWeight:600,color:a?a.color:"#3B82F6"}}>⏱️ {ch.jours}j sans paiement</span>}
+                        {ch.technicien&&<span>🔧 {ch.technicien}</span>}
+                      </div>
+                      {ch.facture?.note_relance&&<div style={{fontSize:11,color:"#3B82F6",marginTop:4,fontStyle:"italic"}}>
+                        📝 {ch.facture.note_relance}
+                        {ch.facture.date_derniere_relance&&<span style={{color:"#94A3B8",marginLeft:4}}>({ch.facture.date_derniere_relance})</span>}
+                      </div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:16,fontWeight:800,color:a?a.color:"#0F172A"}}>{fmt(montant)}</div>
+                      {canAct(role)&&<div style={{display:"flex",gap:5,marginTop:6,justifyContent:"flex-end"}}>
+                        <button onClick={()=>{setNoteModal(ch);setNoteDraft(ch.facture?.note_relance||"");}}
+                          style={{background:"#EFF6FF",border:"none",borderRadius:7,color:"#3B82F6",padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝 Note</button>
+                        <button onClick={()=>updateFacture(ch.id,{statut:"paye",date_paiement:new Date().toLocaleDateString("fr-FR")})}
+                          style={{background:"#F0FDF4",border:"none",borderRadius:7,color:"#16A34A",padding:"5px 8px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✅ Payé</button>
+                      </div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      );
+    }
+
+
     function FacturesTab({isMobile, chantiers, setChantiers, ventes, savTickets, setTickets, profile, role, addNotif}){
       const canEdit = r => ["administrateur","secretaire"].includes(r);
       const STATUTS_FACT = {
@@ -599,7 +787,7 @@
                         {nextKey&&canEdit(role)&&(
                           <button onClick={()=>{
                             if(nextKey==="paye"){setPayModal(ch.id);}
-                            else{updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||""});}
+                            else{updateFacture(ch.id,{statut:nextKey,date_maj:new Date().toLocaleDateString("fr-FR"),maj_par:profile?.nom||"",...(nextKey==="facture"?{date_envoi_facture:new Date().toLocaleDateString("fr-FR")}:{})});}
                           }}
                             style={{width:"100%",background:`linear-gradient(135deg,${nextColor},${nextColor}CC)`,
                               border:"none",borderRadius:10,color:"#FFF",padding:"11px 16px",cursor:"pointer",
@@ -8618,12 +8806,12 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
         {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","ventes","mes_objectifs","suivi_comm"]},
-        {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures"]},
+        {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures","impayes"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={leads:"Leads",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_LABELS={leads:"Leads",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
       const TAB_ICONS={leads:"📥",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
@@ -8945,6 +9133,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
                 {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
