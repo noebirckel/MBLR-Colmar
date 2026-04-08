@@ -1207,37 +1207,63 @@
     // ══════════════════════════════════════════
     // ONGLET MES OBJECTIFS (commercial)
     // ══════════════════════════════════════════
-    function MesObjectifsTab({isMobile, ventes, objectifs, setObjectifs, profile, fmt, role}) {
+    function MesObjectifsTab({isMobile, ventes, objectifs, setObjectifs, profile, fmt, role, allProfiles}) {
       const now = new Date();
       const mM  = String(now.getMonth()+1).padStart(2,"0");
       const mY  = String(now.getFullYear());
       const mKey= `${mY}-${mM}`;
       const nom = profile?.nom||"";
 
-      // Objectif du commercial connecté ce mois
+      // ── MODE ADMIN : vue d'ensemble ──
+      const[adminView,setAdminView]=useState("ensemble"); // "ensemble" | "perso"
+      const[editCommercial,setEditCommercial]=useState(null); // {nom, key}
+      const[draftCAEdit,setDraftCAEdit]=useState("");
+      const[draftMargeEdit,setDraftMargeEdit]=useState("");
+      const[selectedComm,setSelectedComm]=useState(null); // pour détail
+
+      const isAdmin = role==="administrateur";
+
+      // Tous les commerciaux (from profiles + from ventes)
+      const commerciaux=React.useMemo(()=>{
+        const fromProfiles=(allProfiles||[]).filter(p=>p.role==="commercial").map(p=>p.nom);
+        const fromVentes=[...new Set(ventes.map(v=>v.par).filter(Boolean))];
+        return [...new Set([...fromProfiles,...fromVentes])].filter(Boolean).sort();
+      },[allProfiles,ventes]);
+
+      const coutVente=v=>((v.materiels||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0)+(v.cables||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0));
+
+      // Données par commercial pour N mois
+      const getCommData=(commNom, nbMois=6)=>Array.from({length:nbMois},(_,i)=>{
+        const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+        const mm=String(d.getMonth()+1).padStart(2,"0");
+        const yy=String(d.getFullYear());
+        const ok=`${yy}-${mm}__${commNom}`;
+        const o=objectifs[ok]||{};
+        const vs=ventes.filter(v=>(v.par||"")===commNom&&v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy);
+        const ca=vs.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+        const marge=vs.reduce((s,v)=>s+(Number(v.prix_ht||0)-coutVente(v)),0);
+        return{label:d.toLocaleDateString("fr-FR",{month:"short"}),mois:`${yy}-${mm}`,ca,marge,objCA:Number(o.ca||0),objMarge:Number(o.marge||0),nb:vs.length,isCurrent:i===0};
+      }).reverse();
+
+      const saveObjEdit=()=>{
+        if(!editCommercial) return;
+        setObjectifs(p=>({...p,[editCommercial.key]:{ca:Number(draftCAEdit)||0,marge:Number(draftMargeEdit)||0}}));
+        setEditCommercial(null);
+      };
+
+      // ── DONNÉES PERSO ──
       const oKey    = `${mKey}__${nom}`;
       const obj     = objectifs[oKey]||{};
       const objCA   = Number(obj.ca||0);
       const objMarge= Number(obj.marge||0);
-
-      // Filtre ventes par ce commercial
       const mesVentes = ventes.filter(v=>(v.par||"")=== nom);
-
-      // Ventes du mois en cours
       const ventesMonth = mesVentes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
       const caMonth = ventesMonth.reduce((s,v)=>s+Number(v.prix_ht||0),0);
-      const margeMonth = ventesMonth.reduce((s,v)=>{
-        const cout=(v.materiels||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0)
-                  +(v.cables||[]).reduce((sc,m)=>sc+Number(m.prix_unit||0)*Number(m.qty||0),0);
-        return s+(Number(v.prix_ht||0)-cout);
-      },0);
-
+      const margeMonth = ventesMonth.reduce((s,v)=>s+(Number(v.prix_ht||0)-coutVente(v)),0);
       const pctCA    = objCA>0    ? Math.min(100,Math.round((caMonth/objCA)*100))    : null;
       const pctMarge = objMarge>0 ? Math.min(100,Math.round((margeMonth/objMarge)*100)) : null;
       const colorCA    = pctCA===null?"#3B82F6"    : pctCA>=100?"#10B981" : pctCA>=70?"#3B82F6" : pctCA>=40?"#F59E0B":"#EF4444";
       const colorMarge = pctMarge===null?"#8B5CF6" : pctMarge>=100?"#10B981" : pctMarge>=70?"#3B82F6" : pctMarge>=40?"#F59E0B":"#EF4444";
-
-      // Historique 6 derniers mois
       const history6 = Array.from({length:6},(_,i)=>{
         const d=new Date(now.getFullYear(),now.getMonth()-i,1);
         const mm=String(d.getMonth()+1).padStart(2,"0");
@@ -1250,47 +1276,53 @@
         const objc=Number(o.ca||0);
         return{label:d.toLocaleDateString("fr-FR",{month:"short",year:"numeric"}),ca,objCA:objc,nb:vs.length,isCurrentMonth:i===0};
       }).reverse();
-
-      // Top 5 clients
       const clientMap={};
-      mesVentes.forEach(v=>{
-        const c=v.client||"Inconnu";
-        clientMap[c]=(clientMap[c]||0)+Number(v.prix_ht||0);
-      });
+      mesVentes.forEach(v=>{const c=v.client||"Inconnu";clientMap[c]=(clientMap[c]||0)+Number(v.prix_ht||0);});
       const topClients=Object.entries(clientMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
-
-      // Top produits vendus (par mois en cours)
       const prodMap={};
       ventesMonth.forEach(v=>{(v.materiels||[]).forEach(m=>{prodMap[m.article]=(prodMap[m.article]||0)+Number(m.qty||1);});});
       const topProd=Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).slice(0,4);
-
-      // Classement vs autres commerciaux ce mois
       const allCommerciaux=[...new Set(ventes.map(v=>v.par).filter(Boolean))];
       const ranking=allCommerciaux.map(n=>{
         const vs2=ventes.filter(v=>(v.par||"")===n&&v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
         return{nom:n,ca:vs2.reduce((s,v)=>s+Number(v.prix_ht||0),0),nb:vs2.length};
       }).sort((a,b)=>b.ca-a.ca);
       const myRank=ranking.findIndex(r=>r.nom===nom)+1;
-
       const [editObjModal,setEditObjModal]=useState(false);
       const [draftCA,setDraftCA]=useState(String(objCA||""));
       const [draftMarge,setDraftMarge]=useState(String(objMarge||""));
-
-      const saveObj=()=>{
-        setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));
-        setEditObjModal(false);
-      };
-
-      const CARD={background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:"16px 18px",marginBottom:14};
-      const INP=(e={})=>({background:"#F1F5F9",border:"1px solid #E2E8F0",borderRadius:9,color:"#1E293B",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
-
+      const saveObj=()=>{setObjectifs(p=>({...p,[oKey]:{ca:Number(draftCA)||0,marge:Number(draftMarge)||0}}));setEditObjModal(false);};
       const maxHistory=Math.max(...history6.map(h=>Math.max(h.ca,h.objCA)),1);
+
+      const CARD={background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:"16px 18px",marginBottom:14,boxShadow:"0 1px 3px rgba(0,0,0,0.04)"};
+      const INP=(e={})=>({background:"#F1F5F9",border:"1px solid #E2E8F0",borderRadius:9,color:"#1E293B",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
+      const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"};
 
       return(
         <div>
-          {/* Modal édition objectif — admin seulement */}
-          {editObjModal&&role==="administrateur"&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditObjModal(false)}>
-            <div style={{background:"#FFFFFF",borderRadius:16,padding:24,width:"100%",maxWidth:400,border:"1px solid #E2E8F0"}} onClick={e=>e.stopPropagation()}>
+          {/* ── MODAL ÉDITION OBJECTIF COMMERCIAL ── */}
+          {editCommercial&&<div style={OVL} onClick={()=>setEditCommercial(null)}>
+            <div style={{background:"#FFFFFF",borderRadius:16,padding:24,width:"100%",maxWidth:400,border:"1px solid #E2E8F0",margin:16}} onClick={e=>e.stopPropagation()}>
+              <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,color:"#0F172A"}}>🎯 Objectifs de {editCommercial.nom}</h3>
+              <p style={{margin:"0 0 18px",fontSize:12,color:"#64748B"}}>{now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</p>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>OBJECTIF CA (€ HT)</label>
+                <input type="number" value={draftCAEdit} onChange={e=>setDraftCAEdit(e.target.value)} placeholder="Ex: 15000" style={INP()}/>
+              </div>
+              <div style={{marginBottom:20}}>
+                <label style={{fontSize:10,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>OBJECTIF MARGE (€)</label>
+                <input type="number" value={draftMargeEdit} onChange={e=>setDraftMargeEdit(e.target.value)} placeholder="Ex: 3000" style={INP()}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setEditCommercial(null)} style={{flex:1,background:"#E2E8F0",border:"none",borderRadius:9,color:"#94A3B8",padding:"10px",cursor:"pointer",fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                <button onClick={saveObjEdit} style={{flex:2,background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",border:"none",borderRadius:9,color:"#FFF",padding:"10px",cursor:"pointer",fontWeight:800,fontFamily:'"Outfit",sans-serif'}}>💾 Enregistrer</button>
+              </div>
+            </div>
+          </div>}
+
+          {/* ── MODAL ÉDITION OBJECTIF PERSO ── */}
+          {editObjModal&&role==="administrateur"&&<div style={OVL} onClick={()=>setEditObjModal(false)}>
+            <div style={{background:"#FFFFFF",borderRadius:16,padding:24,width:"100%",maxWidth:400,border:"1px solid #E2E8F0",margin:16}} onClick={e=>e.stopPropagation()}>
               <h3 style={{margin:"0 0 16px",fontWeight:800,fontSize:16,color:"#0F172A"}}>🎯 Modifier mes objectifs — {now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h3>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:10,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.08em"}}>OBJECTIF CA (€ HT)</label>
@@ -1308,20 +1340,220 @@
           </div>}
 
           {/* HEADER */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
             <div>
-              <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:800,color:"#0F172A",letterSpacing:"-0.3px"}}>🎯 Mes Objectifs</h2>
+              <h2 style={{margin:"0 0 4px",fontSize:18,fontWeight:800,color:"#0F172A",letterSpacing:"-0.3px"}}>🎯 {isAdmin&&adminView==="ensemble"?"Objectifs commerciaux":"Mes Objectifs"}</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{now.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
             </div>
-            {role==="administrateur"&&(
-              <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditObjModal(true);}}
-                style={{background:"rgba(59,130,246,0.1)",border:"1px solid #E2E8F0",borderRadius:9,color:"#94A3B8",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
-                ✏️ {objCA||objMarge?"Modifier les objectifs":"Fixer les objectifs"}
-              </button>
-            )}
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {/* Toggle admin */}
+              {isAdmin&&<div style={{display:"flex",background:"#F1F5F9",borderRadius:10,padding:3,border:"1px solid #E2E8F0"}}>
+                {[["ensemble","📊 Vue d'ensemble"],["perso","👤 Ma vue"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setAdminView(v)}
+                    style={{padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',background:adminView===v?"#FFFFFF":"transparent",color:adminView===v?"#1E293B":"#94A3B8",boxShadow:adminView===v?"0 1px 3px rgba(0,0,0,0.08)":"none",transition:"all 0.15s"}}>
+                    {l}
+                  </button>
+                ))}
+              </div>}
+              {((!isAdmin)||(isAdmin&&adminView==="perso"))&&role==="administrateur"&&(
+                <button onClick={()=>{setDraftCA(String(objCA||""));setDraftMarge(String(objMarge||""));setEditObjModal(true);}}
+                  style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:9,color:"#2563EB",padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+                  ✏️ {objCA||objMarge?"Modifier":"Fixer objectifs"}
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* KPIs MOIS */}
+          {/* ════════════════════════════════════════
+              VUE D'ENSEMBLE ADMIN
+          ════════════════════════════════════════ */}
+          {isAdmin&&adminView==="ensemble"&&(()=>{
+            // KPIs globaux mois en cours
+            const totalCA=commerciaux.reduce((s,n)=>{
+              const vs=ventes.filter(v=>(v.par||"")===n&&v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY);
+              return s+vs.reduce((ss,v)=>ss+Number(v.prix_ht||0),0);
+            },0);
+            const totalObj=commerciaux.reduce((s,n)=>{
+              return s+Number((objectifs[`${mKey}__${n}`]||{}).ca||0);
+            },0);
+            const totalVentes=ventes.filter(v=>v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY).length;
+            const nbAvecObj=commerciaux.filter(n=>(objectifs[`${mKey}__${n}`]||{}).ca>0).length;
+
+            return(
+              <div>
+                {/* KPIs globaux */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+                  {[
+                    {icon:"💶",label:"CA total équipe",val:fmt(totalCA),color:"#10B981",sub:totalObj>0?`obj. ${fmt(totalObj)}`:"Objectifs à fixer"},
+                    {icon:"📈",label:"Progression globale",val:totalObj>0?Math.min(100,Math.round((totalCA/totalObj)*100))+"%":"—",color:"#3B82F6",sub:`${nbAvecObj}/${commerciaux.length} objectifs fixés`},
+                    {icon:"🧾",label:"Ventes ce mois",val:totalVentes,color:"#A855F7",sub:`${ventes.length} au total`},
+                    {icon:"👥",label:"Commerciaux actifs",val:commerciaux.length,color:"#F59E0B",sub:`ce mois : ${commerciaux.filter(n=>ventes.some(v=>(v.par||"")===n&&v.date&&v.date.split("/")[1]===mM&&v.date.split("/")[2]===mY)).length}`},
+                  ].map(k=>(
+                    <div key={k.label} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 12px",border:`1px solid ${k.color}20`,textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                      <div style={{fontSize:20,marginBottom:4}}>{k.icon}</div>
+                      <div style={{fontSize:isMobile?15:19,fontWeight:800,color:k.color}}>{k.val}</div>
+                      <div style={{fontSize:10,color:"#64748B",marginTop:3,fontWeight:600}}>{k.label}</div>
+                      <div style={{fontSize:10,color:"#CBD5E1",marginTop:1}}>{k.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grille commerciaux */}
+                {commerciaux.length===0
+                  ?<div style={{textAlign:"center",padding:"50px",color:"#94A3B8"}}>Aucun commercial enregistré</div>
+                  :<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":commerciaux.length===1?"1fr":"1fr 1fr",gap:12}}>
+                    {commerciaux.map(commNom=>{
+                      const hist=getCommData(commNom,6);
+                      const curMonth=hist[hist.length-1];
+                      const objCom=Number((objectifs[`${mKey}__${commNom}`]||{}).ca||0);
+                      const objMargeCom=Number((objectifs[`${mKey}__${commNom}`]||{}).marge||0);
+                      const pct=objCom>0?Math.min(100,Math.round((curMonth.ca/objCom)*100)):null;
+                      const color=pct===null?"#3B82F6":pct>=100?"#10B981":pct>=70?"#3B82F6":pct>=40?"#F59E0B":"#EF4444";
+                      const maxH=Math.max(...hist.map(h=>Math.max(h.ca,h.objCA)),1);
+                      const initials=commNom.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
+                      const avatarColors=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444","#06B6D4"];
+                      const avatarColor=avatarColors[commNom.charCodeAt(0)%avatarColors.length];
+                      const nbVentesTotal=ventes.filter(v=>(v.par||"")===commNom).length;
+                      const isExpanded=selectedComm===commNom;
+
+                      return(
+                        <div key={commNom} style={{background:"#FFFFFF",borderRadius:14,border:`1px solid ${isExpanded?"#BFDBFE":"#E2E8F0"}`,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",transition:"all 0.15s"}}>
+                          {/* Header carte */}
+                          <div style={{padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12}} onClick={()=>setSelectedComm(isExpanded?null:commNom)}>
+                            {/* Avatar */}
+                            <div style={{width:40,height:40,borderRadius:"50%",background:avatarColor+"25",border:`2px solid ${avatarColor}50`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:avatarColor,flexShrink:0}}>
+                              {initials}
+                            </div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                                <span style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>{commNom}</span>
+                                {pct!==null&&<span style={{background:color+"20",color,borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:700}}>{pct}%</span>}
+                                {pct===null&&<span style={{background:"#F1F5F9",color:"#94A3B8",borderRadius:20,padding:"1px 8px",fontSize:10}}>Pas d'objectif</span>}
+                              </div>
+                              <div style={{display:"flex",gap:8,fontSize:11,color:"#64748B"}}>
+                                <span style={{fontWeight:600,color}}>{fmt(curMonth.ca)}</span>
+                                {objCom>0&&<span>/ {fmt(objCom)}</span>}
+                                <span>· {curMonth.nb} vente{curMonth.nb>1?"s":""} ce mois</span>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:6,flexShrink:0}}>
+                              <button onClick={e=>{e.stopPropagation();const k=`${mKey}__${commNom}`;const cur=objectifs[k]||{};setDraftCAEdit(String(cur.ca||""));setDraftMargeEdit(String(cur.marge||""));setEditCommercial({nom:commNom,key:k});}}
+                                style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:7,color:"#2563EB",padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✏️</button>
+                              <span style={{color:"#94A3B8",fontSize:14,transition:"transform 0.2s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                            </div>
+                          </div>
+
+                          {/* Barre de progression */}
+                          <div style={{padding:"0 16px 10px"}}>
+                            <div style={{background:"#F1F5F9",borderRadius:4,height:6,overflow:"hidden"}}>
+                              <div style={{height:"100%",borderRadius:4,width:(pct||0)+"%",background:pct>=100?"linear-gradient(90deg,#10B981,#059669)":"linear-gradient(90deg,"+color+","+color+"AA)",transition:"width 0.6s"}}/>
+                            </div>
+                          </div>
+
+                          {/* Graphe 6 mois (toujours visible) */}
+                          <div style={{padding:"0 16px 14px"}}>
+                            <div style={{display:"flex",alignItems:"flex-end",gap:4,height:60}}>
+                              {hist.map((h,i)=>{
+                                const pBar=maxH>0?Math.round((h.ca/maxH)*90):0;
+                                const pObj=maxH>0&&h.objCA>0?Math.round((h.objCA/maxH)*90):0;
+                                return(
+                                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",position:"relative"}}>
+                                    <div style={{width:"100%",height:Math.max(pBar,2)+"%",background:h.isCurrent?color:"#E2E8F0",borderRadius:"3px 3px 0 0",minHeight:3,transition:"height 0.4s"}}/>
+                                    {pObj>0&&<div style={{position:"absolute",bottom:pObj+"%",left:0,right:0,height:"1.5px",background:"#F59E0B",borderRadius:1}}/>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div style={{display:"flex",gap:4,marginTop:4}}>
+                              {hist.map((h,i)=>(
+                                <div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:h.isCurrent?color:"#CBD5E1",fontWeight:h.isCurrent?700:400}}>{h.label}</div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Détail déplié */}
+                          {isExpanded&&<div style={{borderTop:"1px solid #F1F5F9",padding:"14px 16px",background:"#FAFBFC"}}>
+                            {/* Historique tableau */}
+                            <div style={{marginBottom:12}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Historique 6 mois</div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:2,fontSize:10}}>
+                                <div style={{color:"#94A3B8",fontWeight:700,padding:"4px 6px"}}>Mois</div>
+                                <div style={{color:"#94A3B8",fontWeight:700,padding:"4px 6px",textAlign:"right"}}>CA</div>
+                                <div style={{color:"#94A3B8",fontWeight:700,padding:"4px 6px",textAlign:"right"}}>Objectif</div>
+                                <div style={{color:"#94A3B8",fontWeight:700,padding:"4px 6px",textAlign:"right"}}>Taux</div>
+                                {hist.map((h,i)=>{
+                                  const tx=h.objCA>0?Math.round((h.ca/h.objCA)*100):null;
+                                  const tc=tx===null?"#94A3B8":tx>=100?"#10B981":tx>=70?"#3B82F6":tx>=40?"#F59E0B":"#EF4444";
+                                  return(
+                                    <React.Fragment key={i}>
+                                      <div style={{padding:"5px 6px",background:h.isCurrent?"#EFF6FF":"transparent",borderRadius:6,color:h.isCurrent?"#2563EB":"#475569",fontWeight:h.isCurrent?700:400}}>{h.label}</div>
+                                      <div style={{padding:"5px 6px",textAlign:"right",background:h.isCurrent?"#EFF6FF":"transparent",borderRadius:6,color:h.isCurrent?"#2563EB":"#1E293B",fontWeight:600}}>{h.ca>0?fmt(h.ca):"—"}</div>
+                                      <div style={{padding:"5px 6px",textAlign:"right",background:h.isCurrent?"#EFF6FF":"transparent",borderRadius:6,color:"#94A3B8"}}>{h.objCA>0?fmt(h.objCA):"—"}</div>
+                                      <div style={{padding:"5px 6px",textAlign:"right",background:h.isCurrent?"#EFF6FF":"transparent",borderRadius:6,color:tc,fontWeight:700}}>{tx!==null?tx+"%":"—"}</div>
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {/* Objectif marge */}
+                            {objMargeCom>0&&(()=>{
+                              const margeCur=hist[hist.length-1]?.marge||0;
+                              const pctM=Math.min(100,Math.round((margeCur/objMargeCom)*100));
+                              const cM=pctM>=100?"#10B981":pctM>=70?"#3B82F6":pctM>=40?"#F59E0B":"#EF4444";
+                              return(
+                                <div>
+                                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#64748B",marginBottom:4}}>
+                                    <span>📈 Marge ce mois</span>
+                                    <span style={{fontWeight:700,color:cM}}>{pctM}% — {fmt(margeCur)} / {fmt(objMargeCom)}</span>
+                                  </div>
+                                  <div style={{background:"#F1F5F9",borderRadius:4,height:5,overflow:"hidden"}}>
+                                    <div style={{height:"100%",borderRadius:4,width:pctM+"%",background:cM}}/>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {/* Stats ventes */}
+                            <div style={{display:"flex",gap:8,marginTop:10}}>
+                              <div style={{flex:1,background:"#F8FAFC",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                                <div style={{fontSize:15,fontWeight:800,color:"#0F172A"}}>{curMonth.nb}</div>
+                                <div style={{fontSize:9,color:"#64748B"}}>ventes ce mois</div>
+                              </div>
+                              <div style={{flex:1,background:"#F8FAFC",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                                <div style={{fontSize:15,fontWeight:800,color:"#0F172A"}}>{nbVentesTotal}</div>
+                                <div style={{fontSize:9,color:"#64748B"}}>total historique</div>
+                              </div>
+                              <div style={{flex:1,background:"#F8FAFC",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                                <div style={{fontSize:15,fontWeight:800,color:"#0F172A"}}>{fmt(nbVentesTotal>0?ventes.filter(v=>(v.par||"")===commNom).reduce((s,v)=>s+Number(v.prix_ht||0),0)/nbVentesTotal:0)}</div>
+                                <div style={{fontSize:9,color:"#64748B"}}>panier moyen</div>
+                              </div>
+                            </div>
+                            {/* Bouton fixer objectifs mois suivant */}
+                            <button onClick={()=>{
+                              const nextD=new Date(now.getFullYear(),now.getMonth()+1,1);
+                              const nm=String(nextD.getMonth()+1).padStart(2,"0");
+                              const ny=String(nextD.getFullYear());
+                              const nk=`${ny}-${nm}__${commNom}`;
+                              const cur=objectifs[nk]||{};
+                              setDraftCAEdit(String(cur.ca||""));
+                              setDraftMargeEdit(String(cur.marge||""));
+                              setEditCommercial({nom:`${commNom} — ${nextD.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}`,key:nk});
+                            }} style={{width:"100%",marginTop:10,background:"transparent",border:"1px solid #E2E8F0",borderRadius:8,color:"#64748B",padding:"7px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+                              📅 Fixer objectif mois prochain
+                            </button>
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                }
+              </div>
+            );
+          })()}
+
+          {/* ════════════════════════════════════════
+              VUE PERSO (commercial ou admin vue perso)
+          ════════════════════════════════════════ */}
+          {(!isAdmin||adminView==="perso")&&(
           <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8,marginBottom:14}}>
             {[
               {icon:"💶",label:"CA ce mois",val:fmt(caMonth),color:colorCA,sub:objCA>0?`/ ${fmt(objCA)}`:"Pas d'objectif"},
@@ -1503,6 +1735,7 @@
             </div>
 
           </div>{/* fin grille 2 colonnes */}
+          )}
         </div>
       );
     }
@@ -9164,7 +9397,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
-                {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role}/>}
+                {view==="mes_objectifs"&&<MesObjectifsTab isMobile={isMobile} ventes={ventes} objectifs={objectifs} setObjectifs={SOBJ} profile={profile} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="suivi_comm"&&<SuiviCommercialTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} rapports={rapports} ventes={ventes} profile={profile} role={role}/>}
 
                 
