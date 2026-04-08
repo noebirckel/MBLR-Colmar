@@ -8888,7 +8888,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                     else if(t==="suivi_comm"){_b=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.suivi_comm?.etat||"a_appeler")==="a_appeler").length;_bc="#3B82F6";}
                     return(
                       <button key={t} onClick={()=>goTo(t)}
-                        style={{padding:"11px 14px",borderBottom:isAct?"2px solid #2563EB":"2px solid transparent",background:"transparent",border:"none",borderBottom:isAct?"2px solid #2563EB":"2px solid transparent",whiteSpace:"nowrap",color:isAct?"#2563EB":"#64748B",cursor:"pointer",fontSize:12,fontWeight:isAct?700:500,flexShrink:0,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:5,position:"relative"}}>
+                        style={{padding:"11px 14px",background:"transparent",border:"none",borderBottom:isAct?"2px solid #2563EB":"2px solid transparent",whiteSpace:"nowrap",color:isAct?"#2563EB":"#64748B",cursor:"pointer",fontSize:12,fontWeight:isAct?700:500,flexShrink:0,fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:5,position:"relative"}}>
                         {TAB_ICONS[t]} {TAB_LABELS[t]}
                         {_b>0&&<span style={{background:_bc,color:"#FFF",borderRadius:10,fontSize:9,fontWeight:800,padding:"1px 5px"}}>{_b}</span>}
                       </button>
