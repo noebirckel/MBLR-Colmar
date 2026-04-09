@@ -6033,12 +6033,23 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const data=await res.json();
           if(!data.ok){setReonicError(data.error||"Erreur Reonic");setReonicLoading(false);return;}
           const results=data.data?.results||[];
-          // Filtrer ceux déjà importés (par reonic_id)
+          // Filtrer ceux déjà importés
           const existingIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
           const newOffers=results.filter(o=>!existingIds.has(o.id));
-          setReonicOffers(newOffers);
-          // Pré-sélectionner tout
-          const sel={};newOffers.forEach(o=>{sel[o.id]=true;});
+          // Charger les contacts en parallèle pour afficher les vrais noms
+          const enriched=await Promise.all(newOffers.map(async(offer)=>{
+            let contact=null;
+            if(offer.customer?.id){
+              try{
+                const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contact",apiKey:reonicApiKey,clientId:reonicClientId,payload:{contactId:offer.customer.id}})});
+                const cd=await cr.json();
+                if(cd.ok)contact=cd.data;
+              }catch(e){}
+            }
+            return{...offer,_contact:contact};
+          }));
+          setReonicOffers(enriched);
+          const sel={};enriched.forEach(o=>{sel[o.id]=true;});
           setReonicSelected(sel);
         }catch(e){setReonicError("Erreur réseau : "+e.message);}
         setReonicLoading(false);
@@ -6049,23 +6060,13 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(toImport.length===0)return;
         setReonicImporting(true);
         const now=new Date().toLocaleDateString("fr-FR");
-        const newLeads=[];
-        for(const offer of toImport){
-          // Récupérer le contact pour avoir nom/prénom/téléphone
-          let contact=null;
-          if(offer.customer?.id){
-            try{
-              const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contact",apiKey:reonicApiKey,clientId:reonicClientId,payload:{contactId:offer.customer.id}})});
-              const cd=await cr.json();
-              if(cd.ok)contact=cd.data;
-            }catch(e){}
-          }
+        const newLeads=toImport.map(offer=>{
+          const contact=offer._contact;
           const prenom=contact?.firstName||"";
-          const nom=contact?.lastName||"Inconnu";
+          const nom=contact?.lastName||"";
           const adresse=[contact?.street,contact?.number,contact?.postcode,contact?.city].filter(Boolean).join(" ");
           const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
-          const prix=offer.totalPlannedPrice||0;
-          newLeads.push({
+          return{
             id:Date.now()+Math.random(),
             reonic_id:offer.id,
             prenom,nom,
@@ -6077,13 +6078,12 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             canal:"Site web",
             statut:"a_appeler",
             date_creation:now,
-            prix_reonic:prix,
+            prix_reonic:offer.totalPlannedPrice||0,
             reonic_status:offer.status||"",
-            nb_appels:0,
-            historique_appels:[],
+            nb_appels:0,historique_appels:[],
             date_rdv:"",heure_rdv:"",rapport_rdv:null,
-          });
-        }
+          };
+        });
         setLeads(prev=>[...newLeads,...prev]);
         setReonicImporting(false);
         setReonicImportDone(newLeads.length);
@@ -6288,24 +6288,29 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
                     {reonicOffers.map(offer=>{
                       const sel=reonicSelected[offer.id]||false;
+                      const contact=offer._contact;
+                      const prenom=contact?.firstName||"";
+                      const nom=contact?.lastName||"";
+                      const nomComplet=`${prenom} ${nom}`.trim()||"Client inconnu";
+                      const tel=contact?.telephone||contact?.mobilePhone||"";
+                      const ville=contact?.city||"";
                       const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
                       const prix=offer.totalPlannedPrice;
                       const date=offer.offerCreatedAt?new Date(offer.offerCreatedAt).toLocaleDateString("fr-FR"):"";
                       return(
                         <div key={offer.id} onClick={()=>setReonicSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
                           style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,border:`1px solid ${sel?"#BFDBFE":"#E2E8F0"}`,background:sel?"#EFF6FF":"#FAFAFA",cursor:"pointer",transition:"all 0.1s"}}>
-                          {/* Checkbox */}
                           <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel?"#3B82F6":"#CBD5E1"}`,background:sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                             {sel&&<span style={{color:"#FFF",fontSize:12,fontWeight:800}}>✓</span>}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                              <div style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>
-                                {offer.customer?.id?"Contact #"+offer.customer.id.slice(0,6):"Client inconnu"}
-                              </div>
-                              {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)}</span>}
+                              <div style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>{nomComplet}</div>
+                              {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)} €</span>}
                             </div>
                             <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap",fontSize:11,color:"#64748B"}}>
+                              {tel&&<span>📞 {tel}</span>}
+                              {ville&&<span>📍 {ville}</span>}
                               {date&&<span>📅 {date}</span>}
                               {wallbox&&<span>🔌 {wallbox}</span>}
                               {offer.status&&<span style={{background:"#F1F5F9",borderRadius:4,padding:"1px 6px"}}>{offer.status}</span>}
