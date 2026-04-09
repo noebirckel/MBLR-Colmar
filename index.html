@@ -6273,7 +6273,23 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
           };
         });
+        // Mise à jour state
         setLeads(prev=>[...newLeads,...prev]);
+        // Sauvegarde directe Supabase (sans passer par saveDB)
+        const leadsToSave=newLeads.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
+        sb.from("leads").upsert(leadsToSave).then(({error})=>{
+          if(error){
+            console.error("Import Reonic — erreur Supabase:",error.message,error.details);
+            // Fallback : forcer saveDB
+            setLeads(prev=>{
+              const all=[...newLeads,...prev.filter(p=>!newLeads.find(n=>n.id===p.id))];
+              if(typeof saveDB==="function")saveDB(null,null,null,null,null,null,null,null,null,all);
+              return all;
+            });
+          }else{
+            console.log("Import Reonic — sauvegardé :",newLeads.length,"leads");
+          }
+        });
         setReonicImporting(false);setReonicImportDone(newLeads.length);
         setReonicOffers(prev=>prev.filter(o=>!reonicSelected[o.id]));
         setReonicSelected({});
