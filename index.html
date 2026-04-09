@@ -6249,7 +6249,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(toImport.length===0)return;
         setReonicImporting(true);
         const now=new Date().toLocaleDateString("fr-FR");
-        const newLeads=toImport.map(offer=>{
+        const base=Date.now();
+        const newLeads=toImport.map((offer,idx)=>{
           const contact=offer._contact;
           const prenom=contact?.firstName||"";
           const nom=contact?.lastName||"";
@@ -6257,11 +6258,11 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
           const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(c=>c.name).join(", ");
           const produits=[wallbox,solar].filter(Boolean).join(" · ");
-          const type=getReonicType(offer);
-          const ti=TYPE_INFO[type];
+          const type=getReonicTypeStatic(offer);
+          const ti=RTYPE_INFO[type]||RTYPE_INFO.lead;
           const nomClient=`${prenom} ${nom}`.trim()||contact?.email||"Client Reonic";
           return{
-            id:Date.now()+Math.random(),
+            id:base+idx,
             reonic_id:offer.id,prenom,nom,
             client:nomClient,email:contact?.email||"",
             telephone:contact?.telephone||contact?.mobilePhone||"",
@@ -6272,7 +6273,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
           };
         });
-        setLeads(prev=>{const n=[...newLeads,...prev];return n;});
+        setLeads(prev=>[...newLeads,...prev]);
         setReonicImporting(false);setReonicImportDone(newLeads.length);
         setReonicOffers(prev=>prev.filter(o=>!reonicSelected[o.id]));
         setReonicSelected({});
