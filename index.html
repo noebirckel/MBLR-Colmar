@@ -5973,7 +5973,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       perdu:        {label:"Perdu",        color:"#64748B", icon:"❌"},
     };
 
-    function LeadsTab({isMobile, leads, setLeads, ventes, setVentes, profile, fmt, role, installConfigs, marqueConfigs, stock, onLeadConverted, onDeleteLead}) {
+    function LeadsTab({isMobile, leads, setLeads, ventes, setVentes, profile, fmt, role, installConfigs, marqueConfigs, stock, onLeadConverted, onDeleteLead, reonicApiKey, reonicClientId, supabaseUrl, supabaseKey}) {
       const canEdit=r=>["administrateur","commercial","secretaire"].includes(r);
       const INP=(e={})=>({background:"#F1F5F9",border:"1px solid #E2E8F0",borderRadius:10,color:"#1E293B",padding:"10px 12px",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",fontFamily:'"Outfit",sans-serif',...e});
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"10px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',transition:"all 0.15s",...e});
@@ -6013,6 +6013,84 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[editForm,setEditForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
       const[rdvForm,setRdvForm]=useState({date_rdv:"",heure_rdv:""});
       const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
+
+      // ── REONIC IMPORT ──
+      const[reonicModal,setReonicModal]=useState(false);
+      const[reonicOffers,setReonicOffers]=useState([]);
+      const[reonicLoading,setReonicLoading]=useState(false);
+      const[reonicError,setReonicError]=useState(null);
+      const[reonicSelected,setReonicSelected]=useState({}); // {offerId: true/false}
+      const[reonicImporting,setReonicImporting]=useState(false);
+      const[reonicImportDone,setReonicImportDone]=useState(null); // nombre importés
+
+      const EDGE_URL=supabaseUrl?`${supabaseUrl}/functions/v1/reonic-proxy`:"";
+
+      const fetchReonicOffers=async()=>{
+        if(!reonicApiKey||!reonicClientId){setReonicError("Clé API ou Client ID Reonic non configuré dans Paramètres.");return;}
+        setReonicLoading(true);setReonicError(null);
+        try{
+          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
+          const data=await res.json();
+          if(!data.ok){setReonicError(data.error||"Erreur Reonic");setReonicLoading(false);return;}
+          const results=data.data?.results||[];
+          // Filtrer ceux déjà importés (par reonic_id)
+          const existingIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          const newOffers=results.filter(o=>!existingIds.has(o.id));
+          setReonicOffers(newOffers);
+          // Pré-sélectionner tout
+          const sel={};newOffers.forEach(o=>{sel[o.id]=true;});
+          setReonicSelected(sel);
+        }catch(e){setReonicError("Erreur réseau : "+e.message);}
+        setReonicLoading(false);
+      };
+
+      const importSelected=async()=>{
+        const toImport=reonicOffers.filter(o=>reonicSelected[o.id]);
+        if(toImport.length===0)return;
+        setReonicImporting(true);
+        const now=new Date().toLocaleDateString("fr-FR");
+        const newLeads=[];
+        for(const offer of toImport){
+          // Récupérer le contact pour avoir nom/prénom/téléphone
+          let contact=null;
+          if(offer.customer?.id){
+            try{
+              const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contact",apiKey:reonicApiKey,clientId:reonicClientId,payload:{contactId:offer.customer.id}})});
+              const cd=await cr.json();
+              if(cd.ok)contact=cd.data;
+            }catch(e){}
+          }
+          const prenom=contact?.firstName||"";
+          const nom=contact?.lastName||"Inconnu";
+          const adresse=[contact?.street,contact?.number,contact?.postcode,contact?.city].filter(Boolean).join(" ");
+          const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
+          const prix=offer.totalPlannedPrice||0;
+          newLeads.push({
+            id:Date.now()+Math.random(),
+            reonic_id:offer.id,
+            prenom,nom,
+            client:`${prenom} ${nom}`.trim()||"Client Reonic",
+            email:contact?.email||"",
+            telephone:contact?.telephone||contact?.mobilePhone||"",
+            adresse,
+            message:wallbox?`Devis Reonic : ${wallbox}`:"Lead Reonic",
+            canal:"Site web",
+            statut:"a_appeler",
+            date_creation:now,
+            prix_reonic:prix,
+            reonic_status:offer.status||"",
+            nb_appels:0,
+            historique_appels:[],
+            date_rdv:"",heure_rdv:"",rapport_rdv:null,
+          });
+        }
+        setLeads(prev=>[...newLeads,...prev]);
+        setReonicImporting(false);
+        setReonicImportDone(newLeads.length);
+        setReonicOffers(prev=>prev.filter(o=>!reonicSelected[o.id]));
+        setReonicSelected({});
+        setTimeout(()=>{setReonicModal(false);setReonicImportDone(null);},2500);
+      };
 
       const today=new Date().toLocaleDateString("fr-FR");
       const todayISO=new Date().toISOString().split("T")[0];
@@ -6157,6 +6235,99 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       return(
         <div>
           {/* ── MODALS ── */}
+
+          {/* ── MODAL IMPORT REONIC ── */}
+          {reonicModal&&<div style={OVL} onClick={()=>!reonicImporting&&setReonicModal(false)}><div style={{...MBX,width:580,maxWidth:"96vw"}} onClick={e=>e.stopPropagation()}>
+            <Handle/>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+              <div style={{width:36,height:36,borderRadius:8,background:"#F0FDF4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⚡</div>
+              <div>
+                <h3 style={{margin:0,fontWeight:800,fontSize:16,color:"#0F172A"}}>Importer depuis Reonic</h3>
+                <p style={{margin:0,fontSize:11,color:"#64748B"}}>Sélectionnez les leads à importer</p>
+              </div>
+              {!reonicImporting&&<button onClick={()=>setReonicModal(false)} style={{marginLeft:"auto",background:"transparent",border:"none",fontSize:20,cursor:"pointer",color:"#94A3B8",padding:4}}>✕</button>}
+            </div>
+
+            {/* Résultat import */}
+            {reonicImportDone!==null&&<div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"12px 16px",textAlign:"center",marginBottom:12}}>
+              <div style={{fontSize:20,marginBottom:4}}>✅</div>
+              <div style={{fontWeight:700,color:"#16A34A"}}>{reonicImportDone} lead{reonicImportDone>1?"s":""} importé{reonicImportDone>1?"s":""} avec succès !</div>
+            </div>}
+
+            {/* Loading */}
+            {reonicLoading&&<div style={{textAlign:"center",padding:"32px 0"}}>
+              <div style={{fontSize:32,marginBottom:10,animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</div>
+              <div style={{fontSize:13,color:"#64748B"}}>Récupération des leads Reonic…</div>
+            </div>}
+
+            {/* Erreur */}
+            {reonicError&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"12px 16px",marginBottom:12,fontSize:13,color:"#DC2626"}}>
+              ❌ {reonicError}
+              <button onClick={fetchReonicOffers} style={{marginLeft:8,background:"transparent",border:"1px solid #FECACA",borderRadius:6,color:"#DC2626",padding:"3px 8px",cursor:"pointer",fontSize:11}}>Réessayer</button>
+            </div>}
+
+            {/* Liste des offres */}
+            {!reonicLoading&&!reonicError&&reonicImportDone===null&&<>
+              {reonicOffers.length===0
+                ?<div style={{textAlign:"center",padding:"32px 0",color:"#94A3B8"}}>
+                  <div style={{fontSize:32,marginBottom:8}}>✅</div>
+                  <div style={{fontWeight:700,fontSize:14}}>Aucun nouveau lead à importer</div>
+                  <div style={{fontSize:12,marginTop:4}}>Tous les leads Reonic sont déjà dans Ma Borne LR</div>
+                </div>
+                :<>
+                  {/* Sélect all */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"8px 12px",background:"#F8FAFC",borderRadius:8}}>
+                    <span style={{fontSize:12,color:"#475569",fontWeight:600}}>{reonicOffers.length} lead{reonicOffers.length>1?"s":""} disponible{reonicOffers.length>1?"s":""}</span>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>{const s={};reonicOffers.forEach(o=>{s[o.id]=true;});setReonicSelected(s);}} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#3B82F6",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>Tout sélectionner</button>
+                      <button onClick={()=>setReonicSelected({})} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Tout désélectionner</button>
+                    </div>
+                  </div>
+
+                  {/* Liste scrollable */}
+                  <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+                    {reonicOffers.map(offer=>{
+                      const sel=reonicSelected[offer.id]||false;
+                      const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
+                      const prix=offer.totalPlannedPrice;
+                      const date=offer.offerCreatedAt?new Date(offer.offerCreatedAt).toLocaleDateString("fr-FR"):"";
+                      return(
+                        <div key={offer.id} onClick={()=>setReonicSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
+                          style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,border:`1px solid ${sel?"#BFDBFE":"#E2E8F0"}`,background:sel?"#EFF6FF":"#FAFAFA",cursor:"pointer",transition:"all 0.1s"}}>
+                          {/* Checkbox */}
+                          <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel?"#3B82F6":"#CBD5E1"}`,background:sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                            {sel&&<span style={{color:"#FFF",fontSize:12,fontWeight:800}}>✓</span>}
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                              <div style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>
+                                {offer.customer?.id?"Contact #"+offer.customer.id.slice(0,6):"Client inconnu"}
+                              </div>
+                              {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)}</span>}
+                            </div>
+                            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap",fontSize:11,color:"#64748B"}}>
+                              {date&&<span>📅 {date}</span>}
+                              {wallbox&&<span>🔌 {wallbox}</span>}
+                              {offer.status&&<span style={{background:"#F1F5F9",borderRadius:4,padding:"1px 6px"}}>{offer.status}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid #F1F5F9"}}>
+                    <button onClick={()=>setReonicModal(false)} style={{flex:1,background:"#F1F5F9",border:"none",borderRadius:10,color:"#64748B",padding:"10px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>Annuler</button>
+                    <button onClick={importSelected} disabled={reonicImporting||Object.values(reonicSelected).filter(Boolean).length===0}
+                      style={{flex:2,background:Object.values(reonicSelected).filter(Boolean).length===0?"#F1F5F9":"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,color:Object.values(reonicSelected).filter(Boolean).length===0?"#94A3B8":"#FFF",padding:"10px",cursor:"pointer",fontWeight:800,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
+                      {reonicImporting?"⏳ Import en cours…":`⚡ Importer ${Object.values(reonicSelected).filter(Boolean).length} lead${Object.values(reonicSelected).filter(Boolean).length>1?"s":""}`}
+                    </button>
+                  </div>
+                </>
+              }
+            </>}
+          </div></div>}
 
           {/* ── MODAL NOUVEAU RDV ── */}
           {newRdvModal&&<div style={OVL} onClick={()=>setNewRdvModal(false)}><div style={MBX} onClick={e=>e.stopPropagation()}>
@@ -6592,6 +6763,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               ))}
               {canEdit(role)&&<button onClick={()=>{setNewRdvModal(true);setNewRdvMode("nouveau");setNewRdvForm({prenom:"",nom:"",telephone:"",email:"",adresse:"",date_rdv:"",heure_rdv:"",canal:""});setNewRdvSearch("");setNewRdvLead(null);setNewRdvDate({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{padding:"8px 13px",fontSize:13})}>📅 RDV</button>}
               {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"8px 13px",fontSize:13})}>➕ Nouveau</button>}
+              {canEdit(role)&&reonicApiKey&&<button onClick={()=>{setReonicModal(true);fetchReonicOffers();}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{padding:"8px 13px",fontSize:13})}>⚡ Reonic</button>}
             </div>
           </div>
 
@@ -9438,7 +9610,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
 
 
-                {(view==="leads")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock}
+                {(view==="leads")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} supabaseKey={SUPABASE_KEY}
                   onDeleteLead={async(id)=>{
                     await sb.from("leads").delete().eq("id",id);
                     setLeads(prev=>{
