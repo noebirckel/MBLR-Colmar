@@ -100,10 +100,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","leads","administratif","factures","impayes","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","cartes","clients","ventes","leads","impayes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","leads","offres","administratif","factures","impayes","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","cartes","clients","ventes","leads","offres","impayes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","cartes","clients","ventes","leads","administratif","factures","impayes","chantier","sav","rapports"],
+      secretaire:["accueil","cartes","clients","ventes","leads","offres","administratif","factures","impayes","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -454,6 +454,161 @@
     // ══════════════════════════════════════
     // ONGLET IMPAYÉS
     // ══════════════════════════════════════
+    // ══════════════════════════════════════
+    // ONGLET OFFRES
+    // ══════════════════════════════════════
+    function OffresTab({isMobile, leads, setLeads, profile, fmt, role, onLeadConverted}){
+      const canEdit=r=>["administrateur","commercial","secretaire"].includes(r);
+      const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"};
+      const MBX=isMobile?{background:"#FFFFFF",borderRadius:"20px 20px 0 0",padding:"16px 20px 32px",width:"100%",maxHeight:"80vh",overflowY:"auto"}:{background:"#FFFFFF",borderRadius:16,padding:24,width:460,maxWidth:"96vw"};
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+
+      const offres=useMemo(()=>leads.filter(l=>l.statut==="devis_ligne").sort((a,b)=>{
+        const da=a.date_creation?a.date_creation.split("/").reverse().join("-"):"";
+        const db=b.date_creation?b.date_creation.split("/").reverse().join("-"):"";
+        return db.localeCompare(da);
+      }),[leads]);
+
+      const [detailModal,setDetailModal]=useState(null);
+      const [perdreConf,setPerdreConf]=useState(null);
+      const [gagnéModal,setGagnéModal]=useState(null);
+      const [search,setSearch]=useState("");
+
+      const updateLead=(id,patch)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
+
+      const filtered=offres.filter(o=>!search||(o.client||"").toLowerCase().includes(search.toLowerCase())||(o.email||"").toLowerCase().includes(search.toLowerCase()));
+
+      // KPIs
+      const totalMontant=offres.reduce((s,o)=>s+Number(o.prix_reonic||0),0);
+      const signés=offres.filter(o=>o.reonic_status==="Signed");
+      const enAttente=offres.filter(o=>o.reonic_status!=="Signed");
+      const txSign=offres.length>0?Math.round((signés.length/offres.length)*100):0;
+
+      const AVATAR_COLORS=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444","#06B6D4"];
+      const ac=n=>AVATAR_COLORS[(n||"").charCodeAt(0)%AVATAR_COLORS.length];
+      const ini=(c="")=>c.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
+
+      return(
+        <div>
+          {/* Modal confirmation perdu */}
+          {perdreConf&&<div style={OVL} onClick={()=>setPerdreConf(null)}><div style={{...MBX,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <div style={{fontSize:36,marginBottom:10}}>😞</div>
+            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:16,color:"#0F172A"}}>Marquer comme perdu ?</h3>
+            <p style={{margin:"0 0 20px",fontSize:13,color:"#64748B"}}><strong>{perdreConf.client}</strong> — cette offre sera archivée.</p>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setPerdreConf(null)} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button onClick={()=>{updateLead(perdreConf.id,{statut:"perdu"});setPerdreConf(null);}} style={BTN("linear-gradient(135deg,#EF4444,#DC2626)",{flex:2})}>❌ Confirmer perdu</button>
+            </div>
+          </div></div>}
+
+          {/* Modal gagné → créer vente */}
+          {gagnéModal&&<div style={OVL} onClick={()=>setGagnéModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,color:"#0F172A"}}>🎉 Offre gagnée !</h3>
+            <p style={{margin:"0 0 16px",fontSize:12,color:"#64748B"}}>{gagnéModal.client}</p>
+            <div style={{background:"#F0FDF4",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+              <div style={{fontSize:12,color:"#64748B",marginBottom:6}}>Récapitulatif</div>
+              {gagnéModal.prix_reonic>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span>Montant Reonic</span><span style={{fontWeight:700,color:"#10B981"}}>{fmt(gagnéModal.prix_reonic)} €</span></div>}
+              {gagnéModal.message&&<div style={{fontSize:12,color:"#475569",marginTop:4}}>{gagnéModal.message}</div>}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setGagnéModal(null)} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button onClick={()=>{
+                updateLead(gagnéModal.id,{statut:"converti"});
+                if(onLeadConverted)onLeadConverted(gagnéModal);
+                setGagnéModal(null);
+              }} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:2})}>💰 Créer la vente →</button>
+            </div>
+          </div></div>}
+
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+            <div>
+              <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres en cours</h2>
+              <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} offre{offres.length>1?"s":""} · {signés.length} signée{signés.length>1?"s":""}</p>
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+            {[
+              {icon:"📋",label:"Total offres",val:offres.length,color:"#3B82F6"},
+              {icon:"💶",label:"Montant total",val:fmt(totalMontant)+" €",color:"#10B981"},
+              {icon:"✍️",label:"Signées",val:signés.length,color:"#A855F7"},
+              {icon:"⏳",label:"En attente",val:enAttente.length,color:"#F59E0B"},
+            ].map(k=>(
+              <div key={k.label} style={{background:"#FFFFFF",borderRadius:12,padding:"12px 10px",border:`1px solid ${k.color}20`,textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                <div style={{fontSize:18,marginBottom:3}}>{k.icon}</div>
+                <div style={{fontSize:18,fontWeight:800,color:k.color,lineHeight:1}}>{k.val}</div>
+                <div style={{fontSize:10,color:"#64748B",marginTop:3,fontWeight:600}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recherche */}
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Rechercher une offre…"
+            style={{width:"100%",boxSizing:"border-box",background:"#FFFFFF",border:"1px solid #E2E8F0",borderRadius:10,padding:"10px 14px",color:"#1E293B",fontSize:13,marginBottom:12,fontFamily:'"Outfit",sans-serif',outline:"none"}}/>
+
+          {/* Liste offres */}
+          {filtered.length===0
+            ?<div style={{textAlign:"center",padding:"50px 0",color:"#94A3B8"}}>
+              <div style={{fontSize:40,marginBottom:8}}>📋</div>
+              <div style={{fontWeight:700,fontSize:14}}>Aucune offre en cours</div>
+              <div style={{fontSize:12,marginTop:4}}>Les leads passés en "Devis en ligne" apparaissent ici</div>
+            </div>
+            :filtered.map(offre=>{
+              const color=ac(offre.client);
+              const isSigned=offre.reonic_status==="Signed";
+              return(
+                <div key={offre.id} style={{background:"#FFFFFF",borderRadius:14,border:`1px solid ${isSigned?"#BBF7D0":"#E2E8F0"}`,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                    {/* Avatar */}
+                    <div style={{width:42,height:42,borderRadius:"50%",background:color+"20",border:`2px solid ${color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color,flexShrink:0}}>{ini(offre.client)}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:4}}>
+                        <div>
+                          <div style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>{offre.client}</div>
+                          <div style={{display:"flex",gap:8,fontSize:11,color:"#64748B",marginTop:2,flexWrap:"wrap"}}>
+                            {offre.telephone&&<span>📞 {offre.telephone}</span>}
+                            {offre.adresse&&<span>📍 {offre.adresse.split(",")[0]}</span>}
+                            {offre.date_creation&&<span>📅 {offre.date_creation}</span>}
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          {offre.prix_reonic>0&&<div style={{fontSize:16,fontWeight:800,color:"#10B981"}}>{fmt(offre.prix_reonic)} €</div>}
+                          {isSigned
+                            ?<span style={{background:"#F0FDF4",color:"#16A34A",border:"1px solid #BBF7D0",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>✍️ Signé</span>
+                            :<span style={{background:"#EFF6FF",color:"#2563EB",border:"1px solid #BFDBFE",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:600}}>⏳ En attente</span>
+                          }
+                        </div>
+                      </div>
+                      {offre.message&&<div style={{fontSize:11,color:"#475569",marginBottom:8,background:"#F8FAFC",borderRadius:6,padding:"5px 8px"}}>🔌 {offre.message}</div>}
+                      {/* Actions */}
+                      {canEdit(role)&&<div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>setGagnéModal(offre)}
+                          style={{flex:1,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:8,color:"#FFF",padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                          🏆 Gagné
+                        </button>
+                        <button onClick={()=>setPerdreConf(offre)}
+                          style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,color:"#DC2626",padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>
+                          ❌ Perdu
+                        </button>
+                        <button onClick={()=>setDetailModal(offre)}
+                          style={{background:"#F1F5F9",border:"none",borderRadius:8,color:"#64748B",padding:"7px 10px",cursor:"pointer",fontSize:12,fontFamily:'"Outfit",sans-serif'}}>
+                          👁️
+                        </button>
+                      </div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      );
+    }
+
     function ImpaiesTab({isMobile, chantiers, setChantiers, ventes, profile, role, fmt}){
       const canAct = r => ["administrateur","secretaire"].includes(r);
 
@@ -6062,7 +6217,22 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         setReonicLoading(false);
       };
 
-      const importSelected=async()=>{
+      const getReonicType=(offer)=>{
+        const signed=offer.currentSignature?.state==="Signed";
+        const hasPrice=(offer.totalPlannedPrice||0)>0;
+        const hasComp=(offer.options?.[0]?.wallboxPlanned?.components||[]).length>0||(offer.options?.[0]?.solarPlanned?.components||[]).length>0;
+        if(offer.archived||offer.offerArchived)return "perdu";
+        if(signed)return "signe";
+        if(hasPrice||hasComp)return "devis";
+        return "lead";
+      };
+      const TYPE_INFO={
+        lead:  {label:"Demande", color:"#3B82F6",bg:"#EFF6FF",statut:"a_appeler",  icon:"📥"},
+        devis: {label:"Devis",   color:"#A855F7",bg:"#FAF5FF",statut:"devis_ligne", icon:"📋"},
+        signe: {label:"Signé",   color:"#10B981",bg:"#F0FDF4",statut:"converti",    icon:"✍️"},
+        perdu: {label:"Perdu",   color:"#94A3B8",bg:"#F8FAFC",statut:"perdu",       icon:"❌"},
+      };
+      const importSelected=()=>{
         const toImport=reonicOffers.filter(o=>reonicSelected[o.id]);
         if(toImport.length===0)return;
         setReonicImporting(true);
@@ -6073,27 +6243,25 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const nom=contact?.lastName||"";
           const adresse=[contact?.street,contact?.number,contact?.postcode,contact?.city].filter(Boolean).join(" ");
           const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(c=>c.name).join(", ");
+          const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(c=>c.name).join(", ");
+          const produits=[wallbox,solar].filter(Boolean).join(" · ");
+          const type=getReonicType(offer);
+          const ti=TYPE_INFO[type];
+          const nomClient=`${prenom} ${nom}`.trim()||contact?.email||"Client Reonic";
           return{
             id:Date.now()+Math.random(),
-            reonic_id:offer.id,
-            prenom,nom,
-            client:`${prenom} ${nom}`.trim()||"Client Reonic",
-            email:contact?.email||"",
+            reonic_id:offer.id,prenom,nom,
+            client:nomClient,email:contact?.email||"",
             telephone:contact?.telephone||contact?.mobilePhone||"",
-            adresse,
-            message:wallbox?`Devis Reonic : ${wallbox}`:"Lead Reonic",
-            canal:"Site web",
-            statut:"a_appeler",
-            date_creation:now,
+            adresse,message:produits||"Lead Reonic",
+            canal:"Site web",statut:ti.statut,date_creation:now,
             prix_reonic:offer.totalPlannedPrice||0,
-            reonic_status:offer.status||"",
-            nb_appels:0,historique_appels:[],
-            date_rdv:"",heure_rdv:"",rapport_rdv:null,
+            reonic_status:offer.currentSignature?.state||offer.status||"",
+            nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
           };
         });
         setLeads(prev=>[...newLeads,...prev]);
-        setReonicImporting(false);
-        setReonicImportDone(newLeads.length);
+        setReonicImporting(false);setReonicImportDone(newLeads.length);
         setReonicOffers(prev=>prev.filter(o=>!reonicSelected[o.id]));
         setReonicSelected({});
         setTimeout(()=>{setReonicModal(false);setReonicImportDone(null);},2500);
@@ -6308,6 +6476,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                       const prix=offer.totalPlannedPrice;
                       const date=offer.offerCreatedAt?new Date(offer.offerCreatedAt).toLocaleDateString("fr-FR"):"";
                       const hasName=!!(prenom||nom);
+                      const type=getReonicType(offer);
+                      const ti=TYPE_INFO[type];
                       return(
                         <div key={offer.id} onClick={()=>setReonicSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
                           style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,border:`1px solid ${sel?"#BFDBFE":"#E2E8F0"}`,background:sel?"#EFF6FF":"#FAFAFA",cursor:"pointer",transition:"all 0.1s"}}>
@@ -6316,7 +6486,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                              <div style={{fontWeight:700,fontSize:13,color:hasName?"#0F172A":"#94A3B8",fontStyle:hasName?"normal":"italic"}}>{nomComplet}</div>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{fontWeight:700,fontSize:13,color:hasName?"#0F172A":"#94A3B8",fontStyle:hasName?"normal":"italic"}}>{nomComplet}</div>
+                                <span style={{background:ti.bg,color:ti.color,borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>{ti.icon} {ti.label}</span>
+                              </div>
                               {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)} €</span>}
                             </div>
                             <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap",fontSize:11,color:"#64748B"}}>
@@ -9342,14 +9515,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
-        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","ventes","mes_objectifs","suivi_comm"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","offres","ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures","impayes"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={leads:"Leads",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
-      const TAB_ICONS={leads:"📥",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
+      const TAB_LABELS={leads:"Leads",offres:"Offres",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_ICONS={leads:"📥",offres:"📋",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
@@ -9670,6 +9843,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} onLeadConverted={(lead)=>{goTo("ventes");setTimeout(()=>{window._leadToConvert=lead;},100);}}/>}
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
