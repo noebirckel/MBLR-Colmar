@@ -6170,13 +6170,27 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
 
       // ── REONIC IMPORT ──
+      const getReonicTypeStatic=(offer)=>{
+        if(offer.archived||offer.offerArchived||offer.requestArchived)return "perdu";
+        if(offer.currentSignature?.state==="Signed")return "signe";
+        if((offer.totalPlannedPrice||0)>0||(offer.options?.[0]?.wallboxPlanned?.components||[]).length>0||(offer.options?.[0]?.solarPlanned?.components||[]).length>0)return "devis";
+        return "lead";
+      };
+      const RTYPE_INFO={
+        lead:  {label:"Demande", color:"#3B82F6",bg:"#EFF6FF",statut:"a_appeler",  icon:"📥"},
+        devis: {label:"Devis",   color:"#A855F7",bg:"#FAF5FF",statut:"devis_ligne", icon:"📋"},
+        signe: {label:"Signé",   color:"#10B981",bg:"#F0FDF4",statut:"converti",    icon:"✍️"},
+        perdu: {label:"Perdu",   color:"#94A3B8",bg:"#F8FAFC",statut:"perdu",       icon:"❌"},
+      };
       const[reonicModal,setReonicModal]=useState(false);
       const[reonicOffers,setReonicOffers]=useState([]);
       const[reonicLoading,setReonicLoading]=useState(false);
       const[reonicError,setReonicError]=useState(null);
-      const[reonicSelected,setReonicSelected]=useState({}); // {offerId: true/false}
+      const[reonicSelected,setReonicSelected]=useState({});
       const[reonicImporting,setReonicImporting]=useState(false);
-      const[reonicImportDone,setReonicImportDone]=useState(null); // nombre importés
+      const[reonicImportDone,setReonicImportDone]=useState(null);
+      const[reonicFilter,setReonicFilter]=useState("tous"); // tous | lead | devis | signe
+      const[showPerdus,setShowPerdus]=useState(false);
 
       const EDGE_URL=supabaseUrl?`${supabaseUrl}/functions/v1/reonic-proxy`:"";
 
@@ -6190,48 +6204,46 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(!data.ok){setReonicError(data.error||"Erreur Reonic");setReonicLoading(false);return;}
           const results=data.data?.results||[];
 
-          // Filtrer ceux déjà importés
-          const existingIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
-          const newOffers=results.filter(o=>!existingIds.has(o.id));
+          // Déduplication multi-critères
+          const existingReonicIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
+          const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
 
-          // 2. Charger TOUS les contacts d'un coup
+          // 2. Charger tous les contacts
           let contactsMap={};
           try{
             const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contacts",apiKey:reonicApiKey,clientId:reonicClientId})});
             const cd=await cr.json();
-            if(cd.ok&&Array.isArray(cd.data)){
-              cd.data.forEach(c=>{contactsMap[c.id]=c;});
-            }
+            if(cd.ok&&Array.isArray(cd.data)){cd.data.forEach(c=>{contactsMap[c.id]=c;});}
           }catch(e){}
 
-          // 3. Enrichir chaque offre avec son contact
-          const enriched=newOffers.map(offer=>{
+          // 3. Enrichir + détecter doublons
+          const enriched=results.map(offer=>{
             const contact=contactsMap[offer.customer?.id]||null;
-            return{...offer,_contact:contact};
+            const phone=(contact?.telephone||contact?.mobilePhone||"").replace(/\s/g,"");
+            const email=(contact?.email||"").toLowerCase();
+            const isReonicDuplicate=existingReonicIds.has(offer.id);
+            const isPhoneDuplicate=phone&&existingPhones.has(phone);
+            const isEmailDuplicate=email&&existingEmails.has(email);
+            const isDuplicate=isReonicDuplicate||isPhoneDuplicate||isEmailDuplicate;
+            const dupReason=isReonicDuplicate?"ID Reonic":isPhoneDuplicate?"Téléphone":isEmailDuplicate?"Email":"";
+            return{...offer,_contact:contact,_duplicate:isDuplicate,_dupReason:dupReason};
           });
 
           setReonicOffers(enriched);
-          const sel={};enriched.forEach(o=>{sel[o.id]=true;});
+          // Pré-sélection : on coche tout SAUF les perdus et les doublons
+          const sel={};
+          enriched.forEach(o=>{
+            const type=getReonicTypeStatic(o);
+            sel[o.id]=!o._duplicate&&type!=="perdu";
+          });
           setReonicSelected(sel);
         }catch(e){setReonicError("Erreur réseau : "+e.message);}
         setReonicLoading(false);
       };
 
-      const getReonicType=(offer)=>{
-        const signed=offer.currentSignature?.state==="Signed";
-        const hasPrice=(offer.totalPlannedPrice||0)>0;
-        const hasComp=(offer.options?.[0]?.wallboxPlanned?.components||[]).length>0||(offer.options?.[0]?.solarPlanned?.components||[]).length>0;
-        if(offer.archived||offer.offerArchived)return "perdu";
-        if(signed)return "signe";
-        if(hasPrice||hasComp)return "devis";
-        return "lead";
-      };
-      const TYPE_INFO={
-        lead:  {label:"Demande", color:"#3B82F6",bg:"#EFF6FF",statut:"a_appeler",  icon:"📥"},
-        devis: {label:"Devis",   color:"#A855F7",bg:"#FAF5FF",statut:"devis_ligne", icon:"📋"},
-        signe: {label:"Signé",   color:"#10B981",bg:"#F0FDF4",statut:"converti",    icon:"✍️"},
-        perdu: {label:"Perdu",   color:"#94A3B8",bg:"#F8FAFC",statut:"perdu",       icon:"❌"},
-      };
+      const getReonicType=(offer)=>getReonicTypeStatic(offer);
+      const TYPE_INFO=RTYPE_INFO;
       const importSelected=()=>{
         const toImport=reonicOffers.filter(o=>reonicSelected[o.id]);
         if(toImport.length===0)return;
@@ -6260,7 +6272,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
           };
         });
-        setLeads(prev=>[...newLeads,...prev]);
+        setLeads(prev=>{const n=[...newLeads,...prev];return n;});
         setReonicImporting(false);setReonicImportDone(newLeads.length);
         setReonicOffers(prev=>prev.filter(o=>!reonicSelected[o.id]));
         setReonicSelected({});
@@ -6450,18 +6462,45 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <div style={{fontSize:12,marginTop:4}}>Tous les leads Reonic sont déjà dans Ma Borne LR</div>
                 </div>
                 :<>
+                  {/* Filtres par type + toggle perdus */}
+                  <div style={{display:"flex",gap:5,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+                    {["tous","lead","devis","signe"].map(f=>{
+                      const ti=f==="tous"?{label:"Tous",color:"#475569",bg:"#F1F5F9",icon:"📋"}:RTYPE_INFO[f];
+                      const nb=f==="tous"?reonicOffers.filter(o=>showPerdus||getReonicTypeStatic(o)!=="perdu").length:reonicOffers.filter(o=>getReonicTypeStatic(o)===f).length;
+                      return(<button key={f} onClick={()=>setReonicFilter(f)}
+                        style={{padding:"5px 10px",borderRadius:20,border:`1px solid ${reonicFilter===f?ti.color:"#E2E8F0"}`,background:reonicFilter===f?ti.bg:"transparent",color:reonicFilter===f?ti.color:"#64748B",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                        {ti.icon} {ti.label} ({nb})
+                      </button>);
+                    })}
+                    <button onClick={()=>{setShowPerdus(p=>!p);}} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:20,border:"1px solid #E2E8F0",background:showPerdus?"#F1F5F9":"transparent",color:"#94A3B8",fontSize:11,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                      {showPerdus?"Masquer perdus":"Voir perdus"}
+                    </button>
+                  </div>
+
                   {/* Sélect all */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"8px 12px",background:"#F8FAFC",borderRadius:8}}>
-                    <span style={{fontSize:12,color:"#475569",fontWeight:600}}>{reonicOffers.length} lead{reonicOffers.length>1?"s":""} disponible{reonicOffers.length>1?"s":""}</span>
-                    <div style={{display:"flex",gap:8}}>
-                      <button onClick={()=>{const s={};reonicOffers.forEach(o=>{s[o.id]=true;});setReonicSelected(s);}} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#3B82F6",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>Tout sélectionner</button>
-                      <button onClick={()=>setReonicSelected({})} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Tout désélectionner</button>
+                    <span style={{fontSize:12,color:"#475569",fontWeight:600}}>
+                      {Object.values(reonicSelected).filter(Boolean).length} sélectionné{Object.values(reonicSelected).filter(Boolean).length>1?"s":""}
+                      <span style={{color:"#94A3B8",fontWeight:400,marginLeft:6}}>
+                        · {reonicOffers.filter(o=>o._duplicate).length} doublon{reonicOffers.filter(o=>o._duplicate).length>1?"s":""} détecté{reonicOffers.filter(o=>o._duplicate).length>1?"s":""}
+                      </span>
+                    </span>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>{const s={};reonicOffers.filter(o=>!o._duplicate&&getReonicTypeStatic(o)!=="perdu").forEach(o=>{s[o.id]=true;});setReonicSelected(s);}} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#3B82F6",padding:"4px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>Tout cocher</button>
+                      <button onClick={()=>setReonicSelected({})} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#64748B",padding:"4px 10px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Tout décocher</button>
                     </div>
                   </div>
 
                   {/* Liste scrollable */}
                   <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
-                    {reonicOffers.map(offer=>{
+                    {reonicOffers
+                      .filter(offer=>{
+                        const type=getReonicTypeStatic(offer);
+                        if(type==="perdu"&&!showPerdus) return false;
+                        if(reonicFilter!=="tous"&&type!==reonicFilter) return false;
+                        return true;
+                      })
+                      .map(offer=>{
                       const sel=reonicSelected[offer.id]||false;
                       const contact=offer._contact;
                       const prenom=contact?.firstName||"";
@@ -6476,19 +6515,25 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                       const prix=offer.totalPlannedPrice;
                       const date=offer.offerCreatedAt?new Date(offer.offerCreatedAt).toLocaleDateString("fr-FR"):"";
                       const hasName=!!(prenom||nom);
-                      const type=getReonicType(offer);
-                      const ti=TYPE_INFO[type];
+                      const type=getReonicTypeStatic(offer);
+                      const ti=RTYPE_INFO[type]||RTYPE_INFO.lead;
+                      const isDup=offer._duplicate;
+                      const isPerdu=type==="perdu";
                       return(
-                        <div key={offer.id} onClick={()=>setReonicSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
-                          style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,border:`1px solid ${sel?"#BFDBFE":"#E2E8F0"}`,background:sel?"#EFF6FF":"#FAFAFA",cursor:"pointer",transition:"all 0.1s"}}>
-                          <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${sel?"#3B82F6":"#CBD5E1"}`,background:sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                            {sel&&<span style={{color:"#FFF",fontSize:12,fontWeight:800}}>✓</span>}
+                        <div key={offer.id} onClick={()=>!isDup&&setReonicSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
+                          style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,
+                            border:`1px solid ${isDup?"#FDE68A":isPerdu?"#E2E8F0":sel?"#BFDBFE":"#E2E8F0"}`,
+                            background:isDup?"#FFFBEB":isPerdu?"#F8FAFC":sel?"#EFF6FF":"#FAFAFA",
+                            cursor:isDup?"not-allowed":"pointer",opacity:isDup||isPerdu?0.7:1,transition:"all 0.1s"}}>
+                          <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isDup?"#F59E0B":sel?"#3B82F6":"#CBD5E1"}`,background:isDup?"#FEF3C7":sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                            {isDup?<span style={{fontSize:11}}>⚠</span>:sel&&<span style={{color:"#FFF",fontSize:12,fontWeight:800}}>✓</span>}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                                 <div style={{fontWeight:700,fontSize:13,color:hasName?"#0F172A":"#94A3B8",fontStyle:hasName?"normal":"italic"}}>{nomComplet}</div>
                                 <span style={{background:ti.bg,color:ti.color,borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>{ti.icon} {ti.label}</span>
+                                {isDup&&<span style={{background:"#FEF3C7",color:"#92400E",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>⚠️ Doublon ({offer._dupReason})</span>}
                               </div>
                               {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)} €</span>}
                             </div>
@@ -6498,7 +6543,6 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                               {ville&&<span>📍 {ville}</span>}
                               {date&&<span>📅 {date}</span>}
                               {wallbox&&<span style={{color:"#3B82F6"}}>🔌 {wallbox}</span>}
-                              {offer.status&&<span style={{background:"#F1F5F9",borderRadius:4,padding:"1px 6px"}}>{offer.status}</span>}
                             </div>
                           </div>
                         </div>
