@@ -6793,7 +6793,11 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(!keyDraft.trim()||!clientIdDraft.trim()){setTestStatus("error");return;}
         setTestStatus("loading");
         try{
-          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${supabaseKey}`},body:JSON.stringify({action:"test",apiKey:keyDraft.trim(),clientId:clientIdDraft.trim()})});
+          const res=await fetch(EDGE_URL,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({action:"test",apiKey:keyDraft.trim(),clientId:clientIdDraft.trim()})
+          });
           const data=await res.json();
           if(data.ok){
             saveReonicApiKey(keyDraft.trim());
