@@ -9661,46 +9661,131 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>}
 
           {/* KPIs admin uniquement */}
-          {role==="administrateur"&&(
-          <div style={{marginBottom:20}}>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:10}}>
-              {[
-                {v:fmt(_caMonth)+" €",l:"CA ce mois",i:"💰",c:"#10B981",t:"stats"},
-                {v:_chEnCours,l:"En cours",i:"🔧",c:"#3B82F6",t:"chantier"},
-                {v:_chPlan,l:"À planifier",i:"📅",c:"#F59E0B",t:"chantier"},
-                {v:_ventesAuj,l:"Ventes aujourd'hui",i:"💼",c:"#A78BFA",t:"ventes"}
-              ].map(k=>(
-              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 12px",border:"1px solid #E2E8F0",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div>
-                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
-                    <div style={{fontSize:11,color:"#64748B",marginTop:3,fontWeight:600}}>{k.l}</div>
+          {role==="administrateur"&&(()=>{
+            // Mois précédent
+            const prevM=String(_now.getMonth()===0?12:_now.getMonth()).padStart(2,"0");
+            const prevY=String(_now.getMonth()===0?_now.getFullYear()-1:_now.getFullYear());
+            const _caPrevMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()+1===Number(prevM)&&d.getFullYear()===Number(prevY);}).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
+            const _caEvol=_caPrevMonth>0?Math.round(((_caMonth-_caPrevMonth)/_caPrevMonth)*100):null;
+            // Marge brute mois
+            const coutVenteAcc=v=>((v.materiels||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0)+(v.cables||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0));
+            const _ventesMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()===_now.getMonth()&&d.getFullYear()===_now.getFullYear();});
+            const _margeMonth=_ventesMonth.reduce((s,v)=>s+(Number(v.prix_ht||0)-coutVenteAcc(v)),0);
+            const _txMarge=_caMonth>0?Math.round((_margeMonth/_caMonth)*100):0;
+            // Impayés
+            const _impayes=chantiersPipeline.filter(ch=>ch.facture?.statut==="facture");
+            const _impaiesAlerte=_impayes.filter(ch=>{
+              const d=ch.facture?.date_envoi_facture||ch.facture?.date_maj;
+              if(!d)return false;
+              const[j,m,a]=(d||"").split("/");
+              return(Date.now()-new Date(Number(a),Number(m)-1,Number(j)).getTime())/(1000*60*60*24)>=7;
+            }).length;
+            const _montantImpaye=_impayes.reduce((s,ch)=>{const v=ventes.find(vt=>vt.id===ch.vente_id);return s+Number(v?.prix_ht||0);},0);
+            // Taux de transformation leads ce mois
+            const _leadsMonth=(leads||[]).filter(l=>{const d=l.date_creation;if(!d)return false;const[j,m,a]=(d||"").split("/");return Number(m)===_now.getMonth()+1&&Number(a)===_now.getFullYear();});
+            const _txConvert=_leadsMonth.length>0?Math.round((_leadsMonth.filter(l=>l.statut==="converti").length/_leadsMonth.length)*100):null;
+            // Mini histogramme CA 6 mois
+            const _hist6=Array.from({length:6},(_,i)=>{
+              const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
+              const mm=String(d.getMonth()+1).padStart(2,"0");
+              const yy=String(d.getFullYear());
+              const ca=ventes.filter(v=>{const dv=new Date(v.id);return String(dv.getMonth()+1).padStart(2,"0")===mm&&String(dv.getFullYear())===yy;}).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+              return{label:d.toLocaleDateString("fr-FR",{month:"short"}),ca,isCur:i===0};
+            }).reverse();
+            const _maxCA=Math.max(..._hist6.map(h=>h.ca),1);
+            // Actions à traiter
+            const _actions=[
+              {n:_factAFaire,l:"À facturer",c:"#EF4444",t:"factures",show:_factAFaire>0},
+              {n:_acomAEnv,l:"Acomptes à envoyer",c:"#F59E0B",t:"administratif",show:_acomAEnv>0},
+              {n:_savOuverts,l:"SAV ouverts",c:"#EF4444",t:"sav",show:_savOuverts>0},
+              {n:_impaiesAlerte,l:"Impayés en alerte",c:"#DC2626",t:"impayes",show:_impaiesAlerte>0},
+              {n:_stockCrit,l:"Stock critique",c:"#F59E0B",t:"stock",show:_stockCrit>0},
+              {n:_aAppeler,l:"Clients à rappeler",c:"#3B82F6",t:"suivi_comm",show:_aAppeler>0},
+            ].filter(a=>a.show);
+            return(
+              <div style={{marginBottom:16}}>
+                {/* Rangée 1 — KPIs financiers principaux */}
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:10}}>
+                  {/* CA mois */}
+                  <div onClick={()=>goTo("stats")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #E2E8F0",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em"}}>CA ce mois</div>
+                      <span style={{fontSize:14}}>💰</span>
+                    </div>
+                    <div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#10B981",lineHeight:1,marginBottom:4}}>{fmt(_caMonth)} €</div>
+                    {_caEvol!==null&&<div style={{fontSize:11,fontWeight:700,color:_caEvol>=0?"#10B981":"#EF4444"}}>{_caEvol>=0?"↑":"↓"} {Math.abs(_caEvol)}% vs mois préc.</div>}
                   </div>
-                  <span style={{fontSize:20}}>{k.i}</span>
+                  {/* Marge */}
+                  <div onClick={()=>goTo("stats")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #E2E8F0",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em"}}>Marge brute</div>
+                      <span style={{fontSize:14}}>📈</span>
+                    </div>
+                    <div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#3B82F6",lineHeight:1,marginBottom:4}}>{fmt(_margeMonth)} €</div>
+                    <div style={{fontSize:11,color:"#64748B"}}>Taux : <span style={{fontWeight:700,color:_txMarge>=30?"#10B981":_txMarge>=20?"#3B82F6":"#F59E0B"}}>{_txMarge}%</span></div>
+                  </div>
+                  {/* Impayés */}
+                  <div onClick={()=>goTo("impayes")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:`1px solid ${_impaiesAlerte>0?"#FECACA":"#E2E8F0"}`,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em"}}>Impayés</div>
+                      <span style={{fontSize:14}}>⏳</span>
+                    </div>
+                    <div style={{fontSize:isMobile?20:24,fontWeight:900,color:_impaiesAlerte>0?"#DC2626":"#475569",lineHeight:1,marginBottom:4}}>{fmt(_montantImpaye)} €</div>
+                    <div style={{fontSize:11,color:"#64748B"}}>{_impayes.length} facture{_impayes.length>1?"s":""}{_impaiesAlerte>0&&<span style={{color:"#DC2626",fontWeight:700}}> · {_impaiesAlerte} en alerte</span>}</div>
+                  </div>
+                  {/* Taux conversion leads */}
+                  <div onClick={()=>goTo("leads")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #E2E8F0",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.05em"}}>Conversion leads</div>
+                      <span style={{fontSize:14}}>📥</span>
+                    </div>
+                    <div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#A855F7",lineHeight:1,marginBottom:4}}>{_txConvert!==null?_txConvert+"%":"—"}</div>
+                    <div style={{fontSize:11,color:"#64748B"}}>{_leadsMonth.length} lead{_leadsMonth.length>1?"s":""} ce mois</div>
+                  </div>
+                </div>
+
+                {/* Rangée 2 — Mini graphe CA + À traiter */}
+                <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":_actions.length>0?"1fr 1fr":"1fr",gap:10,marginBottom:0}}>
+                  {/* Mini graphe CA 6 mois */}
+                  <div onClick={()=>goTo("stats")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #E2E8F0",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#0F172A"}}>📊 CA — 6 derniers mois</div>
+                      <div style={{fontSize:11,color:"#10B981",fontWeight:700}}>{_caEvol!==null?(_caEvol>=0?"↑ ":"↓ ")+Math.abs(_caEvol)+"%":""}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:5,height:48}}>
+                      {_hist6.map((h,i)=>{
+                        const pct=Math.round((h.ca/_maxCA)*100);
+                        return(
+                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,height:"100%",justifyContent:"flex-end"}}>
+                            <div style={{width:"100%",height:Math.max(pct,4)+"%",background:h.isCur?"#10B981":"#E2E8F0",borderRadius:"3px 3px 0 0",minHeight:4,transition:"height 0.4s"}}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{display:"flex",gap:5,marginTop:4}}>
+                      {_hist6.map((h,i)=>(<div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:h.isCur?"#10B981":"#94A3B8",fontWeight:h.isCur?700:400}}>{h.label}</div>))}
+                    </div>
+                  </div>
+
+                  {/* Bloc À traiter */}
+                  {_actions.length>0&&<div style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #FCA5A520",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#0F172A"}}>⚡ À traiter</div>
+                      <span style={{background:"#FEF2F2",color:"#DC2626",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 8px"}}>{_actions.length}</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {_actions.map(a=>(
+                        <div key={a.l} onClick={()=>goTo(a.t)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 9px",borderRadius:8,background:"#F8FAFC",cursor:"pointer",border:`1px solid ${a.c}15`}}>
+                          <span style={{fontSize:12,color:"#475569"}}>{a.l}</span>
+                          <span style={{fontSize:13,fontWeight:800,color:a.c}}>{a.n}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>}
                 </div>
               </div>
-              ))}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:20}}>
-              {[
-                {v:_factAFaire,l:"À facturer",i:"🧾",c:"#EF4444",t:"factures"},
-                {v:_acomAEnv,l:"Acomptes à envoyer",i:"📋",c:"#F59E0B",t:"administratif"},
-                {v:_stockCrit,l:"Stock critique",i:"📦",c:"#EF4444",t:"stock"},
-                {v:_savOuverts,l:"SAV ouverts",i:"🛠️",c:"#F87171",t:"sav"}
-              ].map(k=>(
-              <div key={k.l} onClick={()=>goTo(k.t)} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 12px",border:"1px solid #E2E8F0",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div>
-                    <div style={{fontSize:isMobile?22:26,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div>
-                    <div style={{fontSize:11,color:"#64748B",marginTop:3,fontWeight:600}}>{k.l}</div>
-                  </div>
-                  <span style={{fontSize:20}}>{k.i}</span>
-                </div>
-              </div>
-              ))}
-            </div>
-          </div>
-          )}
+            );
+          })()}
 
           {/* ── BLOC RDV + INSTALLATIONS DU JOUR — ADMIN ── */}
           {role==="administrateur"&&(()=>{
