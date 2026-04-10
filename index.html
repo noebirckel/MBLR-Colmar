@@ -6480,9 +6480,11 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               }
             })});
             const data=await res.json();
-            if(data.ok&&data.data?.id){
-              setLeads(p=>p.map(l=>l.id===leadId?{...l,reonic_id:data.data.id}:l));
-              console.log("[Reonic] Demande créée:",data.data.id);
+            if(data.ok){
+              // create_request retourne un body vide — la demande est créée dans Reonic
+              const reonicId=data.data?.id||data.data?.requestId||null;
+              if(reonicId){setLeads(p=>p.map(l=>l.id===leadId?{...l,reonic_id:reonicId}:l));}
+              console.log("[Reonic] ✅ Demande créée avec succès",reonicId?`ID: ${reonicId}`:"(pas d'ID retourné)");
             }else{
               console.warn("[Reonic] Création échouée — réponse complète:",JSON.stringify(data));
             }
