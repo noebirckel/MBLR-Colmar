@@ -528,6 +528,10 @@
               <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres en cours</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} offre{offres.length>1?"s":""} · {signés.length} signée{signés.length>1?"s":""}</p>
             </div>
+            <button onClick={()=>{if(window._triggerReonicSync)window._triggerReonicSync();}}
+              style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,color:"#16A34A",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+              🔄 Sync Reonic
+            </button>
           </div>
 
           {/* KPIs */}
@@ -6297,7 +6301,40 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           });
 
           console.log("[Reonic Sync] À insérer:",toInsert.length,"(après dédup)");
-          if(toInsert.length===0){console.log("[Reonic Sync] Tous en doublons.");setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+
+          // ── Mise à jour des leads existants avec reonic_id ──────────────────
+          const leadsWithReonicId=(leads||[]).filter(l=>l.reonic_id);
+          const reonicMap=new Map(results.map(o=>[o.id,o]));
+          const toUpdate=[];
+          for(const lead of leadsWithReonicId){
+            const offer=reonicMap.get(lead.reonic_id);
+            if(!offer)continue;
+            const newType=getReonicTypeStatic(offer);
+            const newTi=RTYPE_INFO[newType]||RTYPE_INFO.lead;
+            const newPrix=offer.totalPlannedPrice||0;
+            const newReonicStatus=offer.currentSignature?.state||offer.status||"";
+            // Vérifier si quelque chose a changé
+            const statutChanged=newTi.statut!==lead.statut&&!["converti","perdu"].includes(lead.statut);
+            const prixChanged=newPrix!==Number(lead.prix_reonic||0);
+            const statusChanged=newReonicStatus!==(lead.reonic_status||"");
+            if(statutChanged||prixChanged||statusChanged){
+              toUpdate.push({id:lead.id,statut:statutChanged?newTi.statut:lead.statut,prix_reonic:newPrix,reonic_status:newReonicStatus});
+            }
+          }
+          if(toUpdate.length>0){
+            console.log("[Reonic Sync] Mises à jour:",toUpdate.length,"leads");
+            setLeads(prev=>prev.map(l=>{
+              const upd=toUpdate.find(u=>u.id===l.id);
+              return upd?{...l,...upd}:l;
+            }));
+            toUpdate.forEach(upd=>{
+              sb.from("leads").update({statut:upd.statut,prix_reonic:upd.prix_reonic,reonic_status:upd.reonic_status}).eq("id",upd.id).then(({error})=>{
+                if(error)console.error("[Reonic Sync] Update lead:",error.message);
+              });
+            });
+          }
+
+          if(toInsert.length===0){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
 
           // 5. Insérer silencieusement
           setLeads(prev=>[...toInsert,...prev]);
@@ -6307,7 +6344,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             if(error)console.error("autoSync Reonic:",error.message);
           });
 
-          setAutoSyncStatus({nb:toInsert.length});
+          setAutoSyncStatus({nb:toInsert.length,updated:toUpdate.length});
           setTimeout(()=>setAutoSyncStatus(null),8000);
         }catch(e){setAutoSyncStatus(null);}
         autoSyncRef.current=false;
@@ -6315,8 +6352,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Lancer le sync au montage du composant
       React.useEffect(()=>{
+        window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
         if(reonicApiKey&&reonicClientId){
-          const t=setTimeout(()=>silentSync(),1500); // délai 1.5s pour laisser les leads se charger
+          const t=setTimeout(()=>silentSync(),1500);
           return()=>clearTimeout(t);
         }
       },[]);
@@ -7181,8 +7219,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               {autoSyncStatus==="syncing"&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#EFF6FF",borderRadius:20,fontSize:11,color:"#2563EB",border:"1px solid #BFDBFE"}}>
                 <div style={{width:8,height:8,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Sync Reonic…
               </div>}
-              {autoSyncStatus&&autoSyncStatus!=="syncing"&&autoSyncStatus.nb>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#F0FDF4",borderRadius:20,fontSize:11,color:"#16A34A",border:"1px solid #BBF7D0"}}>
-                ✅ {autoSyncStatus.nb} nouveau{autoSyncStatus.nb>1?"x":""} lead{autoSyncStatus.nb>1?"s":""} Reonic
+              {autoSyncStatus&&autoSyncStatus!=="syncing"&&(autoSyncStatus.nb>0||autoSyncStatus.updated>0)&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#F0FDF4",borderRadius:20,fontSize:11,color:"#16A34A",border:"1px solid #BBF7D0"}}>
+                ✅ {autoSyncStatus.nb>0?`${autoSyncStatus.nb} nouveau${autoSyncStatus.nb>1?"x":""} lead${autoSyncStatus.nb>1?"s":""}`:""}{autoSyncStatus.nb>0&&autoSyncStatus.updated>0?" · ":""}{autoSyncStatus.updated>0?`${autoSyncStatus.updated} mis à jour`:""}
               </div>}
             </div>
           </div>
