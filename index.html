@@ -7235,11 +7235,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
             body:JSON.stringify({action:"register_webhook",apiKey:reonicApiKey,clientId,payload:{webhookUrl:WEBHOOK_URL}})});
           const data=await res.json();
+          console.log("register_webhook response:",JSON.stringify(data));
           if(data.ok){
             setWebhookResults(data.results);
             setWebhookStatus("ok");
-          } else {setWebhookStatus("error");}
-        }catch(e){setWebhookStatus("error");}
+          } else {
+            setWebhookStatus({err:data.error||JSON.stringify(data.results)||"Erreur inconnue"});
+          }
+        }catch(e){setWebhookStatus({err:e.message||"Erreur réseau"});}
       };
 
       return(
@@ -7334,8 +7337,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             {webhookStatus==="ok"&&<div style={{marginTop:8,padding:"8px 12px",background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,fontSize:11,color:"#16A34A"}}>
               ✅ Reonic enverra automatiquement les nouveaux leads vers Ma Borne LR.
             </div>}
-            {webhookStatus==="error"&&<div style={{marginTop:8,padding:"8px 12px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:11,color:"#DC2626"}}>
-              ❌ Erreur. Vérifiez que la fonction <code style={{fontSize:10}}>reonic-webhook</code> est bien déployée sur Supabase.
+            {webhookStatus&&webhookStatus!=="ok"&&webhookStatus!=="loading"&&<div style={{marginTop:8,padding:"8px 12px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:11,color:"#DC2626"}}>
+              ❌ {typeof webhookStatus==="object"?webhookStatus.err:"Erreur. Vérifiez que la fonction reonic-proxy est bien déployée."}
             </div>}
 
             <div style={{marginTop:8,fontSize:10,color:"#94A3B8",lineHeight:1.5}}>
