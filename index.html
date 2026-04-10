@@ -6194,6 +6194,102 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const EDGE_URL=supabaseUrl?`${supabaseUrl}/functions/v1/reonic-proxy`:"";
 
+      // ── AUTO-SYNC REONIC (polling) ──
+      const[autoSyncStatus,setAutoSyncStatus]=useState(null); // null | "syncing" | {nb:N} | "error"
+      const autoSyncRef=React.useRef(false);
+
+      const silentSync=React.useCallback(async()=>{
+        if(!reonicApiKey||!reonicClientId||!EDGE_URL)return;
+        if(autoSyncRef.current)return;
+        autoSyncRef.current=true;
+        setAutoSyncStatus("syncing");
+        console.log("[Reonic Sync] Démarrage...");
+        try{
+          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
+          const data=await res.json();
+          console.log("[Reonic Sync] Offres récupérées:",data.ok, "total:", data.data?.results?.length||0);
+          if(!data.ok){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+          const results=data.data?.results||[];
+
+          const existingReonicIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
+          const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
+          const newOffers=results.filter(o=>{
+            if(existingReonicIds.has(o.id))return false;
+            const type=getReonicTypeStatic(o);
+            if(type==="perdu")return false;
+            return true;
+          });
+          console.log("[Reonic Sync] Nouveaux (non importés, non perdus):", newOffers.length);
+
+          if(newOffers.length===0){console.log("[Reonic Sync] Aucun nouveau.");setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+
+          // 3. Charger les contacts en batch
+          let contactsMap={};
+          try{
+            const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contacts",apiKey:reonicApiKey,clientId:reonicClientId})});
+            const cd=await cr.json();
+            if(cd.ok&&Array.isArray(cd.data)){cd.data.forEach(c=>{contactsMap[c.id]=c;});}
+            console.log("[Reonic Sync] Contacts:",Object.keys(contactsMap).length);
+          }catch(e){console.log("[Reonic Sync] Erreur contacts:",e.message);}
+
+          // 4. Filtrer les doublons par téléphone/email
+          const base=Date.now();
+          const now=new Date().toLocaleDateString("fr-FR");
+          const toInsert=newOffers.filter(o=>{
+            const c=contactsMap[o.customer?.id]||null;
+            const phone=(c?.telephone||c?.mobilePhone||"").replace(/\s/g,"");
+            const email=(c?.email||"").toLowerCase();
+            if(phone&&existingPhones.has(phone)){console.log("[Reonic Sync] Doublon tél:",phone);return false;}
+            if(email&&existingEmails.has(email)){console.log("[Reonic Sync] Doublon email:",email);return false;}
+            return true;
+          }).map((offer,idx)=>{
+            const c=contactsMap[offer.customer?.id]||null;
+            const prenom=c?.firstName||"";
+            const nom=c?.lastName||"";
+            const adresse=[c?.street,c?.number,c?.postcode,c?.city].filter(Boolean).join(" ");
+            const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(x=>x.name).join(", ");
+            const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(x=>x.name).join(", ");
+            const produits=[wallbox,solar].filter(Boolean).join(" · ");
+            const type=getReonicTypeStatic(offer);
+            const ti=RTYPE_INFO[type]||RTYPE_INFO.lead;
+            return{
+              id:base+idx,reonic_id:offer.id,prenom,nom,
+              client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
+              email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
+              adresse,message:produits||"Lead Reonic",
+              canal:"Site web",statut:ti.statut,date_creation:now,
+              prix_reonic:offer.totalPlannedPrice||0,
+              reonic_status:offer.currentSignature?.state||offer.status||"",
+              nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
+              par:"",date_relance:"",notes:"",vente_id:null,
+            };
+          });
+
+          console.log("[Reonic Sync] À insérer:",toInsert.length,"(après dédup)");
+          if(toInsert.length===0){console.log("[Reonic Sync] Tous en doublons.");setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+
+          // 5. Insérer silencieusement
+          setLeads(prev=>[...toInsert,...prev]);
+          const leadsToSave=toInsert.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
+          sb.from("leads").upsert(leadsToSave).then(({error})=>{
+            if(error)console.error("autoSync Reonic:",error.message);
+          });
+
+          setAutoSyncStatus({nb:toInsert.length});
+          setTimeout(()=>setAutoSyncStatus(null),8000);
+        }catch(e){setAutoSyncStatus(null);}
+        autoSyncRef.current=false;
+      },[reonicApiKey,reonicClientId,leads,EDGE_URL]);
+
+      // Lancer le sync au montage du composant
+      React.useEffect(()=>{
+        if(reonicApiKey&&reonicClientId){
+          const t=setTimeout(()=>silentSync(),1500); // délai 1.5s pour laisser les leads se charger
+          return()=>clearTimeout(t);
+        }
+      },[]);
+
       const fetchReonicOffers=async()=>{
         if(!reonicApiKey||!reonicClientId){setReonicError("Clé API ou Client ID Reonic non configuré dans Paramètres.");return;}
         setReonicLoading(true);setReonicError(null);
@@ -7015,6 +7111,13 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               {canEdit(role)&&<button onClick={()=>{setNewRdvModal(true);setNewRdvMode("nouveau");setNewRdvForm({prenom:"",nom:"",telephone:"",email:"",adresse:"",date_rdv:"",heure_rdv:"",canal:""});setNewRdvSearch("");setNewRdvLead(null);setNewRdvDate({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{padding:"8px 13px",fontSize:13})}>📅 RDV</button>}
               {canEdit(role)&&<button onClick={()=>setNewModal(true)} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"8px 13px",fontSize:13})}>➕ Nouveau</button>}
               {canEdit(role)&&reonicApiKey&&<button onClick={()=>{setReonicModal(true);fetchReonicOffers();}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{padding:"8px 13px",fontSize:13})}>⚡ Reonic</button>}
+              {/* Badge auto-sync */}
+              {autoSyncStatus==="syncing"&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#EFF6FF",borderRadius:20,fontSize:11,color:"#2563EB",border:"1px solid #BFDBFE"}}>
+                <div style={{width:8,height:8,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Sync Reonic…
+              </div>}
+              {autoSyncStatus&&autoSyncStatus!=="syncing"&&autoSyncStatus.nb>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#F0FDF4",borderRadius:20,fontSize:11,color:"#16A34A",border:"1px solid #BBF7D0"}}>
+                ✅ {autoSyncStatus.nb} nouveau{autoSyncStatus.nb>1?"x":""} lead{autoSyncStatus.nb>1?"s":""} Reonic
+              </div>}
             </div>
           </div>
 
@@ -7205,13 +7308,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
     function ReonicConfig({reonicApiKey,saveReonicApiKey,supabaseUrl,supabaseKey}){
       const EDGE_URL=`${supabaseUrl}/functions/v1/reonic-proxy`;
-      const WEBHOOK_URL=`${supabaseUrl}/functions/v1/reonic-webhook`;
       const[testStatus,setTestStatus]=useState(null);
       const[keyDraft,setKeyDraft]=useState(reonicApiKey||"");
       const[clientIdDraft,setClientIdDraft]=useState(()=>{try{return localStorage.getItem("reonic_client_id")||"";}catch(e){return "";}});
       const[showKey,setShowKey]=useState(false);
-      const[webhookStatus,setWebhookStatus]=useState(null); // null | loading | ok | error
-      const[webhookResults,setWebhookResults]=useState(null);
 
       const testConnection=async()=>{
         if(!keyDraft.trim()||!clientIdDraft.trim()){setTestStatus("error");return;}
@@ -7227,23 +7327,6 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         }catch(e){setTestStatus("error");}
       };
 
-      const activerWebhooks=async()=>{
-        if(!reonicApiKey){setWebhookStatus("error");return;}
-        const clientId=clientIdDraft.trim()||localStorage.getItem("reonic_client_id")||"";
-        setWebhookStatus("loading");
-        try{
-          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({action:"register_webhook",apiKey:reonicApiKey,clientId,payload:{webhookUrl:WEBHOOK_URL}})});
-          const data=await res.json();
-          console.log("register_webhook response:",JSON.stringify(data));
-          if(data.ok){
-            setWebhookResults(data.results);
-            setWebhookStatus("ok");
-          } else {
-            setWebhookStatus({err:data.error||JSON.stringify(data.results)||"Erreur inconnue"});
-          }
-        }catch(e){setWebhookStatus({err:e.message||"Erreur réseau"});}
-      };
 
       return(
         <div style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"16px 18px",marginBottom:14,boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
@@ -7288,61 +7371,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             ❌ {typeof testStatus==="object"?testStatus.err:"Vérifiez votre clé API et votre Client ID."}
           </div>}
 
-          {/* ── SECTION WEBHOOKS ── */}
+          {/* ── SYNC AUTOMATIQUE ── */}
           {reonicApiKey&&<div style={{marginTop:12,borderTop:"1px solid #F1F5F9",paddingTop:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>🔔 Webhooks temps réel</div>
-                <div style={{fontSize:11,color:"#64748B",marginTop:2}}>Les leads apparaissent automatiquement sans import manuel</div>
-              </div>
-              {webhookStatus==="ok"
-                ?<span style={{background:"#F0FDF4",color:"#16A34A",border:"1px solid #BBF7D0",borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:700}}>✅ Actifs</span>
-                :<span style={{background:"#F8FAFC",color:"#94A3B8",border:"1px solid #E2E8F0",borderRadius:20,padding:"2px 10px",fontSize:10}}>Inactifs</span>
-              }
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:"#10B981",flexShrink:0}}/>
+              <div style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>Sync automatique active</div>
             </div>
-
-            {/* URL webhook */}
-            <div style={{background:"#F8FAFC",borderRadius:8,padding:"8px 10px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:10,color:"#64748B",marginBottom:2,fontWeight:600}}>URL WEBHOOK</div>
-                <div style={{fontSize:10,color:"#475569",wordBreak:"break-all",fontFamily:"monospace"}}>{WEBHOOK_URL}</div>
-              </div>
-              <button onClick={()=>{try{navigator.clipboard.writeText(WEBHOOK_URL);}catch(e){}}}
-                style={{background:"#E2E8F0",border:"none",borderRadius:6,color:"#475569",padding:"4px 8px",cursor:"pointer",fontSize:10,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>Copier</button>
-            </div>
-
-            {/* Événements couverts */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
-              {[
-                {icon:"📥",label:"Nouveau lead",ev:"request-created",color:"#3B82F6"},
-                {icon:"📋",label:"Devis créé",ev:"offer-created",color:"#A855F7"},
-                {icon:"✍️",label:"Devis signé",ev:"offer-signed",color:"#10B981"},
-              ].map(e=>{
-                const res=webhookResults?.[e.ev];
-                return(
-                  <div key={e.ev} style={{background:res==="ok"?"#F0FDF4":"#F8FAFC",borderRadius:8,padding:"8px 10px",textAlign:"center",border:`1px solid ${res==="ok"?"#BBF7D0":"#E2E8F0"}`}}>
-                    <div style={{fontSize:16,marginBottom:3}}>{e.icon}</div>
-                    <div style={{fontSize:10,fontWeight:700,color:res==="ok"?"#16A34A":e.color}}>{e.label}</div>
-                    <div style={{fontSize:9,color:"#94A3B8",marginTop:1}}>{res==="ok"?"✅ Enregistré":res?"⚠️ Erreur":"En attente"}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <button onClick={activerWebhooks} disabled={webhookStatus==="loading"}
-              style={{width:"100%",background:webhookStatus==="ok"?"linear-gradient(135deg,#10B981,#059669)":"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"10px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif'}}>
-              {webhookStatus==="loading"?"⏳ Enregistrement…":webhookStatus==="ok"?"✅ Webhooks actifs — Réactiver":"🔔 Activer les webhooks temps réel"}
-            </button>
-
-            {webhookStatus==="ok"&&<div style={{marginTop:8,padding:"8px 12px",background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,fontSize:11,color:"#16A34A"}}>
-              ✅ Reonic enverra automatiquement les nouveaux leads vers Ma Borne LR.
-            </div>}
-            {webhookStatus&&webhookStatus!=="ok"&&webhookStatus!=="loading"&&<div style={{marginTop:8,padding:"8px 12px",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,fontSize:11,color:"#DC2626"}}>
-              ❌ {typeof webhookStatus==="object"?webhookStatus.err:"Erreur. Vérifiez que la fonction reonic-proxy est bien déployée."}
-            </div>}
-
-            <div style={{marginTop:8,fontSize:10,color:"#94A3B8",lineHeight:1.5}}>
-              ⚠️ Avant d'activer : déployer <code style={{fontSize:9,background:"#E2E8F0",padding:"1px 4px",borderRadius:3}}>reonic-webhook</code> sur Supabase + configurer les secrets <code style={{fontSize:9,background:"#E2E8F0",padding:"1px 4px",borderRadius:3}}>SUPABASE_URL</code> et <code style={{fontSize:9,background:"#E2E8F0",padding:"1px 4px",borderRadius:3}}>SUPABASE_SERVICE_KEY</code>
+            <div style={{fontSize:11,color:"#64748B",lineHeight:1.6}}>
+              À chaque ouverture de l'onglet Leads, Ma Borne LR vérifie automatiquement les nouveaux leads Reonic et les importe sans action de votre part. Les perdus et doublons sont exclus automatiquement.
             </div>
           </div>}
         </div>
