@@ -6481,11 +6481,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             })});
             const data=await res.json();
             if(data.ok&&data.data?.id){
-              // Sauvegarder le reonic_id retourné sur le lead
               setLeads(p=>p.map(l=>l.id===leadId?{...l,reonic_id:data.data.id}:l));
               console.log("[Reonic] Demande créée:",data.data.id);
             }else{
-              console.warn("[Reonic] Création échouée:",data.error);
+              console.warn("[Reonic] Création échouée — réponse complète:",JSON.stringify(data));
             }
           }catch(e){
             console.warn("[Reonic] Erreur réseau:",e.message);
