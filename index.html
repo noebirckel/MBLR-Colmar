@@ -10034,6 +10034,16 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                 {(view==="leads")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} supabaseKey={SUPABASE_KEY}
                   onDeleteLead={async(id)=>{
+                    // Archiver dans Reonic si le lead vient de là
+                    const lead=leads.find(l=>l.id===id);
+                    if(lead?.reonic_id&&reonicApiKey){
+                      const clientId=localStorage.getItem("reonic_client_id")||"";
+                      const edgeUrl=`${SUPABASE_URL}/functions/v1/reonic-proxy`;
+                      fetch(edgeUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+                        action:"archive_offer",apiKey:reonicApiKey,clientId,
+                        payload:{offerId:lead.reonic_id,reason:`Lead supprimé par ${profile?.nom||"un utilisateur"}`}
+                      })}).then(r=>r.json()).then(d=>console.log("[Reonic] Archive:",d.note?"note ajoutée":"",d.archived?"archivé":"")).catch(e=>console.warn("[Reonic] Archive échoué:",e.message));
+                    }
                     await sb.from("leads").delete().eq("id",id);
                     setLeads(prev=>{
                       const filtered=prev.filter(l=>l.id!==id);
