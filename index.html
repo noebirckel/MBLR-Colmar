@@ -6472,15 +6472,15 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[]);
       const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
 
-      // Calculs pipeline
-      const activeLeads=leads.filter(l=>!["perdu","sans_reponse"].includes(l.statut));
+      // Calculs pipeline (devis_ligne exclus → géré dans onglet Offres)
+      const activeLeads=leads.filter(l=>!["perdu","sans_reponse","devis_ligne"].includes(l.statut));
       const convertis=leads.filter(l=>l.statut==="converti").length;
       const taux=activeLeads.length+convertis>0?Math.round((convertis/(activeLeads.length+convertis))*100):0;
       const rdvAVenir=leads.filter(l=>l.date_rdv&&l.statut==="rdv_fixe").length;
-      const relancesEnRetard=leads.filter(l=>l.date_relance&&!["converti","perdu","sans_reponse"].includes(l.statut)&&parseD(l.date_relance)<=Date.now()).length;
+      const relancesEnRetard=leads.filter(l=>l.date_relance&&!["converti","perdu","sans_reponse","devis_ligne"].includes(l.statut)&&parseD(l.date_relance)<=Date.now()).length;
 
       const filteredLeads=useMemo(()=>{
-        let l=leads.filter(x=>x.statut!=="sans_reponse");
+        let l=leads.filter(x=>x.statut!=="sans_reponse"&&x.statut!=="devis_ligne");
         if(filtre!=="tous") l=l.filter(x=>x.statut===filtre);
         if(filterCanal!=="tous") l=l.filter(x=>x.canal===filterCanal);
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+(x.email||"")+" "+(x.telephone||"")).toLowerCase().includes(search.toLowerCase()));
@@ -6488,7 +6488,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(sortBy==="date_desc") return parseD(b.date_creation)-parseD(a.date_creation);
           if(sortBy==="date_asc") return parseD(a.date_creation)-parseD(b.date_creation);
           if(sortBy==="statut"){
-            const O={a_appeler:0,rdv_fixe:1,devis_ligne:2,relance:3,rdv_fait:4,converti:5,perdu:6};
+            const O={a_appeler:0,rdv_fixe:1,relance:2,rdv_fait:3,converti:4,perdu:5};
             if((O[a.statut]??9)!==(O[b.statut]??9)) return (O[a.statut]??9)-(O[b.statut]??9);
             if(a.statut==="a_appeler") return (a.nb_appels||0)-(b.nb_appels||0);
           }
@@ -7246,7 +7246,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             {/* KPIs statuts cliquables */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
-              {kpiTotals.filter(k=>["a_appeler","rdv_fixe","devis_ligne","relance"].includes(k.key)).map(k=>(
+              {kpiTotals.filter(k=>["a_appeler","rdv_fixe","relance","rdv_fait"].includes(k.key)).map(k=>(
                 <div key={k.key} onClick={()=>setFiltre(filtre===k.key?"tous":k.key)}
                   style={{background:"#FFFFFF",borderRadius:9,padding:"8px",border:`1px solid ${filtre===k.key?k.color:"#E2E8F0"}`,cursor:"pointer",textAlign:"center"}}>
                   <div style={{fontSize:16,fontWeight:800,color:k.color}}>{k.nb}</div>
