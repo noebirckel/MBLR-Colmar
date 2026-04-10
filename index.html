@@ -6238,44 +6238,66 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         autoSyncRef.current=true;
         setAutoSyncStatus("syncing");
         try{
-          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
+          // 1. Récupérer toutes les offres Reonic (demandes + offres avec devis)
+          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
           const data=await res.json();
           if(!data.ok){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
           const results=data.data?.results||[];
 
-          // Déduplication : localStorage + leads actuels + téléphone/email
+          // 2. IDs déjà connus (localStorage + leads en base)
           const persistedIds=getSyncedIds();
           const liveIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
           const allKnownIds=new Set([...persistedIds,...liveIds]);
-          const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
-          const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
-          const newOffers=results.filter(o=>{
-            if(allKnownIds.has(o.id))return false;
-            if(getReonicTypeStatic(o)==="perdu")return false;
-            return true;
-          });
-          console.log("[Reonic Sync] Offres Reonic:",results.length,"| Nouvelles:",newOffers.length,"| Connues:",allKnownIds.size);
 
-          if(newOffers.length===0){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+          // 3. Nouvelles offres : tout ce qui n'est pas encore importé et pas perdu
+          const newOffers=results.filter(o=>!allKnownIds.has(o.id)&&getReonicTypeStatic(o)!=="perdu");
 
-          // 3. Charger les contacts en batch
+          // 4. Mises à jour : leads existants dont le statut/prix a changé dans Reonic
+          const reonicMap=new Map(results.map(o=>[o.id,o]));
+          const toUpdate=[];
+          for(const lead of (leads||[]).filter(l=>l.reonic_id)){
+            const offer=reonicMap.get(lead.reonic_id);
+            if(!offer)continue;
+            const newType=getReonicTypeStatic(offer);
+            const newTi=RTYPE_INFO[newType]||RTYPE_INFO.lead;
+            const newPrix=offer.totalPlannedPrice||0;
+            const newStatus=offer.currentSignature?.state||offer.status||"";
+            const statutChanged=newTi.statut!==lead.statut&&!["converti","perdu"].includes(lead.statut);
+            const prixChanged=newPrix!==Number(lead.prix_reonic||0);
+            const statusChanged=newStatus!==(lead.reonic_status||"");
+            if(statutChanged||prixChanged||statusChanged){
+              toUpdate.push({id:lead.id,statut:statutChanged?newTi.statut:lead.statut,prix_reonic:newPrix,reonic_status:newStatus});
+            }
+          }
+
+          console.log("[Reonic Sync] Reonic:",results.length,"| Nouveaux:",newOffers.length,"| MàJ:",toUpdate.length);
+
+          if(newOffers.length===0&&toUpdate.length===0){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+
+          // 5. Charger les contacts pour les nouvelles offres
           let contactsMap={};
-          try{
-            const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_contacts",apiKey:reonicApiKey,clientId:reonicClientId})});
-            const cd=await cr.json();
-            if(cd.ok&&Array.isArray(cd.data)){cd.data.forEach(c=>{contactsMap[c.id]=c;});}
-            console.log("[Reonic Sync] Contacts:",Object.keys(contactsMap).length);
-          }catch(e){console.log("[Reonic Sync] Erreur contacts:",e.message);}
+          if(newOffers.length>0){
+            try{
+              const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({action:"get_contacts",apiKey:reonicApiKey,clientId:reonicClientId})});
+              const cd=await cr.json();
+              if(cd.ok&&Array.isArray(cd.data)){cd.data.forEach(c=>{contactsMap[c.id]=c;});}
+            }catch(e){}
+          }
 
-          // 4. Filtrer les doublons par téléphone/email
+          // 6. Construire les leads à insérer
           const base=Date.now();
           const now=new Date().toLocaleDateString("fr-FR");
+          const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
+          const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
+
           const toInsert=newOffers.filter(o=>{
             const c=contactsMap[o.customer?.id]||null;
             const phone=(c?.telephone||c?.mobilePhone||"").replace(/\s/g,"");
             const email=(c?.email||"").toLowerCase();
-            if(phone&&existingPhones.has(phone)){console.log("[Reonic Sync] Doublon tél:",phone);return false;}
-            if(email&&existingEmails.has(email)){console.log("[Reonic Sync] Doublon email:",email);return false;}
+            if(phone&&existingPhones.has(phone))return false;
+            if(email&&existingEmails.has(email))return false;
             return true;
           }).map((offer,idx)=>{
             const c=contactsMap[offer.customer?.id]||null;
@@ -6300,70 +6322,30 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             };
           });
 
-          console.log("[Reonic Sync] À insérer:",toInsert.length,"(après dédup)");
-
-          // ── Mise à jour des leads existants avec reonic_id ──────────────────
-          const leadsWithReonicId=(leads||[]).filter(l=>l.reonic_id);
-          const reonicMap=new Map(results.map(o=>[o.id,o]));
-          const toUpdate=[];
-          for(const lead of leadsWithReonicId){
-            const offer=reonicMap.get(lead.reonic_id);
-            if(!offer)continue;
-            const newType=getReonicTypeStatic(offer);
-            const newTi=RTYPE_INFO[newType]||RTYPE_INFO.lead;
-            const newPrix=offer.totalPlannedPrice||0;
-            const newReonicStatus=offer.currentSignature?.state||offer.status||"";
-            // Vérifier si quelque chose a changé
-            const statutChanged=newTi.statut!==lead.statut&&!["converti","perdu"].includes(lead.statut);
-            const prixChanged=newPrix!==Number(lead.prix_reonic||0);
-            const statusChanged=newReonicStatus!==(lead.reonic_status||"");
-            if(statutChanged||prixChanged||statusChanged){
-              toUpdate.push({id:lead.id,statut:statutChanged?newTi.statut:lead.statut,prix_reonic:newPrix,reonic_status:newReonicStatus});
-            }
-          }
+          // 7. Appliquer les mises à jour
           if(toUpdate.length>0){
-            console.log("[Reonic Sync] Mises à jour:",toUpdate.length,"leads");
-            setLeads(prev=>prev.map(l=>{
-              const upd=toUpdate.find(u=>u.id===l.id);
-              return upd?{...l,...upd}:l;
-            }));
-            toUpdate.forEach(upd=>{
-              sb.from("leads").update({statut:upd.statut,prix_reonic:upd.prix_reonic,reonic_status:upd.reonic_status}).eq("id",upd.id).then(({error})=>{
-                if(error)console.error("[Reonic Sync] Update lead:",error.message);
-              });
-            });
+            setLeads(prev=>prev.map(l=>{const u=toUpdate.find(x=>x.id===l.id);return u?{...l,...u}:l;}));
+            toUpdate.forEach(u=>sb.from("leads").update({statut:u.statut,prix_reonic:u.prix_reonic,reonic_status:u.reonic_status}).eq("id",u.id).then(({error})=>{if(error)console.error("[Reonic] update:",error.message);}));
           }
 
-          if(toInsert.length===0){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
-
-          // 5. Insérer silencieusement
-          setLeads(prev=>[...toInsert,...prev]);
-          addSyncedIds(toInsert.map(l=>l.reonic_id).filter(Boolean));
-          const leadsToSave=toInsert.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
-          sb.from("leads").upsert(leadsToSave).then(({error})=>{
-            if(error)console.error("autoSync Reonic:",error.message);
-          });
+          // 8. Insérer les nouveaux
+          if(toInsert.length>0){
+            setLeads(prev=>[...toInsert,...prev]);
+            addSyncedIds(toInsert.map(l=>l.reonic_id).filter(Boolean));
+            const toSave=toInsert.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
+            sb.from("leads").upsert(toSave).then(({error})=>{if(error)console.error("[Reonic] insert:",error.message);});
+          }
 
           setAutoSyncStatus({nb:toInsert.length,updated:toUpdate.length});
           setTimeout(()=>setAutoSyncStatus(null),8000);
-        }catch(e){setAutoSyncStatus(null);}
+        }catch(e){console.error("[Reonic Sync] Erreur:",e.message);setAutoSyncStatus(null);}
         autoSyncRef.current=false;
       },[reonicApiKey,reonicClientId,leads,EDGE_URL]);
-
-      // Lancer le sync au montage du composant
-      React.useEffect(()=>{
-        window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
-        if(reonicApiKey&&reonicClientId){
-          const t=setTimeout(()=>silentSync(),1500);
-          return()=>clearTimeout(t);
-        }
-      },[]);
 
       const fetchReonicOffers=async()=>{
         if(!reonicApiKey||!reonicClientId){setReonicError("Clé API ou Client ID Reonic non configuré dans Paramètres.");return;}
         setReonicLoading(true);setReonicError(null);
         try{
-          // 1. Récupérer toutes les offres
           const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
           const data=await res.json();
           if(!data.ok){setReonicError(data.error||"Erreur Reonic");setReonicLoading(false);return;}
