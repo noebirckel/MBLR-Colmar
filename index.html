@@ -10035,21 +10035,25 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {(view==="leads")&&<LeadsTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} setVentes={SV} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} stock={stock} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} supabaseKey={SUPABASE_KEY}
                   onDeleteLead={async(id)=>{
                     const lead=leads.find(l=>l.id===id);
-                    console.log("[Reonic Delete] Lead trouvé:",lead?.client,"| reonic_id:",lead?.reonic_id,"| apiKey:",!!reonicApiKey);
-                    if(lead?.reonic_id&&reonicApiKey){
+                    console.log("[Reonic Delete] Lead:",lead?.client,"| reonic_id:",lead?.reonic_id,"| email:",lead?.email,"| tel:",lead?.telephone);
+                    if(reonicApiKey&&(lead?.reonic_id||lead?.email||lead?.telephone)){
                       const clientId=localStorage.getItem("reonic_client_id")||"";
                       const edgeUrl=`${SUPABASE_URL}/functions/v1/reonic-proxy`;
                       try{
-                        // Attendre que Reonic soit notifié avant de supprimer
                         const r=await fetch(edgeUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
                           action:"archive_offer",apiKey:reonicApiKey,clientId,
-                          payload:{offerId:lead.reonic_id,reason:`Lead supprimé par ${profile?.nom||"un utilisateur"}`}
+                          payload:{
+                            offerId:lead?.reonic_id||null,
+                            email:lead?.email||"",
+                            telephone:lead?.telephone||"",
+                            reason:`Supprimé par ${profile?.nom||"un utilisateur"} depuis Ma Borne LR`,
+                          }
                         })});
                         const d=await r.json();
                         console.log("[Reonic Delete] Résultat:",JSON.stringify(d));
                       }catch(e){console.warn("[Reonic Delete] Erreur:",e.message);}
                     }else{
-                      console.log("[Reonic Delete] Ignoré — pas de reonic_id ou pas de clé API");
+                      console.log("[Reonic Delete] Ignoré — pas de données Reonic disponibles");
                     }
                     await sb.from("leads").delete().eq("id",id);
                     setLeads(prev=>{
