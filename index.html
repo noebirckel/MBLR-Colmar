@@ -6463,7 +6463,6 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         // ── Envoi automatique vers Reonic si configuré ──
         if(reonicApiKey&&reonicClientId&&EDGE_URL){
           try{
-            const adresseParts=(newForm.adresse||"").split(" ");
             const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
               action:"create_request",
               apiKey:reonicApiKey,
@@ -6475,8 +6474,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 telephone:newForm.telephone||"",
                 message:newForm.message||"",
                 note:`Lead créé depuis Ma Borne LR — Canal: ${newForm.canal||"Manuel"}`,
-                adresse:newForm.adresse||"",
-                ville:adresseParts[adresseParts.length-1]||"",
+                fullAddress:newForm.adresse||"",
               }
             })});
             const data=await res.json();
