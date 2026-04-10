@@ -6342,6 +6342,15 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         autoSyncRef.current=false;
       },[reonicApiKey,reonicClientId,leads,EDGE_URL]);
 
+      // Lancer le sync automatique au montage + exposer pour le bouton manuel
+      React.useEffect(()=>{
+        window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
+        if(reonicApiKey&&reonicClientId){
+          const t=setTimeout(()=>silentSync(),1500);
+          return()=>clearTimeout(t);
+        }
+      },[]);
+
       const fetchReonicOffers=async()=>{
         if(!reonicApiKey||!reonicClientId){setReonicError("Clé API ou Client ID Reonic non configuré dans Paramètres.");return;}
         setReonicLoading(true);setReonicError(null);
