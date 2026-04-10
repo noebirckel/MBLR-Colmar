@@ -6195,34 +6195,64 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const EDGE_URL=supabaseUrl?`${supabaseUrl}/functions/v1/reonic-proxy`:"";
 
       // ── AUTO-SYNC REONIC (polling) ──
-      const[autoSyncStatus,setAutoSyncStatus]=useState(null); // null | "syncing" | {nb:N} | "error"
+      const getSyncedIds=()=>{try{return new Set(JSON.parse(localStorage.getItem("reonic_synced_ids")||"[]"));}catch(e){return new Set();}};
+      const addSyncedIds=(ids)=>{try{const s=getSyncedIds();ids.forEach(id=>s.add(id));localStorage.setItem("reonic_synced_ids",JSON.stringify([...s]));}catch(e){}};
+      const[autoSyncStatus,setAutoSyncStatus]=useState(null);
       const autoSyncRef=React.useRef(false);
+
+      // Nettoyer les doublons Reonic + syncer localStorage au montage
+      React.useEffect(()=>{
+        if(!leads||leads.length===0)return;
+        const seen=new Map();
+        let hasDups=false;
+        leads.forEach(l=>{
+          if(l.reonic_id){
+            if(seen.has(l.reonic_id))hasDups=true;
+            else seen.set(l.reonic_id,l.id);
+          }
+        });
+        // Toujours synchroniser le localStorage
+        addSyncedIds([...seen.keys()]);
+        if(hasDups){
+          console.log("[Reonic] Nettoyage doublons...");
+          const toKeep=new Set(seen.values());
+          leads.forEach(l=>{if(!l.reonic_id)toKeep.add(l.id);});
+          const toDelete=leads.filter(l=>!toKeep.has(l.id)).map(l=>l.id);
+          if(toDelete.length>0){
+            sb.from("leads").delete().in("id",toDelete).then(({error})=>{
+              if(error)console.error("[Reonic] Erreur suppression:",error.message);
+              else console.log(`[Reonic] ${toDelete.length} doublon(s) supprimé(s)`);
+            });
+            setLeads(prev=>prev.filter(l=>toKeep.has(l.id)));
+          }
+        }
+      },[leads.length]);
 
       const silentSync=React.useCallback(async()=>{
         if(!reonicApiKey||!reonicClientId||!EDGE_URL)return;
         if(autoSyncRef.current)return;
         autoSyncRef.current=true;
         setAutoSyncStatus("syncing");
-        console.log("[Reonic Sync] Démarrage...");
         try{
           const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
           const data=await res.json();
-          console.log("[Reonic Sync] Offres récupérées:",data.ok, "total:", data.data?.results?.length||0);
           if(!data.ok){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
           const results=data.data?.results||[];
 
-          const existingReonicIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          // Déduplication : localStorage + leads actuels + téléphone/email
+          const persistedIds=getSyncedIds();
+          const liveIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          const allKnownIds=new Set([...persistedIds,...liveIds]);
           const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
           const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
           const newOffers=results.filter(o=>{
-            if(existingReonicIds.has(o.id))return false;
-            const type=getReonicTypeStatic(o);
-            if(type==="perdu")return false;
+            if(allKnownIds.has(o.id))return false;
+            if(getReonicTypeStatic(o)==="perdu")return false;
             return true;
           });
-          console.log("[Reonic Sync] Nouveaux (non importés, non perdus):", newOffers.length);
+          console.log("[Reonic Sync] Offres Reonic:",results.length,"| Nouvelles:",newOffers.length,"| Connues:",allKnownIds.size);
 
-          if(newOffers.length===0){console.log("[Reonic Sync] Aucun nouveau.");setAutoSyncStatus(null);autoSyncRef.current=false;return;}
+          if(newOffers.length===0){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
 
           // 3. Charger les contacts en batch
           let contactsMap={};
@@ -6271,6 +6301,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
           // 5. Insérer silencieusement
           setLeads(prev=>[...toInsert,...prev]);
+          addSyncedIds(toInsert.map(l=>l.reonic_id).filter(Boolean));
           const leadsToSave=toInsert.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
           sb.from("leads").upsert(leadsToSave).then(({error})=>{
             if(error)console.error("autoSync Reonic:",error.message);
