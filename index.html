@@ -6452,12 +6452,45 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         if(detailModal) setDetailModal(p=>({...p,...patch}));
       };
 
-      const saveLead=()=>{
+      const saveLead=async()=>{
         if(!newForm.nom.trim())return;
-        const entry={...newForm,id:Date.now(),statut:"a_appeler",date_creation:today,nb_appels:0,historique_appels:[]};
+        const leadId=Date.now();
+        const entry={...newForm,id:leadId,statut:"a_appeler",date_creation:today,nb_appels:0,historique_appels:[],reonic_id:null,prix_reonic:0,reonic_status:""};
         setLeads(p=>[entry,...p]);
         setNewModal(false);
         setNewForm({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
+
+        // ── Envoi automatique vers Reonic si configuré ──
+        if(reonicApiKey&&reonicClientId&&EDGE_URL){
+          try{
+            const adresseParts=(newForm.adresse||"").split(" ");
+            const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+              action:"create_request",
+              apiKey:reonicApiKey,
+              clientId:reonicClientId,
+              payload:{
+                prenom:newForm.prenom||"",
+                nom:newForm.nom||"",
+                email:newForm.email||"",
+                telephone:newForm.telephone||"",
+                message:newForm.message||"",
+                note:`Lead créé depuis Ma Borne LR — Canal: ${newForm.canal||"Manuel"}`,
+                adresse:newForm.adresse||"",
+                ville:adresseParts[adresseParts.length-1]||"",
+              }
+            })});
+            const data=await res.json();
+            if(data.ok&&data.data?.id){
+              // Sauvegarder le reonic_id retourné sur le lead
+              setLeads(p=>p.map(l=>l.id===leadId?{...l,reonic_id:data.data.id}:l));
+              console.log("[Reonic] Demande créée:",data.data.id);
+            }else{
+              console.warn("[Reonic] Création échouée:",data.error);
+            }
+          }catch(e){
+            console.warn("[Reonic] Erreur réseau:",e.message);
+          }
+        }
       };
       const saveEditLead=()=>{
         if(!editForm.nom.trim())return;
@@ -6789,9 +6822,12 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
             </div>
             <div style={{marginBottom:16}}><L c="Message"/><textarea value={newForm.message} onChange={e=>setNewForm(p=>({...p,message:e.target.value}))} style={{...INP(),height:70,resize:"none",lineHeight:1.6}}/></div>
+            {reonicApiKey&&<div style={{marginBottom:12,padding:"8px 12px",background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,fontSize:11,color:"#16A34A",display:"flex",alignItems:"center",gap:6}}>
+              ⚡ Ce lead sera automatiquement créé dans Reonic
+            </div>}
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setNewModal(false)} style={BTN("#E2E8F0",{flex:1})}>Annuler</button>
-              <button onClick={saveLead} disabled={!newForm.nom.trim()} style={BTN(!newForm.nom.trim()?"#FFFFFF":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,opacity:!newForm.nom.trim()?0.5:1})}>💾 Enregistrer</button>
+              <button onClick={saveLead} disabled={!newForm.nom.trim()} style={BTN(!newForm.nom.trim()?"#FFFFFF":"linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2,opacity:!newForm.nom.trim()?0.5:1})}>💾 Enregistrer{reonicApiKey?" + Reonic":""}</button>
             </div>
           </div></div>}
 
