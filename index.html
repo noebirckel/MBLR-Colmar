@@ -6666,6 +6666,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(x=>x.name).join(", ");
             const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(x=>x.name).join(", ");
             const produits=[wallbox,solar].filter(Boolean).join(" · ");
+            // Debug : voir les champs message/note disponibles
+            if(idx===0)console.log("[Reonic offer fields]",{message:offer.message,description:offer.description,note:offer.note,request:offer.request,comment:offer.comment,customerNote:offer.customerNote,internalNote:offer.internalNote,options0:offer.options?.[0]?.description});
             const type=getReonicTypeStatic(offer);
             const ti=RTYPE_INFO[type]||RTYPE_INFO.lead;
             return{
