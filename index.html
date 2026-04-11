@@ -7586,7 +7586,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[search,setSearch]=useState("");
       const[editId,setEditId]=useState(null);
       const[delConf,setDelConf]=useState(null);
-      const[matSearch,setMatSearch]=useState("");
+      const[revertConf,setRevertConf]=useState(null);
       const[matCat,setMatCat]=useState("tous");
       const[cabSearch,setCabSearch]=useState("");
       const[addrSugg,setAddrSugg]=useState([]);
@@ -8029,10 +8029,36 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         </div></div>
       );
 
+      const RevertModal = () => revertConf&&(
+        <div style={OVL} onClick={()=>setRevertConf(null)}><div style={{...MBX,maxWidth:380,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+          <Handle/>
+          <div style={{fontSize:40,marginBottom:10}}>↩️</div>
+          <h3 style={{margin:"0 0 8px",fontWeight:800,fontSize:16}}>Remettre en offre ?</h3>
+          <p style={{color:"#64748B",fontSize:13,margin:"0 0 6px"}}><strong style={{color:"#1E293B"}}>{revertConf.client}</strong></p>
+          <p style={{color:"#94A3B8",fontSize:12,margin:"0 0 20px"}}>La vente sera supprimée et le lead correspondant repassera en "Devis en ligne" dans l'onglet Offres.</p>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setRevertConf(null)} style={BTN("#E2E8F0",{flex:1})}>Annuler</button>
+            <button onClick={async()=>{
+              const v=revertConf;
+              // 1. Supprimer la vente
+              if(onDeleteVente) await onDeleteVente(v.id);
+              else await sb.from("ventes").delete().eq("id",v.id);
+              // 2. Remettre le lead en devis_ligne si lié à un lead
+              if(v.lead_id||v.reonic_id){
+                await sb.from("leads").update({statut:"devis_ligne",vente_id:null})
+                  .or(v.lead_id?`id.eq.${v.lead_id}`:`reonic_id.eq.${v.reonic_id}`);
+              }
+              setRevertConf(null);
+            }} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2})}>↩️ Remettre en offre</button>
+          </div>
+        </div></div>
+      );
+
       // ══ VUE LISTE ══
       if(viewMode==="list") return (
         <div>
           <DelModal/>
+          <RevertModal/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
             <div>
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>💰 Ventes & Chiffre d'affaires</h2>
@@ -8093,6 +8119,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                   )}
                   {canEdit(role)&&<div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
                     <button onClick={()=>openEdit(v)} style={BTN("#E2E8F0",{padding:"6px 12px",fontSize:12})}>✏️ Modifier</button>
+                    <button onClick={()=>setRevertConf(v)} style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,color:"#3B82F6",padding:"6px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>↩️ Offre</button>
                     <button onClick={()=>setDelConf(v)} style={{background:"#EF444415",border:"1px solid #EF444430",borderRadius:8,color:"#EF4444",padding:"6px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>🗑️</button>
                   </div>}
                 </div>
