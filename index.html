@@ -531,9 +531,10 @@
             const existingByEmail=email?(leads||[]).find(l=>(l.email||"").toLowerCase()===email):null;
             const existing=existingByReonicId||existingByPhone||existingByEmail||null;
             const existingStatut=existing?.statut||null;
-            // Vraie doublon bloquante = déjà en offre ou converti
-            const isDupBlocking=existingStatut&&["devis_ligne","converti"].includes(existingStatut);
-            // Peut upgrader = lead existe mais pas encore en offre
+            const existingHasVente=!!(existing?.vente_id);
+            // Bloquant = déjà en devis_ligne OU converti AVEC une vente créée
+            const isDupBlocking=existingStatut==="devis_ligne"||(existingStatut==="converti"&&existingHasVente);
+            // Peut upgrader = lead existe mais pas bloquant (a_appeler, converti sans vente, etc.)
             const canUpgrade=!!existing&&!isDupBlocking;
             const type=getRType(offer);
             return{...offer,_contact:c,_duplicate:!!isDupBlocking,_canUpgrade:canUpgrade,_existingLead:existing||null,_type:type};
