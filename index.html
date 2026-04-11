@@ -525,16 +525,24 @@
             const c=contactsMap[offer.customer?.id]||null;
             const phone=(c?.telephone||c?.mobilePhone||"").replace(/\s/g,"");
             const email=(c?.email||"").toLowerCase();
-            const isDup=existingReonicIds.has(offer.id)||(phone&&existingPhones.has(phone))||(email&&existingEmails.has(email));
+            // Chercher un lead existant lié à cette offre
+            const existingByReonicId=(leads||[]).find(l=>l.reonic_id===offer.id);
+            const existingByPhone=phone?(leads||[]).find(l=>(l.telephone||"").replace(/\s/g,"")===phone):null;
+            const existingByEmail=email?(leads||[]).find(l=>(l.email||"").toLowerCase()===email):null;
+            const existing=existingByReonicId||existingByPhone||existingByEmail||null;
+            // Vraie doublon seulement si déjà en devis_ligne ou offre
+            const isDupBlocking=existing&&["devis_ligne","converti"].includes(existing.statut);
+            // Peut être mis à jour si existe mais pas encore en offre
+            const canUpgrade=existing&&!["devis_ligne","converti"].includes(existing.statut);
             const type=getRType(offer);
-            return{...offer,_contact:c,_duplicate:isDup,_type:type};
+            return{...offer,_contact:c,_duplicate:isDupBlocking,_canUpgrade:canUpgrade,_existingLead:existing,_type:type};
           });
 
           // Filtrer : montrer uniquement les offres avec devis (type devis ou signe), exclure perdus
           const offresOnly=enriched.filter(o=>["devis","signe"].includes(o._type));
           setImportOffers(offresOnly);
           const sel={};
-          offresOnly.forEach(o=>{if(!o._duplicate)sel[o.id]=true;});
+          offresOnly.forEach(o=>{if(!o._duplicate)sel[o.id]=true;}); // coche tout sauf vrais doublons
           setImportSelected(sel);
         }catch(e){setImportError("Erreur réseau : "+e.message);}
         setImportLoading(false);
@@ -546,31 +554,63 @@
         setImporting(true);
         const now=new Date().toLocaleDateString("fr-FR");
         const base=Date.now();
-        const newLeads=toImport.map((offer,idx)=>{
+        const toCreate=[];
+        const toUpdate=[];
+
+        toImport.forEach((offer,idx)=>{
           const c=offer._contact;
-          const prenom=c?.firstName||"";const nom=c?.lastName||"";
-          const adresse=[c?.street,c?.number,c?.postcode,c?.city].filter(Boolean).join(" ");
           const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(x=>x.name).join(", ");
           const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(x=>x.name).join(", ");
           const produits=[wallbox,solar].filter(Boolean).join(" · ");
           const ti=RTYPE_INFO[offer._type]||RTYPE_INFO.devis;
-          return{
-            id:base+idx,reonic_id:offer.id,prenom,nom,
-            client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
-            email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
-            adresse,message:produits||"Offre Reonic",canal:"Site web",
-            statut:ti.statut,date_creation:now,
-            prix_reonic:offer.totalPlannedPrice||0,
-            reonic_status:offer.currentSignature?.state||offer.status||"",
-            nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
-            par:"",date_relance:"",notes:"",vente_id:null,
-          };
+
+          if(offer._canUpgrade&&offer._existingLead){
+            // Mettre à jour le lead existant → devis_ligne
+            toUpdate.push({
+              id:offer._existingLead.id,
+              statut:ti.statut,
+              reonic_id:offer.id,
+              prix_reonic:offer.totalPlannedPrice||0,
+              reonic_status:offer.currentSignature?.state||offer.status||"",
+              message:produits||offer._existingLead.message,
+            });
+          } else if(!offer._duplicate){
+            // Créer un nouveau lead
+            const prenom=c?.firstName||"";const nom=c?.lastName||"";
+            const adresse=[c?.street,c?.number,c?.postcode,c?.city].filter(Boolean).join(" ");
+            toCreate.push({
+              id:base+idx,reonic_id:offer.id,prenom,nom,
+              client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
+              email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
+              adresse,message:produits||"Offre Reonic",canal:"Site web",
+              statut:ti.statut,date_creation:now,
+              prix_reonic:offer.totalPlannedPrice||0,
+              reonic_status:offer.currentSignature?.state||offer.status||"",
+              nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
+              par:"",date_relance:"",notes:"",vente_id:null,
+            });
+          }
         });
-        setLeads(prev=>[...newLeads,...prev]);
-        const toSave=newLeads.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
-        sb.from("leads").upsert(toSave).then(({error})=>{if(error)console.error("Import offres:",error.message);});
-        try{const ids=JSON.parse(localStorage.getItem("reonic_synced_ids")||"[]");newLeads.filter(l=>l.reonic_id).forEach(l=>ids.push(l.reonic_id));localStorage.setItem("reonic_synced_ids",JSON.stringify([...new Set(ids)]));}catch(e){}
-        setImporting(false);setImportDone(newLeads.length);
+
+        // Appliquer les mises à jour
+        if(toUpdate.length>0){
+          setLeads(prev=>prev.map(l=>{const u=toUpdate.find(x=>x.id===l.id);return u?{...l,...u}:l;}));
+          toUpdate.forEach(u=>{
+            sb.from("leads").update({statut:u.statut,reonic_id:u.reonic_id,prix_reonic:u.prix_reonic,reonic_status:u.reonic_status,message:u.message}).eq("id",u.id)
+              .then(({error})=>{if(error)console.error("upgrade lead:",error.message);});
+          });
+        }
+        // Insérer les nouveaux
+        if(toCreate.length>0){
+          setLeads(prev=>[...toCreate,...prev]);
+          const toSave=toCreate.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
+          sb.from("leads").upsert(toSave).then(({error})=>{if(error)console.error("import offres:",error.message);});
+        }
+        // Màj localStorage
+        try{const ids=JSON.parse(localStorage.getItem("reonic_synced_ids")||"[]");[...toCreate,...toUpdate].filter(l=>l.reonic_id).forEach(l=>ids.push(l.reonic_id));localStorage.setItem("reonic_synced_ids",JSON.stringify([...new Set(ids)]));}catch(e){}
+
+        setImporting(false);
+        setImportDone(toCreate.length+toUpdate.length);
         setImportOffers(prev=>prev.filter(o=>!importSelected[o.id]));
         setImportSelected({});
         setTimeout(()=>{setImportModal(false);setImportDone(null);},2500);
@@ -664,27 +704,30 @@
                           const nom=`${c?.firstName||""} ${c?.lastName||""}`.trim()||c?.email||"Client inconnu";
                           const ti=RTYPE_INFO[offer._type]||RTYPE_INFO.devis;
                           const prix=offer.totalPlannedPrice;
+                          const isBlocked=offer._duplicate&&!offer._canUpgrade;
                           return(
-                            <div key={offer.id} onClick={()=>!offer._duplicate&&setImportSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
+                            <div key={offer.id} onClick={()=>!isBlocked&&setImportSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
                               style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,
-                                border:`1px solid ${offer._duplicate?"#FDE68A":sel?"#BFDBFE":"#E2E8F0"}`,
-                                background:offer._duplicate?"#FFFBEB":sel?"#EFF6FF":"#FAFAFA",
-                                cursor:offer._duplicate?"not-allowed":"pointer",opacity:offer._duplicate?0.7:1}}>
-                              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${offer._duplicate?"#F59E0B":sel?"#3B82F6":"#CBD5E1"}`,background:offer._duplicate?"#FEF3C7":sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                                {offer._duplicate?<span style={{fontSize:10}}>⚠</span>:sel&&<span style={{color:"#FFF",fontSize:11,fontWeight:800}}>✓</span>}
+                                border:`1px solid ${isBlocked?"#FDE68A":offer._canUpgrade?"#E0F2FE":sel?"#BFDBFE":"#E2E8F0"}`,
+                                background:isBlocked?"#FFFBEB":offer._canUpgrade?(sel?"#E0F2FE":"#F0F9FF"):sel?"#EFF6FF":"#FAFAFA",
+                                cursor:isBlocked?"not-allowed":"pointer",opacity:isBlocked?0.7:1}}>
+                              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${isBlocked?"#F59E0B":sel?"#3B82F6":"#CBD5E1"}`,background:isBlocked?"#FEF3C7":sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                                {isBlocked?<span style={{fontSize:10}}>⚠</span>:sel&&<span style={{color:"#FFF",fontSize:11,fontWeight:800}}>✓</span>}
                               </div>
                               <div style={{flex:1,minWidth:0}}>
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                                   <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                                     <span style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>{nom}</span>
                                     <span style={{background:ti.bg,color:ti.color,borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{ti.icon} {ti.label}</span>
-                                    {offer._duplicate&&<span style={{background:"#FEF3C7",color:"#92400E",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>⚠️ Déjà importée</span>}
+                                    {isBlocked&&<span style={{background:"#FEF3C7",color:"#92400E",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>⚠️ Déjà en offre</span>}
+                                    {offer._canUpgrade&&<span style={{background:"#E0F2FE",color:"#0369A1",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>↑ Convertir demande → Offre</span>}
                                   </div>
                                   {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)} €</span>}
                                 </div>
                                 <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
                                   {c?.email&&<span style={{marginRight:8}}>✉️ {c.email}</span>}
                                   {(c?.telephone||c?.mobilePhone)&&<span>📞 {c.telephone||c.mobilePhone}</span>}
+                                  {offer._canUpgrade&&offer._existingLead&&<span style={{marginLeft:8,color:"#0369A1"}}>· Demande actuelle : {offer._existingLead.statut}</span>}
                                 </div>
                               </div>
                             </div>
