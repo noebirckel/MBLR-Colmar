@@ -6603,8 +6603,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const data=await res.json();
           if(!data.ok){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
           const results=data.data?.results||[];
-
-          // 2. IDs déjà connus (localStorage + leads en base)
+          if(results.length>0)console.log("[Reonic raw offer]",{id:results[0].id,message:results[0].message,description:results[0].description,note:results[0].note,comment:results[0].comment,customerNote:results[0].customerNote,internalNote:results[0].internalNote,request:results[0].request,options0desc:results[0].options?.[0]?.description,keys:Object.keys(results[0])});
           const persistedIds=getSyncedIds();
           const liveIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
           const allKnownIds=new Set([...persistedIds,...liveIds]);
