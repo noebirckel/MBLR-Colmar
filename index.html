@@ -6919,7 +6919,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       };
       const saveRdv=()=>{
         if(!rdvForm.date_rdv)return;
-        updateLead(rdvModal.id,{...rdvForm,statut:"rdv_fixe"});
+        const currentStatut=rdvModal.statut||"a_appeler";
+        const advancedStatuts=["rdv_fait","relance","converti"];
+        const newStatut=advancedStatuts.includes(currentStatut)?currentStatut:"rdv_fixe";
+        updateLead(rdvModal.id,{...rdvForm,statut:newStatut});
         setRdvModal(null);setRdvForm({date_rdv:"",heure_rdv:""});
       };
       const saveRapport=()=>{
