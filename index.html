@@ -6479,6 +6479,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const getSyncedIds=()=>{try{return new Set(JSON.parse(localStorage.getItem("reonic_synced_ids")||"[]"));}catch(e){return new Set();}};
       const addSyncedIds=(ids)=>{try{const s=getSyncedIds();ids.forEach(id=>s.add(id));localStorage.setItem("reonic_synced_ids",JSON.stringify([...s]));}catch(e){}};
       const[autoSyncStatus,setAutoSyncStatus]=useState(null);
+      React.useEffect(()=>{window._autoSyncStatus=autoSyncStatus;},[autoSyncStatus]);
       const autoSyncRef=React.useRef(false);
 
       // Nettoyer les doublons Reonic + syncer localStorage au montage
@@ -9590,7 +9591,6 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[leads,setLeads]=React.useState([]);
       const leadsRef=React.useRef([]);
       React.useEffect(()=>{leadsRef.current=leads;},[leads]);
-      React.useEffect(()=>{window._autoSyncStatus=autoSyncStatus;},[autoSyncStatus]);
       const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
       const[acomptes,setAcomptes]=React.useState([]);
       const[acompteDefPct,setAcompteDefPct]=React.useState(()=>{try{return Number(localStorage.getItem("acompte_pct")||50);}catch(e){return 50;}});
