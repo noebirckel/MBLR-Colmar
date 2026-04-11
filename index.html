@@ -6346,7 +6346,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       React.useEffect(()=>{
         window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
         window._revertLead=(leadId)=>SLeads(prev=>prev.map(l=>l.id===leadId?{...l,statut:"devis_ligne",vente_id:null}:l));
-        window._getLeads=()=>leads;
+        window._getLeads=()=>leadsRef.current;
         if(reonicApiKey&&reonicClientId){
           const t=setTimeout(()=>silentSync(),1500);
           return()=>clearTimeout(t);
@@ -7706,6 +7706,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           prix_ht:lead.prix_reonic>0?String(lead.prix_reonic):"",
           description:lead.message||"",
           materiels:matsFromMapping,
+          lead_id:lead.id||null,
+          reonic_id:lead.reonic_id||null,
         });
         setMItem({id:"",qty:""});
         setCItem({id:"",qty:""});
@@ -8062,20 +8064,21 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               // 1. Supprimer la vente
               if(onDeleteVente) await onDeleteVente(v.id);
               else await sb.from("ventes").delete().eq("id",v.id);
-              // 2. Trouver le lead lié : par reonic_id, adresse ou client
+              // 2. Trouver le lead lié par lead_id (stocké à la conversion) ou fallback
+              const allLeads=window._getLeads?.()||[];
               const lead=
-                (v.reonic_id&&window._getLeads?.().find(l=>l.reonic_id===v.reonic_id))||
-                window._getLeads?.().find(l=>l.client===v.client&&["converti","devis_ligne"].includes(l.statut));
+                (v.lead_id&&allLeads.find(l=>l.id===v.lead_id))||
+                (v.reonic_id&&allLeads.find(l=>l.reonic_id===v.reonic_id))||
+                allLeads.find(l=>l.client===v.client&&["converti","devis_ligne"].includes(l.statut));
               if(lead){
-                // Mettre à jour le state React
                 if(window._revertLead)window._revertLead(lead.id);
-                // Mettre à jour Supabase
                 await sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id);
               } else {
-                // Fallback : mettre à jour par client dans Supabase
+                // Fallback Supabase sans lead en mémoire
                 await sb.from("leads").update({statut:"devis_ligne",vente_id:null})
                   .eq("client",v.client).eq("statut","converti");
               }
+              console.log("[Revert]",v.client,"→ devis_ligne",lead?"(lead trouvé)":"(fallback Supabase)");
               setRevertConf(null);
             }} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2})}>↩️ Remettre en offre</button>
           </div>
@@ -9307,6 +9310,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[hist,setHist]=React.useState([]);
       const[ventes,setVentes]=React.useState([]);
       const[leads,setLeads]=React.useState([]);
+      const leadsRef=React.useRef([]);
+      React.useEffect(()=>{leadsRef.current=leads;},[leads]);
       const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
       const[acomptes,setAcomptes]=React.useState([]);
       const[acompteDefPct,setAcompteDefPct]=React.useState(()=>{try{return Number(localStorage.getItem("acompte_pct")||50);}catch(e){return 50;}});
