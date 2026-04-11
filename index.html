@@ -644,15 +644,38 @@
       // Auto-sync Reonic à l'ouverture de l'onglet
       const[syncBadge,setSyncBadge]=useState(null);
       React.useEffect(()=>{
-        const t=setTimeout(()=>{
-          if(window._triggerReonicSync)window._triggerReonicSync();
+        if(!reonicApiKey||!reonicClientId||!EDGE_URL)return;
+        setSyncBadge("syncing");
+        const t=setTimeout(async()=>{
+          try{
+            // Appel silencieux : récupérer les offres et comparer
+            const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
+            const data=await res.json();
+            if(!data.ok){setSyncBadge(null);return;}
+            const results=data.data?.results||[];
+            const knownIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+            const newCount=results.filter(o=>{
+              if(knownIds.has(o.id))return false;
+              const t=o.archived||o.offerArchived?"perdu":o.currentSignature?.state==="Signed"?"signe":(o.totalPlannedPrice||0)>0?"devis":"lead";
+              return t!=="perdu";
+            }).length;
+            const updateCount=(leads||[]).filter(l=>{
+              if(!l.reonic_id)return false;
+              const offer=results.find(o=>o.id===l.reonic_id);
+              if(!offer)return false;
+              const newPrix=offer.totalPlannedPrice||0;
+              return newPrix!==Number(l.prix_reonic||0);
+            }).length;
+            setSyncBadge({nb:newCount,updated:updateCount});
+            setTimeout(()=>setSyncBadge(null),8000);
+            // Déclencher le vrai sync si nécessaire
+            if(newCount>0||updateCount>0){
+              if(window._triggerReonicSync)window._triggerReonicSync();
+            }
+          }catch(e){setSyncBadge(null);}
         },800);
-        // Poll autoSyncStatus depuis LeadsTab via window
-        const poll=setInterval(()=>{
-          const s=window._autoSyncStatus;
-          setSyncBadge(s);
-        },300);
-        return()=>{clearTimeout(t);clearInterval(poll);};
+        return()=>clearTimeout(t);
       },[]);
 
       const updateLead=(id,patch)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
