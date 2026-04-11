@@ -6346,6 +6346,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       React.useEffect(()=>{
         window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
         window._revertLead=(leadId)=>SLeads(prev=>prev.map(l=>l.id===leadId?{...l,statut:"devis_ligne",vente_id:null}:l));
+        window._getLeads=()=>leads;
         if(reonicApiKey&&reonicClientId){
           const t=setTimeout(()=>silentSync(),1500);
           return()=>clearTimeout(t);
@@ -7722,16 +7723,19 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const cancelForm = () => {
         clearDraft();
-        // Si on annule une conversion de lead → remettre en devis_ligne
+        // Si annulation d'une conversion lead → remettre en devis_ligne
         if(pendingLeadRef.current&&!editId){
           const lead=pendingLeadRef.current;
           pendingLeadRef.current=null;
-          sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id).then(({error})=>{
-            if(error)console.error("revert lead:",error.message);
-          });
-          // Mettre à jour le state leads via window si disponible
+          window._leadToConvert=null;
+          // Mettre à jour le state React via global
           if(window._revertLead)window._revertLead(lead.id);
+          // Mettre à jour Supabase
+          sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id)
+            .then(({error})=>{if(error)console.error("revert lead:",error.message);
+            else console.log("[Revert] Lead remis en devis_ligne:",lead.client);});
         }
+        pendingLeadRef.current=null;
         goToView("list");
         setEditId(null);
       };
@@ -7753,6 +7757,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(onVenteSaved) onVenteSaved(entry);
         }
         clearDraft();
+        pendingLeadRef.current=null; // vente sauvegardée, plus besoin de réverter
+        window._leadToConvert=null;
         goToView("list");
         setEditId(null);
       };
@@ -8094,10 +8100,19 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               // 1. Supprimer la vente
               if(onDeleteVente) await onDeleteVente(v.id);
               else await sb.from("ventes").delete().eq("id",v.id);
-              // 2. Remettre le lead en devis_ligne si lié à un lead
-              if(v.lead_id||v.reonic_id){
+              // 2. Trouver le lead lié : par reonic_id, adresse ou client
+              const lead=
+                (v.reonic_id&&window._getLeads?.().find(l=>l.reonic_id===v.reonic_id))||
+                window._getLeads?.().find(l=>l.client===v.client&&["converti","devis_ligne"].includes(l.statut));
+              if(lead){
+                // Mettre à jour le state React
+                if(window._revertLead)window._revertLead(lead.id);
+                // Mettre à jour Supabase
+                await sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id);
+              } else {
+                // Fallback : mettre à jour par client dans Supabase
                 await sb.from("leads").update({statut:"devis_ligne",vente_id:null})
-                  .or(v.lead_id?`id.eq.${v.lead_id}`:`reonic_id.eq.${v.reonic_id}`);
+                  .eq("client",v.client).eq("statut","converti");
               }
               setRevertConf(null);
             }} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{flex:2})}>↩️ Remettre en offre</button>
