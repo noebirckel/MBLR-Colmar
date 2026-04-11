@@ -642,11 +642,17 @@
       };
 
       // Auto-sync Reonic à l'ouverture de l'onglet
+      const[syncBadge,setSyncBadge]=useState(null);
       React.useEffect(()=>{
         const t=setTimeout(()=>{
           if(window._triggerReonicSync)window._triggerReonicSync();
         },800);
-        return()=>clearTimeout(t);
+        // Poll autoSyncStatus depuis LeadsTab via window
+        const poll=setInterval(()=>{
+          const s=window._autoSyncStatus;
+          setSyncBadge(s);
+        },300);
+        return()=>{clearTimeout(t);clearInterval(poll);};
       },[]);
 
       const updateLead=(id,patch)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
@@ -783,7 +789,17 @@
               <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres en cours</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} offre{offres.length>1?"s":""} · {signés.length} signée{signés.length>1?"s":""}</p>
             </div>
-            <div style={{display:"flex",gap:6}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {/* Badge sync */}
+              {syncBadge==="syncing"&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#EFF6FF",borderRadius:20,fontSize:11,color:"#2563EB",border:"1px solid #BFDBFE"}}>
+                <div style={{width:8,height:8,borderRadius:"50%",border:"2px solid #3B82F6",borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>Sync…
+              </div>}
+              {syncBadge&&syncBadge!=="syncing"&&(syncBadge.nb>0||syncBadge.updated>0)&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#F0FDF4",borderRadius:20,fontSize:11,color:"#16A34A",border:"1px solid #BBF7D0"}}>
+                ✅ {syncBadge.nb>0?`${syncBadge.nb} nouveau${syncBadge.nb>1?"x":""}`:""}{syncBadge.nb>0&&syncBadge.updated>0?" · ":""}{syncBadge.updated>0?`${syncBadge.updated} màj`:""}
+              </div>}
+              {syncBadge&&syncBadge!=="syncing"&&syncBadge.nb===0&&syncBadge.updated===0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",background:"#F8FAFC",borderRadius:20,fontSize:11,color:"#64748B",border:"1px solid #E2E8F0"}}>
+                ✓ À jour
+              </div>}
               {reonicApiKey&&<button onClick={()=>{setImportModal(true);setImportOffers([]);setImportSelected({});setImportError(null);fetchReonicOffres();}}
                 style={{background:"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
                 ⚡ Importer Reonic
@@ -6608,6 +6624,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
         window._revertLead=(leadId)=>SLeads(prev=>prev.map(l=>l.id===leadId?{...l,statut:"devis_ligne",vente_id:null}:l));
         window._getLeads=()=>leadsRef.current;
+        window._setAutoSyncStatus=(s)=>setAutoSyncStatus(s);
         if(reonicApiKey&&reonicClientId){
           const t=setTimeout(()=>silentSync(),1500);
           return()=>clearTimeout(t);
@@ -9573,6 +9590,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[leads,setLeads]=React.useState([]);
       const leadsRef=React.useRef([]);
       React.useEffect(()=>{leadsRef.current=leads;},[leads]);
+      React.useEffect(()=>{window._autoSyncStatus=autoSyncStatus;},[autoSyncStatus]);
       const[chantiersPipeline,setChantiersPipeline]=React.useState([]);
       const[acomptes,setAcomptes]=React.useState([]);
       const[acompteDefPct,setAcompteDefPct]=React.useState(()=>{try{return Number(localStorage.getItem("acompte_pct")||50);}catch(e){return 50;}});
