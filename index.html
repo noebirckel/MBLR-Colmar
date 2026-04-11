@@ -6427,6 +6427,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       devis_ligne:  {label:"Devis en ligne",color:"#06B6D4", icon:"📄"},
       rdv_fait:     {label:"RDV effectué", color:"#10B981", icon:"✅"},
       relance:      {label:"À relancer",   color:"#EF4444", icon:"🔔"},
+      en_veille:    {label:"En veille",    color:"#6366F1", icon:"💤"},
       sans_reponse: {label:"Sans réponse", color:"#64748B", icon:"📵"},
       converti:     {label:"Converti",     color:"#10B981", icon:"💰"},
       perdu:        {label:"Perdu",        color:"#64748B", icon:"❌"},
@@ -6834,14 +6835,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
 
       // Calculs pipeline (devis_ligne exclus → géré dans onglet Offres)
-      const activeLeads=leads.filter(l=>!["perdu","sans_reponse","devis_ligne"].includes(l.statut));
+      const activeLeads=leads.filter(l=>!["perdu","sans_reponse","devis_ligne","en_veille"].includes(l.statut));
       const convertis=leads.filter(l=>l.statut==="converti").length;
       const taux=activeLeads.length+convertis>0?Math.round((convertis/(activeLeads.length+convertis))*100):0;
       const rdvAVenir=leads.filter(l=>l.date_rdv&&l.statut==="rdv_fixe").length;
       const relancesEnRetard=leads.filter(l=>l.date_relance&&!["converti","perdu","sans_reponse","devis_ligne"].includes(l.statut)&&parseD(l.date_relance)<=Date.now()).length;
 
       const filteredLeads=useMemo(()=>{
-        let l=leads.filter(x=>!["sans_reponse","devis_ligne","converti"].includes(x.statut));
+        let l=leads.filter(x=>!["sans_reponse","devis_ligne","converti","en_veille"].includes(x.statut));
         if(filtre!=="tous") l=l.filter(x=>x.statut===filtre);
         if(filterCanal!=="tous") l=l.filter(x=>x.canal===filterCanal);
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+(x.email||"")+" "+(x.telephone||"")).toLowerCase().includes(search.toLowerCase()));
@@ -6858,6 +6859,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[leads,filtre,filterCanal,search,sortBy]);
 
       const sansReponseleads=useMemo(()=>leads.filter(l=>l.statut==="sans_reponse").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
+      const enVeilleleads=useMemo(()=>leads.filter(l=>l.statut==="en_veille").sort((a,b)=>parseD(a.date_relance||"99/99/9999")-parseD(b.date_relance||"99/99/9999")),[leads]);
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;return parseD(l.date_relance)<=Date.now();}).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
       const rdvDuJour=useMemo(()=>leads.filter(l=>{if(!l.date_rdv)return false;const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return rdv===todayISO;}).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||"")),[leads]);
 
@@ -7534,6 +7536,13 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {detailModal.statut==="a_appeler"&&<button onClick={()=>{updateLead(detailModal.id,{statut:"devis_ligne"});setDetailModal(p=>({...p,statut:"devis_ligne"}));}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📄 Devis en ligne</button>}
                 {["rdv_fixe","rdv_fait","relance","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportStep(1);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:detailModal.rapport_rdv?.type_logement||"",tableau:detailModal.rapport_rdv?.tableau||"",suite:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
                 {["rdv_fait","relance","rdv_fixe","converti","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer vente":"Convertir"}</button>}
+                {!["en_veille","perdu","converti","sans_reponse"].includes(detailModal.statut)&&<button onClick={()=>{
+                  const d=prompt("Relancer à partir du (jj/mm/aaaa) — laisser vide pour sans date :");
+                  if(d===null)return;
+                  updateLead(detailModal.id,{statut:"en_veille",date_relance:d||""});
+                  setDetailModal(null);
+                }} style={BTN("linear-gradient(135deg,#6366F1,#4338CA)",{flex:1,fontSize:12})}>💤 En veille</button>}
+                {detailModal.statut==="en_veille"&&<button onClick={()=>{updateLead(detailModal.id,{statut:"a_appeler",date_relance:""});setDetailModal(p=>({...p,statut:"a_appeler"}));}} style={BTN("linear-gradient(135deg,#F59E0B,#D97706)",{flex:1,fontSize:12})}>↩ Réactiver</button>}
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>{setNoteModal(detailModal);setNoteDraft(detailModal.notes||"");setDetailModal(null);}} style={BTN("#3B82F620",{flex:1,fontSize:12,color:"#60A5FA",border:"1px solid #3B82F620"})}>📝 Note</button>
@@ -7554,11 +7563,12 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{leads.filter(l=>!["perdu","sans_reponse"].includes(l.statut)).length} actifs · {relancesEnRetard>0&&<span style={{color:"#EF4444",fontWeight:700}}>{relancesEnRetard} relance{relancesEnRetard>1?"s":""} en retard</span>}</p>
             </div>
             <div style={{display:"flex",gap:6}}>
-              {["liste","relances","sans_reponse"].map(v=>(
+              {["liste","relances","sans_reponse","en_veille"].map(v=>(
                 <button key={v} onClick={()=>setSubView(v)} style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${subView===v?"#3B82F6":"#E2E8F0"}`,background:subView===v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#FFFFFF",color:subView===v?"#FFF":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',position:"relative",whiteSpace:"nowrap"}}>
-                  {v==="liste"?"📋 Leads":v==="relances"?"📅 Agenda":"📵 Sans réponse"}
+                  {v==="liste"?"📋 Leads":v==="relances"?"📅 Agenda":v==="sans_reponse"?"📵 Sans réponse":"💤 En veille"}
                   {v==="relances"&&(rdvDuJour.length+relancesUrgentes.length)>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{rdvDuJour.length+relancesUrgentes.length}</span>}
                   {v==="sans_reponse"&&sansReponseleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#64748B",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{sansReponseleads.length}</span>}
+                  {v==="en_veille"&&enVeilleleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#6366F1",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{enVeilleleads.length}</span>}
                 </button>
               ))}
               {canEdit(role)&&<button onClick={()=>{setNewRdvModal(true);setNewRdvMode("nouveau");setNewRdvForm({prenom:"",nom:"",telephone:"",email:"",adresse:"",date_rdv:"",heure_rdv:"",canal:""});setNewRdvSearch("");setNewRdvLead(null);setNewRdvDate({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{padding:"8px 13px",fontSize:13})}>📅 RDV</button>}
@@ -7740,6 +7750,44 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                     </div>
                   </div>
                 ))}
+              </>
+            }
+          </>}
+
+          {/* ── VUE EN VEILLE ── */}
+          {subView==="en_veille"&&<>
+            {enVeilleleads.length===0
+              ?<div style={{textAlign:"center",padding:"50px 0",color:"#CBD5E1"}}><div style={{fontSize:36,marginBottom:8}}>💤</div><div style={{fontWeight:700,fontSize:14}}>Aucun lead en veille</div></div>
+              :<>
+                <div style={{background:"#6366F118",border:"1px solid #6366F130",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#6366F1"}}>
+                  💤 {enVeilleleads.length} lead{enVeilleleads.length>1?"s":""} en veille — projet non mûr, à relancer quand le client sera prêt.
+                </div>
+                {enVeilleleads.map(lead=>{
+                  const relanceStr=lead.date_relance?(lead.date_relance.includes("-")?new Date(lead.date_relance).toLocaleDateString("fr-FR"):lead.date_relance):null;
+                  const isUrgent=lead.date_relance&&parseD(lead.date_relance)<=Date.now();
+                  return(
+                    <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#FFFFFF",borderRadius:12,border:`1px solid ${isUrgent?"#6366F150":"#E2E8F0"}`,padding:"12px 14px",marginBottom:7,cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                        <div style={{display:"flex",gap:10,flex:1}}>
+                          <div style={{width:36,height:36,borderRadius:"50%",background:"#6366F115",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#6366F1",flexShrink:0}}>{initials(lead.prenom,lead.nom)}</div>
+                          <div>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+                              <span style={{fontWeight:800,fontSize:13,color:"#334155"}}>{lead.prenom} {lead.nom}</span>
+                              {isUrgent&&<span style={{background:"#6366F120",color:"#6366F1",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>🔔 À relancer</span>}
+                              {relanceStr&&!isUrgent&&<span style={{background:"#F1F5F9",color:"#64748B",padding:"1px 7px",borderRadius:20,fontSize:10}}>📅 {relanceStr}</span>}
+                            </div>
+                            <div style={{fontSize:11,color:"#64748B"}}>{lead.telephone&&"📞 "+lead.telephone+" · "}{lead.date_creation}{lead.canal&&" · "+lead.canal}</div>
+                            {lead.notes&&<div style={{fontSize:11,color:"#94A3B8",marginTop:3,fontStyle:"italic"}}>"{lead.notes}"</div>}
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                          {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞</a>}
+                          <button onClick={()=>updateLead(lead.id,{statut:"a_appeler"})} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Réactiver</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </>
             }
           </>}
