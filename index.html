@@ -597,7 +597,7 @@
               reonic_id:offer.id,
               prix_reonic:offer.totalPlannedPrice||0,
               reonic_status:offer.currentSignature?.state||offer.status||"",
-              message:produits||offer._existingLead.message,
+              message:offer.customerMessage||produits||offer._existingLead.message||"",
             });
           } else if(!offer._duplicate){
             // Créer un nouveau lead
@@ -607,7 +607,7 @@
               id:base+idx,reonic_id:offer.id,prenom,nom,
               client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
               email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
-              adresse,message:produits||"Offre Reonic",canal:"Site web",
+              adresse,message:offer.customerMessage||produits||"",canal:"Site web",
               statut:ti.statut,date_creation:now,
               prix_reonic:offer.totalPlannedPrice||0,
               reonic_status:offer.currentSignature?.state||offer.status||"",
@@ -6603,7 +6603,6 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           const data=await res.json();
           if(!data.ok){setAutoSyncStatus(null);autoSyncRef.current=false;return;}
           const results=data.data?.results||[];
-          if(results.length>0)console.log("[Reonic raw offer]",{id:results[0].id,message:results[0].message,description:results[0].description,note:results[0].note,comment:results[0].comment,customerNote:results[0].customerNote,internalNote:results[0].internalNote,request:results[0].request,options0desc:results[0].options?.[0]?.description,keys:Object.keys(results[0])});
           const persistedIds=getSyncedIds();
           const liveIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
           const allKnownIds=new Set([...persistedIds,...liveIds]);
@@ -6665,15 +6664,13 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(x=>x.name).join(", ");
             const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(x=>x.name).join(", ");
             const produits=[wallbox,solar].filter(Boolean).join(" · ");
-            // Debug : voir les champs message/note disponibles
-            if(idx===0)console.log("[Reonic offer fields]",{message:offer.message,description:offer.description,note:offer.note,request:offer.request,comment:offer.comment,customerNote:offer.customerNote,internalNote:offer.internalNote,options0:offer.options?.[0]?.description});
             const type=getReonicTypeStatic(offer);
             const ti=RTYPE_INFO[type]||RTYPE_INFO.lead;
             return{
               id:base+idx,reonic_id:offer.id,prenom,nom,
               client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
               email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
-              adresse,message:produits||"Lead Reonic",
+              adresse,message:offer.customerMessage||produits||"",
               canal:"Site web",statut:ti.statut,date_creation:now,
               prix_reonic:offer.totalPlannedPrice||0,
               reonic_status:offer.currentSignature?.state||offer.status||"",
@@ -6785,7 +6782,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             reonic_id:offer.id,prenom,nom,
             client:nomClient,email:contact?.email||"",
             telephone:contact?.telephone||contact?.mobilePhone||"",
-            adresse,message:produits||"Lead Reonic",
+            adresse,message:offer.customerMessage||produits||"",
             canal:"Site web",statut:ti.statut,date_creation:now,
             prix_reonic:offer.totalPlannedPrice||0,
             reonic_status:offer.currentSignature?.state||offer.status||"",
