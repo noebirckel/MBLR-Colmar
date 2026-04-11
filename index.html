@@ -6482,7 +6482,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const relancesEnRetard=leads.filter(l=>l.date_relance&&!["converti","perdu","sans_reponse","devis_ligne"].includes(l.statut)&&parseD(l.date_relance)<=Date.now()).length;
 
       const filteredLeads=useMemo(()=>{
-        let l=leads.filter(x=>x.statut!=="sans_reponse"&&x.statut!=="devis_ligne");
+        let l=leads.filter(x=>!["sans_reponse","devis_ligne","converti"].includes(x.statut));
         if(filtre!=="tous") l=l.filter(x=>x.statut===filtre);
         if(filterCanal!=="tous") l=l.filter(x=>x.canal===filterCanal);
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+(x.email||"")+" "+(x.telephone||"")).toLowerCase().includes(search.toLowerCase()));
