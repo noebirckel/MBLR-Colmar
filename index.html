@@ -457,7 +457,7 @@
     // ══════════════════════════════════════
     // ONGLET OFFRES
     // ══════════════════════════════════════
-    function OffresTab({isMobile, leads, setLeads, profile, fmt, role, onLeadConverted, reonicApiKey, reonicClientId, supabaseUrl}){
+    function OffresTab({isMobile, leads, setLeads, ventes, profile, fmt, role, onLeadConverted, reonicApiKey, reonicClientId, supabaseUrl}){
       const canEdit=r=>["administrateur","commercial","secretaire"].includes(r);
       const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"};
       const MBX=isMobile?{background:"#FFFFFF",borderRadius:"20px 20px 0 0",padding:"16px 20px 32px",width:"100%",maxHeight:"80vh",overflowY:"auto"}:{background:"#FFFFFF",borderRadius:16,padding:24,width:460,maxWidth:"96vw"};
@@ -532,9 +532,17 @@
             const existing=existingByReonicId||existingByPhone||existingByEmail||null;
             const existingStatut=existing?.statut||null;
             const existingHasVente=!!(existing?.vente_id);
-            // Bloquant = déjà en devis_ligne OU converti AVEC une vente créée
-            const isDupBlocking=existingStatut==="devis_ligne"||(existingStatut==="converti"&&existingHasVente);
-            // Peut upgrader = lead existe mais pas bloquant (a_appeler, converti sans vente, etc.)
+            // Chercher une vente manuelle avec le même nom de client
+            const contactName=`${c?.firstName||""} ${c?.lastName||""}`.trim().toLowerCase();
+            const venteByName=contactName.length>2?(ventes||[]).find(v=>{
+              const vn=(v.client||"").toLowerCase();
+              return vn===contactName||vn.includes(contactName)||contactName.includes(vn);
+            }):null;
+            const venteByReonic=(ventes||[]).find(v=>v.reonic_id===offer.id);
+            const hasVente=existingHasVente||!!venteByName||!!venteByReonic;
+            // Bloquant = déjà en devis_ligne OU converti/signé avec une vente (manuelle ou liée)
+            const isDupBlocking=existingStatut==="devis_ligne"||(existingStatut==="converti"&&hasVente)||!!venteByReonic||!!venteByName;
+            // Peut upgrader = lead existe mais pas bloquant
             const canUpgrade=!!existing&&!isDupBlocking;
             const type=getRType(offer);
             return{...offer,_contact:c,_duplicate:!!isDupBlocking,_canUpgrade:canUpgrade,_existingLead:existing||null,_type:type};
@@ -546,7 +554,8 @@
           offresOnly.filter(o=>o._duplicate).forEach(o=>{
             const c=o._contact;
             const nom=`${c?.firstName||""} ${c?.lastName||""}`.trim()||c?.email||"?";
-            console.log(`  → BLOQUÉ: ${nom} | statut existant: ${o._existingLead?.statut} | reonic_id lead: ${o._existingLead?.reonic_id||"null"} | match via: ${o._existingLead?.reonic_id===o.id?"reonic_id":(c?.telephone||c?.mobilePhone)?"tél":"email"}`);
+            const venteMatch=(ventes||[]).find(v=>(v.client||"").toLowerCase().includes(nom.toLowerCase())||nom.toLowerCase().includes((v.client||"").toLowerCase()));
+            console.log(`  → BLOQUÉ: ${nom} | statut: ${o._existingLead?.statut||"(no lead)"} | vente_id: ${o._existingLead?.vente_id||"null"} | vente par nom: ${venteMatch?.client||"non"}`);
           });
           offresOnly.filter(o=>o._canUpgrade).forEach(o=>{
             const c=o._contact;
@@ -10523,7 +10532,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
+                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} profile={profile} fmt={fmt} role={role} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
