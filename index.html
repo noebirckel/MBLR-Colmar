@@ -9863,7 +9863,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(rs){setStock(rs);cacheSet("stock",rs);}
           if(ro){setOrders(ro);cacheSet("orders",ro);}
           if(rh){setHist(rh);cacheSet("historique",rh);}
-          if(rleads){setLeads(rleads);}
+          if(rleads){
+            const parsed=rleads.map(l=>({
+              ...l,
+              historique_appels:typeof l.historique_appels==="string"?JSON.parse(l.historique_appels||"[]"):l.historique_appels||[],
+              rapport_rdv:typeof l.rapport_rdv==="string"?JSON.parse(l.rapport_rdv||"null"):l.rapport_rdv||null,
+            }));
+            setLeads(parsed);
+          }
           if(robj){
             const obj={};
             robj.forEach(r=>{if(r.key)obj[r.key]={ca:r.ca||0,marge:r.marge||0};});
