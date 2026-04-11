@@ -7223,17 +7223,75 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div></div>}
 
           {/* RDV */}
-          {rdvModal&&<div style={OVL} onClick={()=>setRdvModal(null)}><div style={{...MBX,maxWidth:400}} onClick={e=>e.stopPropagation()}>
+          {rdvModal&&<div style={OVL} onClick={()=>setRdvModal(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
             <Handle/>
-            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:16}}>📅 Fixer un rendez-vous</h3>
-            <p style={{margin:"0 0 18px",fontSize:12,color:"#64748B"}}>{rdvModal.prenom} {rdvModal.nom}</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-              <div><L c="Date"/><input type="date" value={rdvForm.date_rdv} onChange={e=>setRdvForm(p=>({...p,date_rdv:e.target.value}))} style={INP()}/></div>
-              <div><L c="Heure"/><input type="time" value={rdvForm.heure_rdv} onChange={e=>setRdvForm(p=>({...p,heure_rdv:e.target.value}))} style={INP()}/></div>
-            </div>
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16}}>📅 Fixer un rendez-vous</h3>
+            <p style={{margin:"0 0 14px",fontSize:12,color:"#64748B"}}>{rdvModal.prenom} {rdvModal.nom}</p>
+            {/* Mini calendrier */}
+            {(()=>{
+              const selDate=rdvForm.date_rdv?new Date(rdvForm.date_rdv):null;
+              const [calYear,setCalYear]=React.useState(selDate?selDate.getFullYear():new Date().getFullYear());
+              const [calMonth,setCalMonth]=React.useState(selDate?selDate.getMonth():new Date().getMonth());
+              const today=new Date();today.setHours(0,0,0,0);
+              const firstDay=new Date(calYear,calMonth,1).getDay();
+              const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+              const DAYS=["Lu","Ma","Me","Je","Ve","Sa","Di"];
+              const MONTHS=["Janv","Févr","Mars","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+              const startOffset=(firstDay+6)%7; // Lundi=0
+              const cells=[];
+              for(let i=0;i<startOffset;i++)cells.push(null);
+              for(let d=1;d<=daysInMonth;d++)cells.push(d);
+              const HOURS=["08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30"];
+              return(<>
+                {/* Header mois */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
+                    style={{background:"#F1F5F9",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>‹</button>
+                  <span style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>{MONTHS[calMonth]} {calYear}</span>
+                  <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
+                    style={{background:"#F1F5F9",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>›</button>
+                </div>
+                {/* Jours de la semaine */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+                  {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:10,fontWeight:700,color:"#94A3B8",padding:"3px 0"}}>{d}</div>)}
+                </div>
+                {/* Grille des jours */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:14}}>
+                  {cells.map((d,i)=>{
+                    if(!d)return <div key={i}/>;
+                    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                    const isSelected=rdvForm.date_rdv===dateStr;
+                    const isToday=new Date(calYear,calMonth,d).getTime()===today.getTime();
+                    const isPast=new Date(calYear,calMonth,d)<today;
+                    return(
+                      <button key={i} onClick={()=>!isPast&&setRdvForm(p=>({...p,date_rdv:dateStr}))}
+                        style={{padding:"6px 2px",borderRadius:7,border:isToday?`2px solid #A855F7`:"2px solid transparent",background:isSelected?"#A855F7":isToday?"#F3E8FF":"transparent",color:isSelected?"#FFF":isPast?"#CBD5E1":isToday?"#7C3AED":"#1E293B",fontSize:12,fontWeight:isSelected||isToday?700:400,cursor:isPast?"default":"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Sélection heure rapide */}
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:7,textTransform:"uppercase",letterSpacing:"0.05em"}}>Heure</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                    {HOURS.map(h=>(
+                      <button key={h} onClick={()=>setRdvForm(p=>({...p,heure_rdv:h}))}
+                        style={{padding:"6px 4px",borderRadius:7,border:`1px solid ${rdvForm.heure_rdv===h?"#A855F7":"#E2E8F0"}`,background:rdvForm.heure_rdv===h?"#F3E8FF":"transparent",color:rdvForm.heure_rdv===h?"#7C3AED":"#475569",fontSize:11,fontWeight:rdvForm.heure_rdv===h?700:400,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Date sélectionnée */}
+                {rdvForm.date_rdv&&<div style={{padding:"8px 12px",background:"#F3E8FF",borderRadius:8,marginBottom:14,fontSize:12,color:"#7C3AED",fontWeight:600,textAlign:"center"}}>
+                  📅 {new Date(rdvForm.date_rdv).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})} {rdvForm.heure_rdv?`à ${rdvForm.heure_rdv}`:"— heure à définir"}
+                </div>}
+              </>);
+            })()}
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>setRdvModal(null)} style={BTN("#E2E8F0",{flex:1})}>Annuler</button>
-              <button onClick={saveRdv} disabled={!rdvForm.date_rdv} style={BTN(!rdvForm.date_rdv?"#FFFFFF":"linear-gradient(135deg,#A855F7,#7C3AED)",{flex:2,opacity:!rdvForm.date_rdv?0.5:1})}>📅 Confirmer</button>
+              <button onClick={saveRdv} disabled={!rdvForm.date_rdv} style={BTN(!rdvForm.date_rdv?"#E2E8F0":"linear-gradient(135deg,#A855F7,#7C3AED)",{flex:2,opacity:!rdvForm.date_rdv?0.5:1})}>📅 Confirmer</button>
             </div>
           </div></div>}
 
