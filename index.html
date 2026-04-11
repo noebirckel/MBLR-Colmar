@@ -457,11 +457,12 @@
     // ══════════════════════════════════════
     // ONGLET OFFRES
     // ══════════════════════════════════════
-    function OffresTab({isMobile, leads, setLeads, profile, fmt, role, onLeadConverted}){
+    function OffresTab({isMobile, leads, setLeads, profile, fmt, role, onLeadConverted, reonicApiKey, reonicClientId, supabaseUrl}){
       const canEdit=r=>["administrateur","commercial","secretaire"].includes(r);
       const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"};
       const MBX=isMobile?{background:"#FFFFFF",borderRadius:"20px 20px 0 0",padding:"16px 20px 32px",width:"100%",maxHeight:"80vh",overflowY:"auto"}:{background:"#FFFFFF",borderRadius:16,padding:24,width:460,maxWidth:"96vw"};
       const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+      const EDGE_URL=supabaseUrl?`${supabaseUrl}/functions/v1/reonic-proxy`:"";
 
       const offres=useMemo(()=>leads.filter(l=>l.statut==="devis_ligne").sort((a,b)=>{
         const da=a.date_creation?a.date_creation.split("/").reverse().join("-"):"";
@@ -473,6 +474,107 @@
       const [perdreConf,setPerdreConf]=useState(null);
       const [gagnéModal,setGagnéModal]=useState(null);
       const [search,setSearch]=useState("");
+
+      // ── Import Reonic ──
+      const[importModal,setImportModal]=useState(false);
+      const[importLoading,setImportLoading]=useState(false);
+      const[importError,setImportError]=useState(null);
+      const[importOffers,setImportOffers]=useState([]);
+      const[importSelected,setImportSelected]=useState({});
+      const[importing,setImporting]=useState(false);
+      const[importDone,setImportDone]=useState(null);
+
+      const RTYPE_INFO={
+        lead:  {label:"Demande", color:"#3B82F6",bg:"#EFF6FF",statut:"a_appeler",  icon:"📥"},
+        devis: {label:"Devis",   color:"#A855F7",bg:"#FAF5FF",statut:"devis_ligne", icon:"📋"},
+        signe: {label:"Signé",   color:"#10B981",bg:"#F0FDF4",statut:"converti",    icon:"✍️"},
+        perdu: {label:"Perdu",   color:"#94A3B8",bg:"#F8FAFC",statut:"perdu",       icon:"❌"},
+      };
+      const getRType=(offer)=>{
+        if(offer.archived||offer.offerArchived||offer.requestArchived)return "perdu";
+        if(offer.currentSignature?.state==="Signed")return "signe";
+        if((offer.totalPlannedPrice||0)>0||(offer.options?.[0]?.wallboxPlanned?.components||[]).length>0)return "devis";
+        return "lead";
+      };
+
+      const fetchReonicOffres=async()=>{
+        if(!reonicApiKey||!reonicClientId){setImportError("Clé API Reonic non configurée dans Paramètres.");return;}
+        setImportLoading(true);setImportError(null);
+        try{
+          const res=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({action:"get_offers",apiKey:reonicApiKey,clientId:reonicClientId,payload:{page:0}})});
+          const data=await res.json();
+          if(!data.ok){setImportError(data.error||"Erreur Reonic");setImportLoading(false);return;}
+          const results=data.data?.results||[];
+
+          // Contacts
+          let contactsMap={};
+          try{
+            const cr=await fetch(EDGE_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({action:"get_contacts",apiKey:reonicApiKey,clientId:reonicClientId})});
+            const cd=await cr.json();
+            if(cd.ok&&Array.isArray(cd.data)){cd.data.forEach(c=>{contactsMap[c.id]=c;});}
+          }catch(e){}
+
+          // Dédup
+          const existingReonicIds=new Set((leads||[]).map(l=>l.reonic_id).filter(Boolean));
+          const existingPhones=new Set((leads||[]).map(l=>(l.telephone||"").replace(/\s/g,"")).filter(Boolean));
+          const existingEmails=new Set((leads||[]).map(l=>(l.email||"").toLowerCase()).filter(Boolean));
+
+          const enriched=results.map(offer=>{
+            const c=contactsMap[offer.customer?.id]||null;
+            const phone=(c?.telephone||c?.mobilePhone||"").replace(/\s/g,"");
+            const email=(c?.email||"").toLowerCase();
+            const isDup=existingReonicIds.has(offer.id)||(phone&&existingPhones.has(phone))||(email&&existingEmails.has(email));
+            const type=getRType(offer);
+            return{...offer,_contact:c,_duplicate:isDup,_type:type};
+          });
+
+          // Filtrer : montrer uniquement les offres avec devis (type devis ou signe), exclure perdus
+          const offresOnly=enriched.filter(o=>["devis","signe"].includes(o._type));
+          setImportOffers(offresOnly);
+          const sel={};
+          offresOnly.forEach(o=>{if(!o._duplicate)sel[o.id]=true;});
+          setImportSelected(sel);
+        }catch(e){setImportError("Erreur réseau : "+e.message);}
+        setImportLoading(false);
+      };
+
+      const doImport=()=>{
+        const toImport=importOffers.filter(o=>importSelected[o.id]);
+        if(toImport.length===0)return;
+        setImporting(true);
+        const now=new Date().toLocaleDateString("fr-FR");
+        const base=Date.now();
+        const newLeads=toImport.map((offer,idx)=>{
+          const c=offer._contact;
+          const prenom=c?.firstName||"";const nom=c?.lastName||"";
+          const adresse=[c?.street,c?.number,c?.postcode,c?.city].filter(Boolean).join(" ");
+          const wallbox=(offer.options?.[0]?.wallboxPlanned?.components||[]).map(x=>x.name).join(", ");
+          const solar=(offer.options?.[0]?.solarPlanned?.components||[]).map(x=>x.name).join(", ");
+          const produits=[wallbox,solar].filter(Boolean).join(" · ");
+          const ti=RTYPE_INFO[offer._type]||RTYPE_INFO.devis;
+          return{
+            id:base+idx,reonic_id:offer.id,prenom,nom,
+            client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
+            email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
+            adresse,message:produits||"Offre Reonic",canal:"Site web",
+            statut:ti.statut,date_creation:now,
+            prix_reonic:offer.totalPlannedPrice||0,
+            reonic_status:offer.currentSignature?.state||offer.status||"",
+            nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
+            par:"",date_relance:"",notes:"",vente_id:null,
+          };
+        });
+        setLeads(prev=>[...newLeads,...prev]);
+        const toSave=newLeads.map(l=>({...l,historique_appels:JSON.stringify(l.historique_appels||[])}));
+        sb.from("leads").upsert(toSave).then(({error})=>{if(error)console.error("Import offres:",error.message);});
+        try{const ids=JSON.parse(localStorage.getItem("reonic_synced_ids")||"[]");newLeads.filter(l=>l.reonic_id).forEach(l=>ids.push(l.reonic_id));localStorage.setItem("reonic_synced_ids",JSON.stringify([...new Set(ids)]));}catch(e){}
+        setImporting(false);setImportDone(newLeads.length);
+        setImportOffers(prev=>prev.filter(o=>!importSelected[o.id]));
+        setImportSelected({});
+        setTimeout(()=>{setImportModal(false);setImportDone(null);},2500);
+      };
 
       const updateLead=(id,patch)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
 
@@ -522,16 +624,99 @@
             </div>
           </div></div>}
 
+          {/* Modal import Reonic offres */}
+          {importModal&&<div style={OVL} onClick={()=>setImportModal(false)}><div style={{...MBX,width:520,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <h3 style={{margin:0,fontWeight:800,fontSize:16,color:"#0F172A"}}>📋 Importer des offres Reonic</h3>
+              <button onClick={()=>setImportModal(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
+            </div>
+            {importDone!==null
+              ?<div style={{textAlign:"center",padding:"20px 0"}}>
+                <div style={{fontSize:36,marginBottom:8}}>✅</div>
+                <div style={{fontWeight:700,color:"#10B981"}}>{importDone} offre{importDone>1?"s":""} importée{importDone>1?"s":""}</div>
+              </div>
+              :<>
+                {importError&&<div style={{padding:"8px 12px",background:"#FEF2F2",borderRadius:8,fontSize:12,color:"#DC2626",marginBottom:10}}>❌ {importError}</div>}
+                {importLoading
+                  ?<div style={{textAlign:"center",padding:"30px 0",color:"#64748B"}}>⏳ Chargement des offres Reonic…</div>
+                  :importOffers.length===0
+                    ?<div style={{textAlign:"center",padding:"30px 0",color:"#94A3B8"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>📋</div>
+                        <div style={{fontSize:13}}>Aucune offre avec devis trouvée</div>
+                        <button onClick={fetchReonicOffres} style={{...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)"),marginTop:12,fontSize:12}}>🔄 Réessayer</button>
+                      </div>
+                    :<>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"6px 10px",background:"#F8FAFC",borderRadius:8}}>
+                        <span style={{fontSize:12,color:"#475569",fontWeight:600}}>
+                          {Object.values(importSelected).filter(Boolean).length} sélectionnée{Object.values(importSelected).filter(Boolean).length>1?"s":""}
+                          {importOffers.filter(o=>o._duplicate).length>0&&<span style={{color:"#F59E0B",marginLeft:6}}>· {importOffers.filter(o=>o._duplicate).length} déjà importée{importOffers.filter(o=>o._duplicate).length>1?"s":""}</span>}
+                        </span>
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={()=>{const s={};importOffers.filter(o=>!o._duplicate).forEach(o=>{s[o.id]=true;});setImportSelected(s);}} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#3B82F6",padding:"3px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Tout cocher</button>
+                          <button onClick={()=>setImportSelected({})} style={{background:"transparent",border:"1px solid #E2E8F0",borderRadius:6,color:"#64748B",padding:"3px 8px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>Tout décocher</button>
+                        </div>
+                      </div>
+                      <div style={{maxHeight:340,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+                        {importOffers.map(offer=>{
+                          const sel=importSelected[offer.id]||false;
+                          const c=offer._contact;
+                          const nom=`${c?.firstName||""} ${c?.lastName||""}`.trim()||c?.email||"Client inconnu";
+                          const ti=RTYPE_INFO[offer._type]||RTYPE_INFO.devis;
+                          const prix=offer.totalPlannedPrice;
+                          return(
+                            <div key={offer.id} onClick={()=>!offer._duplicate&&setImportSelected(p=>({...p,[offer.id]:!p[offer.id]}))}
+                              style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",borderRadius:10,
+                                border:`1px solid ${offer._duplicate?"#FDE68A":sel?"#BFDBFE":"#E2E8F0"}`,
+                                background:offer._duplicate?"#FFFBEB":sel?"#EFF6FF":"#FAFAFA",
+                                cursor:offer._duplicate?"not-allowed":"pointer",opacity:offer._duplicate?0.7:1}}>
+                              <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${offer._duplicate?"#F59E0B":sel?"#3B82F6":"#CBD5E1"}`,background:offer._duplicate?"#FEF3C7":sel?"#3B82F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                                {offer._duplicate?<span style={{fontSize:10}}>⚠</span>:sel&&<span style={{color:"#FFF",fontSize:11,fontWeight:800}}>✓</span>}
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                    <span style={{fontWeight:700,fontSize:13,color:"#0F172A"}}>{nom}</span>
+                                    <span style={{background:ti.bg,color:ti.color,borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>{ti.icon} {ti.label}</span>
+                                    {offer._duplicate&&<span style={{background:"#FEF3C7",color:"#92400E",borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700}}>⚠️ Déjà importée</span>}
+                                  </div>
+                                  {prix>0&&<span style={{fontSize:12,fontWeight:800,color:"#10B981",flexShrink:0}}>{fmt(prix)} €</span>}
+                                </div>
+                                <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
+                                  {c?.email&&<span style={{marginRight:8}}>✉️ {c.email}</span>}
+                                  {(c?.telephone||c?.mobilePhone)&&<span>📞 {c.telephone||c.mobilePhone}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button onClick={doImport} disabled={importing||Object.values(importSelected).filter(Boolean).length===0}
+                        style={{width:"100%",...BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{fontSize:14,padding:"12px"}),opacity:importing||Object.values(importSelected).filter(Boolean).length===0?0.5:1}}>
+                        {importing?"⏳ Import…":`📋 Importer ${Object.values(importSelected).filter(Boolean).length} offre${Object.values(importSelected).filter(Boolean).length>1?"s":""}`}
+                      </button>
+                    </>
+                }
+              </>
+            }
+          </div></div>}
+
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
             <div>
               <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres en cours</h2>
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} offre{offres.length>1?"s":""} · {signés.length} signée{signés.length>1?"s":""}</p>
             </div>
-            <button onClick={()=>{if(window._triggerReonicSync)window._triggerReonicSync();}}
-              style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,color:"#16A34A",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
-              🔄 Sync Reonic
-            </button>
+            <div style={{display:"flex",gap:6}}>
+              {reonicApiKey&&<button onClick={()=>{setImportModal(true);setImportOffers([]);setImportSelected({});setImportError(null);fetchReonicOffres();}}
+                style={{background:"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+                ⚡ Importer Reonic
+              </button>}
+              <button onClick={()=>{if(window._triggerReonicSync)window._triggerReonicSync();}}
+                style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,color:"#16A34A",padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:'"Outfit",sans-serif'}}>
+                🔄 Sync
+              </button>
+            </div>
           </div>
 
           {/* KPIs */}
@@ -10279,7 +10464,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
+                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
