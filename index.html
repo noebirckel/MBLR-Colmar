@@ -7889,112 +7889,74 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               </div>
             </SCard>
 
-            {/* 2. Marque */}
-            <SCard n={2} title="Marque de la borne" icon="⚡" done={!!form.marque_borne}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
-                {["Easee","Ohme","V2C","Zaptec","Tesla","Smappee","Prise renforcée"].map(b=>(
-                  <button key={b} onClick={()=>setForm(p=>({...p,marque_borne:b,modele_borne:"",puissance_install:"",materiels:[],cables:[]}))}
-                    style={{padding:"9px 6px",borderRadius:9,border:`2px solid ${form.marque_borne===b?"#3B82F6":"#E2E8F0"}`,background:form.marque_borne===b?"#3B82F620":"#F1F5F9",color:form.marque_borne===b?"#60A5FA":"#64748B",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',textAlign:"center",lineHeight:1.3}}>
-                    {b}
-                  </button>
-                ))}
+            {/* 2. Matériels pré-remplis (Reonic) */}
+            <SCard n={2} title="Matériels" icon="📦" done={form.materiels.length>0}>
+              {form.materiels.length===0&&<div style={{fontSize:12,color:"#94A3B8",marginBottom:10}}>
+                Aucun matériel — ajoute des composants ci-dessous ou configure le mapping Reonic dans Paramètres.
+              </div>}
+              {form.materiels.map((m,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F8FAFC",borderRadius:8,padding:"8px 12px",marginBottom:4,border:"1px solid #E2E8F0"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:"#1E293B"}}>{m.article}</div>
+                    <div style={{fontSize:11,color:"#64748B"}}>{m.cat}</div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input type="number" min="1" value={m.qty} onChange={e=>setForm(p=>({...p,materiels:p.materiels.map((x,j)=>j===i?{...x,qty:Number(e.target.value)||1}:x)}))}
+                      style={{width:52,textAlign:"center",background:"#E2E8F0",border:"none",borderRadius:6,padding:"4px",fontSize:13,fontFamily:'"Outfit",sans-serif'}}/>
+                    <span style={{fontSize:11,color:"#10B981",fontWeight:600,minWidth:50,textAlign:"right"}}>{fmt((m.prix_unit||0)*m.qty)}</span>
+                    <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter((_,j)=>j!==i)}))}
+                      style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                  </div>
+                </div>
+              ))}
+              {/* Ajouter un composant */}
+              <div style={{marginTop:form.materiels.length>0?10:0}}>
+                <div style={{fontSize:10,color:"#64748B",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Ajouter un composant</div>
+                <div style={{display:"flex",gap:6}}>
+                  <div style={{position:"relative",flex:2}}>
+                    <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#64748B"}}>🔍</span>
+                    <input value={matSearch} onChange={e=>setMatSearch(e.target.value)} placeholder="Rechercher…"
+                      style={{...INP(),paddingLeft:32,fontSize:13,width:"100%",boxSizing:"border-box"}}/>
+                  </div>
+                  <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:12}}>
+                    <option value="">Sélectionner…</option>
+                    {BORNES.filter(s=>!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()))
+                      .map(s=><option key={s.id} value={s.id}>{s.article} ({fmt(s.prix)})</option>)}
+                  </select>
+                  <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté"
+                    style={{...INP(),width:56,textAlign:"center"}}/>
+                  <button onClick={addMat} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{padding:"10px 14px",fontSize:16})}>+</button>
+                </div>
               </div>
             </SCard>
 
-            {/* 3. Modèle */}
-            {bornesBrand.length>0&&<SCard n={3} title={`Modèle ${form.marque_borne}`} icon="🔌" done={!!form.modele_borne}>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {bornesBrand.map(b=>(
-                  <button key={b.id} onClick={()=>setForm(p=>{const mats=p.materiels.filter(m=>!bornesBrand.some(x=>x.id===Number(m.id)));return{...p,modele_borne:b.article,materiels:[...mats,{id:b.id,article:b.article,cat:b.cat,unite:b.unite||"pce",qty:1,prix_unit:b.prix||0}]};})}
-                    style={{padding:"11px 14px",borderRadius:10,border:`2px solid ${form.modele_borne===b.article?"#3B82F6":"#E2E8F0"}`,background:form.modele_borne===b.article?"#3B82F620":"#F1F5F9",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontWeight:700,fontSize:14,color:form.modele_borne===b.article?"#1E293B":"#94A3B8"}}>{b.article}</span>
-                    <span style={{fontSize:12,color:"#10B981",fontWeight:700}}>{fmt(b.prix)}</span>
-                  </button>
-                ))}
-              </div>
-            </SCard>}
-
-            {/* 4. Puissance */}
-            {form.marque_borne&&form.marque_borne!=="Prise renforcée"&&<SCard n={4} title="Puissance" icon="🔋" done={!!form.puissance_install}>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                {["7.4kW","11kW","22kW"].map(p=>{
-                  const c=(installConfigs||{})[p]||{};
-                  const active=form.puissance_install===p;
-                  return(
-                    <button key={p} onClick={()=>{
-                      const cc=(installConfigs||{})[p]||{};
-                      const allDisjIds=["7.4kW","11kW","22kW"].map(pw=>Number((installConfigs||{})[pw]?.disjoncteur_id)).filter(Boolean);
-                      const matsClean=form.materiels.filter(m=>!allDisjIds.includes(Number(m.id)));
-                      if(cc.disjoncteur_id){const s=stock.find(x=>x.id===Number(cc.disjoncteur_id));if(s)matsClean.push({id:s.id,article:s.article,cat:s.cat,unite:s.unite||"pce",qty:1,prix_unit:s.prix||0});}
-                      const allCableIds=["7.4kW","11kW","22kW"].flatMap(pw=>{const ccc=(installConfigs||{})[pw]||{};return[Number(ccc.cable_id)].filter(Boolean);});
-                      setForm(pr=>({...pr,puissance_install:p,materiels:matsClean,cables:pr.cables.filter(cab=>!allCableIds.includes(Number(cab.id)))}));
-                    }}
-                      style={{padding:"12px 8px",borderRadius:12,border:`2px solid ${active?"#A855F7":"#E2E8F0"}`,background:active?"#A855F720":"#F1F5F9",cursor:"pointer",textAlign:"center",fontFamily:'"Outfit",sans-serif'}}>
-                      <div style={{fontWeight:900,fontSize:16,color:active?"#C084FC":"#94A3B8"}}>{c.label||p}</div>
-                      {c.disjoncteur&&<div style={{fontSize:10,color:"#64748B",marginTop:3}}>⚡ {c.disjoncteur}</div>}
-                      {c.cable&&<div style={{fontSize:10,color:"#64748B"}}>🔌 {c.cable}</div>}
-                    </button>
-                  );
-                })}
-              </div>
-            </SCard>}
-
-            {/* 5. Câble */}
-            {form.marque_borne&&<SCard n={5} title="Longueur de câble" icon="🔌" done={form.cables.length>0}>
-              <div style={{background:"#E2E8F022",borderRadius:8,padding:"7px 12px",marginBottom:10,fontSize:12,color:"#94A3B8"}}>
-                🔌 {cableAlimStock?cableAlimStock.article:(cfg?.cable||"Configurez le câble dans Paramètres")}
-                {cableCommStock&&<span style={{marginLeft:10,color:"#A855F7"}}>· 📡 {cableCommStock.article}</span>}
-              </div>
+            {/* 3. Câble */}
+            <SCard n={3} title="Longueur de câble" icon="🔌" done={form.cables.length>0}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                 <button onClick={()=>setCableMl(v=>Math.max(1,v-5))} style={{width:44,height:44,borderRadius:10,background:"#E2E8F0",border:"none",color:"#1E293B",fontSize:22,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
                 <div style={{flex:1,position:"relative"}}>
-                  <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value)||1)} style={{...INP(),textAlign:"center",fontSize:18,fontWeight:800,paddingRight:32}}/>
+                  <input type="number" min="1" value={cableMl} onChange={e=>setCableMl(Number(e.target.value)||1)}
+                    style={{...INP(),textAlign:"center",fontSize:18,fontWeight:800,paddingRight:32,width:"100%",boxSizing:"border-box"}}/>
                   <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#64748B",fontWeight:700,fontSize:13}}>ml</span>
                 </div>
                 <button onClick={()=>setCableMl(v=>v+5)} style={{width:44,height:44,borderRadius:10,background:"#E2E8F0",border:"none",color:"#1E293B",fontSize:22,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>+</button>
                 <button onClick={addCables} style={{...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)"),padding:"10px 16px",height:44,flexShrink:0}}>Ajouter</button>
               </div>
-              {form.cables.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F1F5F9",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
+              {form.cables.map((m,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F1F5F9",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
                   <span style={{fontSize:12,color:"#1E293B"}}>{m.article}</span>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <span style={{fontSize:13,color:"#10B981",fontWeight:700}}>{m.qty} ml</span>
-                    <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+                    <button onClick={()=>setForm(p=>({...p,cables:p.cables.filter((_,j)=>j!==i)}))}
+                      style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
                   </div>
                 </div>
               ))}
-            </SCard>}
+              {form.cables.length===0&&<div style={{fontSize:12,color:"#94A3B8"}}>Aucun câble ajouté</div>}
+            </SCard>
 
-            {/* 6. Composants supplémentaires */}
-            {form.marque_borne&&<SCard n={6} title="Composants supplémentaires" icon="📦" done={false}>
-              <div style={{position:"relative",marginBottom:6}}>
-                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#64748B"}}>🔍</span>
-                <input value={matSearch} onChange={e=>setMatSearch(e.target.value)} placeholder="Rechercher un composant…"
-                  style={{...INP(),paddingLeft:32,fontSize:13}}/>
-                {matSearch&&<button onClick={()=>setMatSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,fontFamily:'"Outfit",sans-serif'}}>×</button>}
-              </div>
-              <div style={{display:"flex",gap:6,marginBottom:6}}>
-                <select value={mItem.id} onChange={e=>setMItem(p=>({...p,id:e.target.value}))} style={{...INP(),flex:2,fontSize:13}}>
-                  <option value="">Ajouter un composant…</option>
-                  {BORNES.filter(s=>!form.materiels.find(m=>m.id===s.id)&&(!matSearch||(s.article+" "+(s.cat||"")).toLowerCase().includes(matSearch.toLowerCase()))).map(s=><option key={s.id} value={s.id}>{s.article} — {s.cat} ({fmt(s.prix)})</option>)}
-                </select>
-                <input type="number" min="1" value={mItem.qty} onChange={e=>setMItem(p=>({...p,qty:e.target.value}))} placeholder="Qté" style={{...INP(),width:60,textAlign:"center"}}/>
-                <button onClick={addMat} style={BTN("#3B82F6",{padding:"10px 14px",fontSize:18})}>+</button>
-              </div>
-              {form.materiels.map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F1F5F9",borderRadius:8,padding:"7px 12px",marginBottom:3}}>
-                  <span style={{fontSize:12,color:"#1E293B"}}>{m.article}</span>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{fontSize:12,color:"#10B981",fontWeight:600}}>{m.qty}×</span>
-                    <span style={{fontSize:11,color:"#64748B"}}>{fmt((m.prix_unit||0)*m.qty)}</span>
-                    <button onClick={()=>setForm(p=>({...p,materiels:p.materiels.filter(x=>x.id!==m.id)}))} style={{background:"#EF444420",border:"none",borderRadius:6,color:"#EF4444",padding:"3px 8px",cursor:"pointer",fontSize:13,fontFamily:'"Outfit",sans-serif'}}>✕</button>
-                  </div>
-                </div>
-              ))}
-            </SCard>}
-
-            {/* 7. Prix */}
-            <SCard n={7} title="Prix de vente" icon="💶" done={!!form.prix_ht}>
+            {/* 4. Prix */}
+            <SCard n={4} title="Prix de vente" icon="💶" done={!!form.prix_ht}>
               <div style={{marginBottom:cout>0?10:0}}>
                 <L c="PRIX HT (€)"/>
                 <input type="number" step="0.01" value={form.prix_ht} onChange={e=>setForm(p=>({...p,prix_ht:e.target.value}))} placeholder="Ex: 1250.00" style={{...INP(),fontSize:18,fontWeight:800}}/>
