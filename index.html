@@ -641,6 +641,14 @@
         setTimeout(()=>{setImportModal(false);setImportDone(null);},2500);
       };
 
+      // Auto-sync Reonic à l'ouverture de l'onglet
+      React.useEffect(()=>{
+        const t=setTimeout(()=>{
+          if(window._triggerReonicSync)window._triggerReonicSync();
+        },800);
+        return()=>clearTimeout(t);
+      },[]);
+
       const updateLead=(id,patch)=>setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
 
       const filtered=offres.filter(o=>!search||(o.client||"").toLowerCase().includes(search.toLowerCase())||(o.email||"").toLowerCase().includes(search.toLowerCase()));
@@ -7978,17 +7986,17 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const cancelForm = () => {
         clearDraft();
-        // Si annulation d'une conversion lead → remettre en devis_ligne
-        if(pendingLeadRef.current&&!editId){
-          const lead=pendingLeadRef.current;
+        // Trouver le lead à réverter : pendingLeadRef OU form.lead_id
+        const leadToRevert=pendingLeadRef.current||(form.lead_id&&!editId?{id:form.lead_id,client:form.client}:null);
+        if(leadToRevert&&!editId){
           pendingLeadRef.current=null;
           window._leadToConvert=null;
-          // Mettre à jour le state React via global
-          if(window._revertLead)window._revertLead(lead.id);
-          // Mettre à jour Supabase
-          sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id)
-            .then(({error})=>{if(error)console.error("revert lead:",error.message);
-            else console.log("[Revert] Lead remis en devis_ligne:",lead.client);});
+          if(window._revertLead)window._revertLead(leadToRevert.id);
+          sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",leadToRevert.id)
+            .then(({error})=>{
+              if(error)console.error("revert lead:",error.message);
+              else console.log("[Revert] Lead remis en devis_ligne:",leadToRevert.client||leadToRevert.id);
+            });
         }
         pendingLeadRef.current=null;
         goToView("list");
