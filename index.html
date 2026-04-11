@@ -6872,7 +6872,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         const now=new Date();
         const callLog={date:now.toLocaleDateString("fr-FR"),heure:now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})};
         const historique_appels=[...(lead.historique_appels||[]),callLog];
-        const patch=nb>=4?{nb_appels:nb,statut:"sans_reponse",historique_appels}:{nb_appels:nb,historique_appels};
+        const patch=nb>=3?{nb_appels:nb,statut:"sans_reponse",historique_appels}:{nb_appels:nb,historique_appels};
         updateLead(lead.id,patch);
         if(detailModal) setDetailModal(p=>({...p,...patch}));
       };
@@ -6970,7 +6970,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                   <span style={{background:S.color+"20",color:S.color,padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700,flexShrink:0}}>{S.icon} {S.label}</span>
                   {isUrgent&&<span style={{background:"#EF444420",color:"#EF4444",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>🔔</span>}
                   {rdvToday&&<span style={{background:"#A855F720",color:"#A855F7",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>📅 Aujourd'hui</span>}
-                  {(lead.nb_appels||0)>0&&lead.statut==="a_appeler"&&<span style={{background:"#CBD5E140",color:"#94A3B8",padding:"1px 7px",borderRadius:20,fontSize:10}}>📵 {lead.nb_appels}/4</span>}
+                  {(lead.nb_appels||0)>0&&lead.statut==="a_appeler"&&<span style={{background:"#CBD5E140",color:"#94A3B8",padding:"1px 7px",borderRadius:20,fontSize:10}}>📵 {lead.nb_appels}/3</span>}
                 </div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#64748B",alignItems:"center"}}>
                   {lead.telephone&&<span>📞 {lead.telephone}</span>}
@@ -7751,7 +7751,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               ?<div style={{textAlign:"center",padding:"50px 0",color:"#CBD5E1"}}><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700,fontSize:14}}>Aucun lead sans réponse</div></div>
               :<>
                 <div style={{background:"#64748B18",border:"1px solid #64748B30",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#94A3B8"}}>
-                  📵 {sansReponseleads.length} lead{sansReponseleads.length>1?"s":""} sans réponse après 4 tentatives. Relancez-les ou marquez-les comme perdus.
+                  📵 {sansReponseleads.length} lead{sansReponseleads.length>1?"s":""} sans réponse après 3 tentatives. Relancez-les ou marquez-les comme perdus.
                 </div>
                 {sansReponseleads.map(lead=>(
                   <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #64748B25",padding:"12px 14px",marginBottom:7,cursor:"pointer"}}>
@@ -7761,7 +7761,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                         <div>
                           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
                             <span style={{fontWeight:800,fontSize:13,color:"#334155"}}>{lead.prenom} {lead.nom}</span>
-                            <span style={{background:"#64748B20",color:"#94A3B8",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 {lead.nb_appels||4} appels</span>
+                            <span style={{background:"#64748B20",color:"#94A3B8",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>📵 {lead.nb_appels||3} appels</span>
                           </div>
                           <div style={{fontSize:11,color:"#64748B",marginBottom:3}}>{lead.telephone&&"📞 "+lead.telephone+" · "}{lead.date_creation}{lead.canal&&" · "+lead.canal}</div>
                           {(lead.historique_appels||[]).length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
