@@ -6345,6 +6345,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       // Lancer le sync automatique au montage + exposer pour le bouton manuel
       React.useEffect(()=>{
         window._triggerReonicSync=()=>{autoSyncRef.current=false;silentSync();};
+        window._revertLead=(leadId)=>SLeads(prev=>prev.map(l=>l.id===leadId?{...l,statut:"devis_ligne",vente_id:null}:l));
         if(reonicApiKey&&reonicClientId){
           const t=setTimeout(()=>silentSync(),1500);
           return()=>clearTimeout(t);
@@ -7634,6 +7635,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       },[form, viewMode]);
 
       const clearDraft = () => { try { localStorage.removeItem("vente_draft"); } catch(e){} };
+      const pendingLeadRef=React.useRef(null); // lead en attente de conversion
 
       const openCreate = () => {
         setEditId(null);
@@ -7648,18 +7650,53 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         const lead=window._leadToConvert;
         if(!lead)return;
         window._leadToConvert=null;
-        // Construire les matériels depuis les composants Reonic + mapping
+        pendingLeadRef.current=lead;
         const mapping=reonicMapping||[];
-        const components=[
-          ...(lead._components||[]), // si on a les composants directement
-        ];
+
+        // Composants présents dans l'offre Reonic (stockés dans message)
+        // Format : "Wallbox 11kW ABB · Panneau 440Wc x23 · Batterie 10kWh"
+        const msgLower=(lead.message||"").toLowerCase();
+        const componentNames=(lead.message||"")
+          .split(/[·,\n]/)
+          .map(s=>s.trim())
+          .filter(Boolean);
+
+        // Matcher chaque ligne du mapping contre les composants de l'offre
         const matsFromMapping=mapping
-          .filter(m=>m.stock_id)
+          .filter(m=>m.stock_id&&m.reonic_name)
+          .filter(m=>{
+            const reonicNameLower=(m.reonic_name||"").toLowerCase();
+            // Vérifier si le nom Reonic est présent dans le message
+            return componentNames.some(comp=>
+              comp.toLowerCase().includes(reonicNameLower)||
+              reonicNameLower.includes(comp.toLowerCase())
+            )||msgLower.includes(reonicNameLower);
+          })
           .map(m=>{
             const stockItem=stock.find(s=>s.id===Number(m.stock_id));
             if(!stockItem)return null;
-            return{id:stockItem.id,article:stockItem.article,cat:stockItem.cat,unite:stockItem.unite||"pce",qty:Number(m.qty||1),prix_unit:stockItem.prix||0};
+            // Essayer de détecter la quantité depuis le message (ex: "Panneau 440Wc x23")
+            let qty=Number(m.qty||1);
+            const reonicNameLower=(m.reonic_name||"").toLowerCase();
+            const matchedComp=componentNames.find(c=>
+              c.toLowerCase().includes(reonicNameLower)||
+              reonicNameLower.includes(c.toLowerCase().replace(/\s*x\d+$/,"").trim())
+            );
+            if(matchedComp){
+              const qtyMatch=matchedComp.match(/x(\d+)$/i)||matchedComp.match(/(\d+)\s*(?:pcs?|unités?|u\.?)$/i);
+              if(qtyMatch)qty=Number(qtyMatch[1]);
+            }
+            return{id:stockItem.id,article:stockItem.article,cat:stockItem.cat,
+              unite:stockItem.unite||"pce",qty,prix_unit:stockItem.prix||0};
           }).filter(Boolean);
+
+        console.log("[Mapping Reonic]",
+          "Message:",lead.message,
+          "| Composants trouvés:",componentNames,
+          "| Matériels mappés:",matsFromMapping.length,
+          matsFromMapping.map(m=>m.article)
+        );
+
         setEditId(null);
         setForm({
           ...emptyForm(),
@@ -7673,18 +7710,31 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         setCItem({id:"",qty:""});
         goToView("form");
       },[]);
+
       const openEdit = v => {
+        pendingLeadRef.current=null; // édition normale, pas de lead en attente
         setEditId(v.id);
         setForm({...v});
         setMItem({id:"",qty:""});
         setCItem({id:"",qty:""});
         goToView("form");
       };
+
       const cancelForm = () => {
         clearDraft();
+        // Si on annule une conversion de lead → remettre en devis_ligne
+        if(pendingLeadRef.current&&!editId){
+          const lead=pendingLeadRef.current;
+          pendingLeadRef.current=null;
+          sb.from("leads").update({statut:"devis_ligne",vente_id:null}).eq("id",lead.id).then(({error})=>{
+            if(error)console.error("revert lead:",error.message);
+          });
+          // Mettre à jour le state leads via window si disponible
+          if(window._revertLead)window._revertLead(lead.id);
+        }
         goToView("list");
         setEditId(null);
-              };
+      };
       const saveVente = async() => {
         if(!form.client||!form.prix_ht)return;
         let coords=form.coords||null;
