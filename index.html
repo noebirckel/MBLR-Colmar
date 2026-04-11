@@ -525,21 +525,23 @@
             const c=contactsMap[offer.customer?.id]||null;
             const phone=(c?.telephone||c?.mobilePhone||"").replace(/\s/g,"");
             const email=(c?.email||"").toLowerCase();
-            // Chercher un lead existant lié à cette offre
+            // Chercher un lead existant lié
             const existingByReonicId=(leads||[]).find(l=>l.reonic_id===offer.id);
             const existingByPhone=phone?(leads||[]).find(l=>(l.telephone||"").replace(/\s/g,"")===phone):null;
             const existingByEmail=email?(leads||[]).find(l=>(l.email||"").toLowerCase()===email):null;
             const existing=existingByReonicId||existingByPhone||existingByEmail||null;
-            // Vraie doublon seulement si déjà en devis_ligne ou offre
-            const isDupBlocking=existing&&["devis_ligne","converti"].includes(existing.statut);
-            // Peut être mis à jour si existe mais pas encore en offre
-            const canUpgrade=existing&&!["devis_ligne","converti"].includes(existing.statut);
+            const existingStatut=existing?.statut||null;
+            // Vraie doublon bloquante = déjà en offre ou converti
+            const isDupBlocking=existingStatut&&["devis_ligne","converti"].includes(existingStatut);
+            // Peut upgrader = lead existe mais pas encore en offre
+            const canUpgrade=!!existing&&!isDupBlocking;
             const type=getRType(offer);
-            return{...offer,_contact:c,_duplicate:isDupBlocking,_canUpgrade:canUpgrade,_existingLead:existing,_type:type};
+            return{...offer,_contact:c,_duplicate:!!isDupBlocking,_canUpgrade:canUpgrade,_existingLead:existing||null,_type:type};
           });
 
           // Filtrer : montrer uniquement les offres avec devis (type devis ou signe), exclure perdus
           const offresOnly=enriched.filter(o=>["devis","signe"].includes(o._type));
+          console.log("[Import Offres] Total:",results.length,"| Avec devis:",offresOnly.length,"| Bloquants:",offresOnly.filter(o=>o._duplicate).length,"| Upgrade:",offresOnly.filter(o=>o._canUpgrade).length,"| Nouveaux:",offresOnly.filter(o=>!o._duplicate&&!o._canUpgrade).length);
           setImportOffers(offresOnly);
           const sel={};
           offresOnly.forEach(o=>{
