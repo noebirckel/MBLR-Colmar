@@ -6613,6 +6613,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           // 4. Mises à jour : leads existants dont le statut/prix a changé dans Reonic
           const reonicMap=new Map(results.map(o=>[o.id,o]));
           const toUpdate=[];
+          // Statuts avancés manuellement — Reonic ne doit pas les écraser
+          const PROTECTED_STATUTS=["rdv_fixe","rdv_fait","relance","converti","perdu","en_veille","devis_ligne"];
           for(const lead of (leads||[]).filter(l=>l.reonic_id)){
             const offer=reonicMap.get(lead.reonic_id);
             if(!offer)continue;
@@ -6620,7 +6622,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             const newTi=RTYPE_INFO[newType]||RTYPE_INFO.lead;
             const newPrix=offer.totalPlannedPrice||0;
             const newStatus=offer.currentSignature?.state||offer.status||"";
-            const statutChanged=newTi.statut!==lead.statut&&!["converti","perdu"].includes(lead.statut);
+            // Ne pas écraser un statut avancé manuellement
+            const canChangeStatut=!PROTECTED_STATUTS.includes(lead.statut);
+            const statutChanged=canChangeStatut&&newTi.statut!==lead.statut;
             const prixChanged=newPrix!==Number(lead.prix_reonic||0);
             const statusChanged=newStatus!==(lead.reonic_status||"");
             if(statutChanged||prixChanged||statusChanged){
