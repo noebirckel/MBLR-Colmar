@@ -10264,10 +10264,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const TAB_LABELS={leads:"Leads",offres:"Offres",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
       const TAB_ICONS={leads:"📥",offres:"📋",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const NAV_GROUP_ORDER={
-        administrateur:["accueil","ventes","pilotage","administratif","terrain","stock","cartes","clients","admin"],
-        commercial:["accueil","ventes","terrain","clients","cartes"],
-        secretaire:["accueil","administratif","ventes","terrain","clients","cartes"],
-        installateur:["accueil","terrain","stock","cartes","clients"],
+        administrateur:["accueil","cartes","clients","ventes","pilotage","administratif","terrain","stock","admin"],
+        commercial:["accueil","cartes","clients","ventes","terrain"],
+        secretaire:["accueil","cartes","clients","administratif","ventes","terrain"],
+        installateur:["accueil","cartes","clients","terrain","stock"],
       };
       const groupOrder=NAV_GROUP_ORDER[role]||NAV_GROUP_ORDER.administrateur;
       const visibleGroups=groupOrder
