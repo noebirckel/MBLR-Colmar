@@ -542,6 +542,16 @@
           // Filtrer : montrer uniquement les offres avec devis (type devis ou signe), exclure perdus
           const offresOnly=enriched.filter(o=>["devis","signe"].includes(o._type));
           console.log("[Import Offres] Total:",results.length,"| Avec devis:",offresOnly.length,"| Bloquants:",offresOnly.filter(o=>o._duplicate).length,"| Upgrade:",offresOnly.filter(o=>o._canUpgrade).length,"| Nouveaux:",offresOnly.filter(o=>!o._duplicate&&!o._canUpgrade).length);
+          offresOnly.filter(o=>o._duplicate).forEach(o=>{
+            const c=o._contact;
+            const nom=`${c?.firstName||""} ${c?.lastName||""}`.trim()||c?.email||"?";
+            console.log(`  → BLOQUÉ: ${nom} | statut existant: ${o._existingLead?.statut} | reonic_id lead: ${o._existingLead?.reonic_id||"null"} | match via: ${o._existingLead?.reonic_id===o.id?"reonic_id":(c?.telephone||c?.mobilePhone)?"tél":"email"}`);
+          });
+          offresOnly.filter(o=>o._canUpgrade).forEach(o=>{
+            const c=o._contact;
+            const nom=`${c?.firstName||""} ${c?.lastName||""}`.trim()||c?.email||"?";
+            console.log(`  → UPGRADE: ${nom} | statut existant: ${o._existingLead?.statut}`);
+          });
           setImportOffers(offresOnly);
           const sel={};
           offresOnly.forEach(o=>{
