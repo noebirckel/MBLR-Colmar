@@ -10230,8 +10230,27 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       // Navigation groups
       const fmt=n=>(n??0).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0});
-      const NAV_GROUPS=[
-        {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
+      // ── SIDEBAR STATE ──────────────────────────────────────────────────────
+      const[sidebarCollapsed,setSidebarCollapsed]=React.useState(()=>{try{return localStorage.getItem("sidebar_collapsed")==="1";}catch(e){return false;}});
+      const toggleSidebar=()=>setSidebarCollapsed(p=>{try{localStorage.setItem("sidebar_collapsed",p?"0":"1");}catch(e){}return !p;});
+
+      // Groupes fermés par défaut (selon le rôle)
+      const defaultClosed={
+        administrateur:["pilotage","admin"],
+        commercial:["terrain"],
+        secretaire:["ventes","terrain"],
+        installateur:[],
+      };
+      const[closedGroups,setClosedGroups]=React.useState(()=>{
+        try{const s=localStorage.getItem("sidebar_closed_groups");return s?JSON.parse(s):(defaultClosed[role]||[]);}catch(e){return [];}
+      });
+      const toggleGroup=(gid)=>setClosedGroups(prev=>{
+        const next=prev.includes(gid)?prev.filter(x=>x!==gid):[...prev,gid];
+        try{localStorage.setItem("sidebar_closed_groups",JSON.stringify(next));}catch(e){}
+        return next;
+      });
+
+      const NAV_GROUPS=[\n        {id:"accueil",icon:"🏠",label:"Accueil",tabs:["accueil"]},
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
@@ -10243,9 +10262,55 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       ];
       const TAB_LABELS={leads:"Leads",offres:"Offres",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
       const TAB_ICONS={leads:"📥",offres:"📋",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
-      const visibleGroups=NAV_GROUPS.map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))})).filter(g=>g.tabs.length>0);
+      const NAV_GROUP_ORDER={
+        administrateur:["accueil","ventes","pilotage","administratif","terrain","stock","cartes","clients","admin"],
+        commercial:["accueil","ventes","terrain","clients","cartes"],
+        secretaire:["accueil","administratif","ventes","terrain","clients","cartes"],
+        installateur:["accueil","terrain","stock","cartes","clients"],
+      };
+      const groupOrder=NAV_GROUP_ORDER[role]||NAV_GROUP_ORDER.administrateur;
+      const visibleGroups=groupOrder
+        .map(gid=>NAV_GROUPS.find(g=>g.id===gid))
+        .filter(Boolean)
+        .map(g=>({...g,tabs:g.tabs.filter(t=>allowedTabs.includes(t))}))
+        .filter(g=>g.tabs.length>0);
       const activeGroupObj=visibleGroups.find(g=>g.tabs.includes(view));
       const subTabs=activeGroupObj?.tabs||[];
+
+      // ── BLOC "AUJOURD'HUI" par rôle ─────────────────────────────
+      const todayISO2=new Date().toISOString().split("T")[0];
+      const rdvToday=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===todayISO2&&!l.rapport_rdv;}).length;
+      const acomptesAPayer=(acomptes||[]).filter(a=>a.statut==="a_envoyer").length;
+      const facturesAFaire=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+      const chantiersAPlanif=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
+      const savOuverts=(savTickets||[]).filter(s=>s.statut==="ouvert").length;
+      const todayBloc=role==="commercial"?{
+        text:rdvToday>0?`📅 ${rdvToday} RDV aujourd'hui`:"✓ Aucun RDV aujourd'hui",
+        color:rdvToday>0?"#2563EB":"#94A3B8",bg:rdvToday>0?"#EFF6FF":"#F8FAFC",border:rdvToday>0?"#BFDBFE":"#E2E8F0",
+        tab:"leads"
+      }:role==="secretaire"?{
+        text:acomptesAPayer>0?`📄 ${acomptesAPayer} acompte${acomptesAPayer>1?"s":""} à envoyer`:`🧾 ${facturesAFaire} facture${facturesAFaire>1?"s":""} à faire`,
+        color:(acomptesAPayer+facturesAFaire)>0?"#7C3AED":"#94A3B8",bg:(acomptesAPayer+facturesAFaire)>0?"#EEEDFE":"#F8FAFC",border:(acomptesAPayer+facturesAFaire)>0?"#C4B5FD":"#E2E8F0",
+        tab:acomptesAPayer>0?"administratif":"factures"
+      }:role==="administrateur"?{
+        text:[rdvToday&&`📅 ${rdvToday} RDV`,chantiersAPlanif&&`🔧 ${chantiersAPlanif} chantier${chantiersAPlanif>1?"s":""}`,savOuverts&&`🛠️ ${savOuverts} SAV`].filter(Boolean).join(" · ")||"✓ Tout est à jour",
+        color:(rdvToday+chantiersAPlanif+savOuverts)>0?"#059669":"#94A3B8",bg:(rdvToday+chantiersAPlanif+savOuverts)>0?"#ECFDF5":"#F8FAFC",border:(rdvToday+chantiersAPlanif+savOuverts)>0?"#A7F3D0":"#E2E8F0",
+        tab:"accueil"
+      }:null;
+
+      // Badges par groupe (pour mode collapsed)
+      const getGroupBadge=(g)=>{
+        let total=0;
+        g.tabs.forEach(t=>{
+          if(t==="factures")total+=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;
+          else if(t==="chantier")total+=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;
+          else if(t==="commandes")total+=(orders||[]).filter(o=>o.statut==="en_attente").length;
+          else if(t==="sav")total+=(savTickets||[]).filter(s=>s.statut==="ouvert").length;
+          else if(t==="administratif")total+=(acomptes||[]).filter(a=>a.statut==="a_envoyer").length;
+          else if(t==="leads"){total+=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===todayISO2&&!l.rapport_rdv;}).length;}
+        });
+        return total;
+      };
 
       const loginDemo=(role)=>{
         const DEMO_PROFILES={
@@ -10382,84 +10447,131 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           {/* Layout principal */}
           <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
 
-            {/* Sidebar desktop — style Zoho */}
+            {/* Sidebar desktop */}
             {!isMobile&&(
-              <aside style={{width:220,flexShrink:0,background:"#FFFFFF",borderRight:"1px solid #E2E8F0",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"1px 0 4px rgba(0,0,0,0.04)"}}>
-                {/* Logo */}
-                <div style={{padding:"16px 14px",borderBottom:"1px solid #F1F5F9",display:"flex",alignItems:"center",gap:10}}>
-                  <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:34,height:34,borderRadius:8,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}/>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:800,fontSize:13,color:"#0F172A",letterSpacing:"-0.2px"}}>Ma Borne LR</div>
-                    <div style={{fontSize:9,color:"#94A3B8",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.05em"}}>Colmar</div>
-                  </div>
-                  <div style={{display:"flex",gap:4}}>
-                    <button onClick={()=>window.location.reload()} title="Actualiser"
-                      style={{background:"transparent",border:"none",borderRadius:7,padding:"5px 6px",cursor:"pointer",color:"#94A3B8",fontSize:14,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}
-                      onMouseOver={e=>e.currentTarget.style.background="#F1F5F9"}
-                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>🔄</button>
-                    <button onClick={()=>setNotifPanel(p=>!p)} title="Notifications"
-                      style={{position:"relative",background:notifPanel?"#EFF6FF":"transparent",border:"none",borderRadius:7,padding:"5px 6px",cursor:"pointer",color:unreadCount>0?"#2563EB":"#94A3B8",fontSize:14,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>
-                      🔔
-                      {unreadCount>0&&<span style={{position:"absolute",top:-3,right:-3,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:8,fontWeight:800,width:14,height:14,display:"flex",alignItems:"center",justifyContent:"center"}}>{unreadCount>9?"9+":unreadCount}</span>}
-                    </button>
-                  </div>
+              <aside style={{width:sidebarCollapsed?52:220,flexShrink:0,background:"#FFFFFF",borderRight:"1px solid #E2E8F0",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"1px 0 4px rgba(0,0,0,0.04)",transition:"width 0.2s ease"}}>
+                {/* Logo + collapse */}
+                <div style={{padding:"12px 10px",borderBottom:"1px solid #F1F5F9",display:"flex",alignItems:"center",gap:8,minHeight:56}}>
+                  <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI4LjEuMCwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkNhbHF1ZV8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB4PSIwcHgiIHk9IjBweCIKCSB2aWV3Qm94PSIwIDAgNDQ5IDQ0OSIgc3R5bGU9ImVuYWJsZS1iYWNrZ3JvdW5kOm5ldyAwIDAgNDQ5IDQ0OTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMwNDUyNTQ7fQoJLnN0MXtmaWxsOiNGRkZGRkY7fQoJLnN0MntmaWxsOm5vbmU7c3Ryb2tlOiMwNDUyNTQ7c3Ryb2tlLXdpZHRoOjM7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQo8L3N0eWxlPgo8ZyBpZD0iZm9uZCI+Cgk8cmVjdCB4PSIwLjQiIHk9IjAuMyIgY2xhc3M9InN0MCIgd2lkdGg9IjQ1MCIgaGVpZ2h0PSI0NTAiLz4KPC9nPgo8ZyBpZD0iTG9nbyI+Cgk8Zz4KCQk8ZyBpZD0iYV8wMDAwMDE3ODg4Mzg5ODIwNzkzMjU0MDg1MDAwMDAwMzAxNzg1Mjk3OTM1MTc0NTk0M18iPgoJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTgzLjYsOTYuNXYxMTMuOGg0OXYyOC41aC04MS40Vjk2LjVIMTgzLjZ6Ii8+CgkJPC9nPgoJPC9nPgoJPGc+CgkJPGcgaWQ9ImJfMDAwMDAwNjE0Njc3MjY5MjU5NDU0MDA4MzAwMDAwMTcyMDM0MzAxNDg5Nzk3MDcwMjVfIj4KCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTI2MS42LDI5OVYxODUuMmgtNDl2LTI4LjVIMjk0djE0Mi4yaC0zMi40VjI5OXoiLz4KCQk8L2c+Cgk8L2c+CjwvZz4KPGcgaWQ9Im1hX2Jvcm5lIj4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMzMsMzUzLjNjMCwwLjItMC40LDAuNi0wLjcsMC42aC0zLjljLTAuNSwwLTAuNy0wLjQtMC43LTAuNnYtMTEuNWMtMS44LDMuNS0zLjUsNy4yLTUuNCwxMC44CgkJCWMwLDAuMS0wLjUsMC40LTAuNiwwLjRIMTE4Yy0wLjIsMC0wLjYtMC4yLTAuNy0wLjRsMCwwbC01LjctMTEuMXYxMS45YzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMy45Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg0YzAuMiwwLDAuNiwwLjIsMC43LDAuNGw4LjMsMTYuOWw3LjgtMTYuOWMwLjEtMC4xLDAuNS0wLjQsMC43LTAuNGgzLjljMC41LDAsMC43LDAuNCwwLjcsMC42djIzLjZIMTMzeiIKCQkJLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTQ5LjgsMzUxLjFoLTcuMWwtMC45LDIuNGwwLDBjLTAuMSwwLjItMC40LDAuNC0wLjcsMC40aC00LjNjLTAuNiwwLTAuOS0wLjQtMC43LTAuOQoJCQljMy4xLTcuOCw2LjQtMTYuMyw5LjQtMjQuMWMwLjItMC41LDEuMS0wLjUsMS4zLDBsOS40LDI0LjFjMC4xLDAuNC0wLjEsMC45LTAuNiwwLjloLTQuM2MtMC4yLDAtMC42LTAuMS0wLjctMC40bDAsMEwxNDkuOCwzNTEuMQoJCQl6IE0xNDQsMzQ2LjhoNC4zbC0xLjItMy43Yy0wLjQtMS4yLTAuNi0yLjItMC45LTMuNGMtMC4yLDEuMy0wLjUsMi4zLTAuOSwzLjRMMTQ0LDM0Ni44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xODUuMSwzNDEuNGMzLjQsMS42LDMuMyw1LDMuMyw1YzAsNy4xLTcuMiw3LjMtOC45LDcuM2gtNy44Yy0wLjUsMC0wLjctMC40LTAuNy0wLjZ2LTIzLjYKCQkJYzAtMC40LDAuMi0wLjYsMC43LTAuNmg3LjhjMCwwLDguNi0wLjEsOC42LDcuMkMxODgsMzM5LDE4Ni44LDM0MC42LDE4NS4xLDM0MS40eiBNMTc2LjIsMzM4LjloMy4yYzAsMCwzLjIsMCwzLjItMi4zCgkJCWMwLTIuNi0zLjItMi42LTMuMi0yLjZoLTMuMlYzMzguOXogTTE4Mi45LDM0Ni40YzAtMi40LTMuNC0yLjMtMy40LTIuM2gtMy4ydjQuNmgzLjJDMTgwLjgsMzQ4LjgsMTgyLjksMzQ4LjQsMTgyLjksMzQ2LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIxNS45LDM0MS42YzAsNi4yLTQuMiwxMi42LTEyLjIsMTIuNmMtOC4yLDAtMTIuMi02LjQtMTIuMi0xMi42YzAtNi4yLDQtMTIuNiwxMi4yLTEyLjYKCQkJQzIxMS44LDMyOSwyMTUuOSwzMzUuMywyMTUuOSwzNDEuNnogTTIxMC40LDM0MS43YzAtMy44LTIuMy03LjctNi43LTcuN2MtNC41LDAtNi43LDMuOC02LjcsNy43YzAsMy44LDIuMyw3LjYsNi43LDcuNgoJCQlDMjA4LjEsMzQ5LjMsMjEwLjQsMzQ1LjUsMjEwLjQsMzQxLjd6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIzMy41LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZIMjIxYy0wLjQsMC0wLjctMC40LTAuNy0wLjYKCQkJdi0xMy44YzAtMC40LDAuNC0wLjYsMC43LTAuNmgyLjZjLTAuNS0wLjctMS0xLjUtMS41LTIuM2wtMS44LTIuOXYtNGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoNy44YzAsMCw4LjYsMCw4LjYsNy41CgkJCWMwLDQuMi0yLjYsNi00LjksNi44bDYsOS41bDAsMGMwLjQsMC41LDAsMS0wLjYsMWgtNC40VjM1My45eiBNMjI5LjcsMzM4LjljMS4xLTAuMSwyLjQtMC42LDIuNC0yLjNjMC0yLjMtMi40LTIuMy0zLjItMi4zaC0yLjIKCQkJTDIyOS43LDMzOC45eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNjMuMywzNTMuM2MwLDAuMi0wLjIsMC42LTAuNywwLjZoLTRjLTAuMSwwLTAuNS0wLjEtMC42LTAuMmMtMy43LTUuMS02LjctOS43LTEwLjQtMTQuOHYxNC40CgkJCWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuNC0wLjYsMC43LTAuNmg0YzAuMSwwLDAuNSwwLjEsMC42LDAuMgoJCQljMy41LDUuMSw2LjgsOS43LDEwLjQsMTQuOHYtMTQuNGMwLTAuNCwwLjItMC42LDAuNy0wLjZoMy45YzAuNSwwLDAuNywwLjQsMC43LDAuNkwyNjMuMywzNTMuM0wyNjMuMywzNTMuM3oiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjczLjksMzM0LjF2NC44aDljMC40LDAsMC43LDAuNCwwLjcsMC42djMuOGMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTl2NC44aDExYzAuNSwwLDAuNywwLjQsMC43LDAuNnYzLjkKCQkJYzAsMC4yLTAuNCwwLjYtMC43LDAuNmgtMTUuOGMtMC41LDAtMC43LTAuNC0wLjctMC42di0yMy42YzAtMC40LDAuMi0wLjYsMC43LTAuNmgxNS40YzAuNCwwLDAuNywwLjQsMC43LDAuNnYzLjgKCQkJYzAsMC40LTAuNCwwLjYtMC43LDAuNmgtMTAuNlYzMzQuMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMzE0LjksMzQ4LjhjMC41LDAsMC43LDAuNCwwLjcsMC42djMuOWMwLDAuMi0wLjQsMC42LTAuNywwLjZoLTEyLjdjLTAuNCwwLTAuNy0wLjQtMC43LTAuNnYtMjMuNgoJCQljMC0wLjQsMC40LTAuNiwwLjctMC42aDMuOWMwLjQsMCwwLjcsMC40LDAuNywwLjZ2MTguOWg4LjFWMzQ4Ljh6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTMzMi40LDM1My45Yy0wLjIsMC0wLjYtMC4xLTAuNy0wLjRsMCwwbC02LTkuNWgtMS4xdjkuMmMwLDAuMi0wLjIsMC42LTAuNywwLjZoLTMuOWMtMC40LDAtMC43LTAuNC0wLjctMC42CgkJCXYtMTMuOGMwLTAuNCwwLjQtMC42LDAuNy0wLjZoMi42Yy0wLjUtMC43LTEtMS41LTEuNS0yLjNsLTEuOC0yLjl2LTRjMC0wLjQsMC40LTAuNiwwLjctMC42aDcuOGMwLDAsOC42LDAsOC42LDcuNQoJCQljMCw0LjItMi42LDYtNC45LDYuOGw2LDkuNWwwLDBjMC40LDAuNSwwLDEtMC42LDFoLTQuNFYzNTMuOXogTTMyOC42LDMzOC45YzEuMS0wLjEsMi40LTAuNiwyLjQtMi4zYzAtMi4zLTIuNC0yLjMtMy4yLTIuM2gtMi4yCgkJCUwzMjguNiwzMzguOXoiLz4KCTwvZz4KPC9nPgo8ZyBpZD0ibG9nb19tYV9ib3JuZSI+Cgk8Zz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QyIiBkPSJNMjUzLjEsMTE4LjJsLTU2LjUsNzYuNmMtMC45LDEuMi0wLjEsMi45LDEuMywyLjlsMjAuMy0wLjJjMS4xLDAsMS44LDEuMSwxLjYsMi4yYzAsMC0wLjQsMS42LTAuOSw0LjMKCQkJYy0yLjcsMTIuNy0xMC41LDQ5LjUtMTAuNSw0OS41Yy0wLjQsMS44LDEuOCwzLjEsMi45LDEuNWw1Ni42LTc3LjFjMC45LTEuMiwwLjEtMi45LTEuMy0yLjlsLTIxLjEsMC4yYy0xLjEsMC0xLjgtMS4xLTEuNi0yLjIKCQkJbDEyLjEtNTMuM0MyNTYuNCwxMTcuOCwyNTQuMiwxMTYuNywyNTMuMSwxMTguMnoiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" style={{width:32,height:32,borderRadius:7,flexShrink:0}}/>
+                  {!sidebarCollapsed&&<>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:800,fontSize:13,color:"#0F172A",letterSpacing:"-0.2px"}}>Ma Borne LR</div>
+                      <div style={{fontSize:9,color:"#94A3B8",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.05em"}}>Colmar</div>
+                    </div>
+                    <div style={{display:"flex",gap:3}}>
+                      <button onClick={()=>window.location.reload()} title="Actualiser"
+                        style={{background:"transparent",border:"none",borderRadius:6,padding:"4px 5px",cursor:"pointer",color:"#94A3B8",fontSize:13,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}
+                        onMouseOver={e=>e.currentTarget.style.background="#F1F5F9"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>🔄</button>
+                      <button onClick={()=>setNotifPanel(p=>!p)} title="Notifications"
+                        style={{position:"relative",background:notifPanel?"#EFF6FF":"transparent",border:"none",borderRadius:6,padding:"4px 5px",cursor:"pointer",color:unreadCount>0?"#2563EB":"#94A3B8",fontSize:13,lineHeight:1,fontFamily:'"Outfit",sans-serif'}}>
+                        🔔
+                        {unreadCount>0&&<span style={{position:"absolute",top:-2,right:-2,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:7,fontWeight:800,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center"}}>{unreadCount>9?"9+":unreadCount}</span>}
+                      </button>
+                    </div>
+                  </>}
+                  {/* Collapse toggle */}
+                  <button onClick={toggleSidebar}
+                    style={{background:"transparent",border:"none",borderRadius:6,padding:"4px 5px",cursor:"pointer",color:"#94A3B8",fontSize:13,lineHeight:1,fontFamily:'"Outfit",sans-serif',marginLeft:sidebarCollapsed?"auto":"0",flexShrink:0}}
+                    onMouseOver={e=>e.currentTarget.style.background="#F1F5F9"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                    {sidebarCollapsed?"›":"‹"}
+                  </button>
                 </div>
-                <nav style={{flex:1,padding:"8px 8px",overflowY:"auto"}}>
-                  {visibleGroups.map(g=>{
-                    const isGA=g.tabs.includes(view);
-                    return(
-                      <div key={g.id} style={{marginBottom:2}}>
-                        {g.tabs.length===1?(
-                          <button onClick={()=>goTo(g.tabs[0])} style={{width:"100%",display:"flex",alignItems:"center",gap:9,padding:"9px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isGA?"#EFF6FF":"transparent",borderLeft:isGA?"3px solid #2563EB":"3px solid transparent"}}>
+
+                {/* Bloc Aujourd'hui */}
+                {!sidebarCollapsed&&todayBloc&&(
+                  <div onClick={()=>goTo(todayBloc.tab)} style={{margin:"8px 8px 0",padding:"7px 10px",background:todayBloc.bg,border:`1px solid ${todayBloc.border}`,borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,color:todayBloc.color,lineHeight:1.4}}>
+                    {todayBloc.text}
+                  </div>
+                )}
+
+                {/* Navigation */}
+                <nav style={{flex:1,padding:"6px 6px",overflowY:"auto"}}>
+                  {sidebarCollapsed?(
+                    // Mode icônes seules
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4}}>
+                      {visibleGroups.map(g=>{
+                        const isGA=g.tabs.includes(view);
+                        const badge=getGroupBadge(g);
+                        return(
+                          <div key={g.id} title={g.label} style={{position:"relative"}}>
+                            <button onClick={()=>goTo(g.tabs[0])} style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8,border:"none",cursor:"pointer",background:isGA?"#EFF6FF":"transparent",fontSize:18,fontFamily:'"Outfit",sans-serif'}}
+                              onMouseOver={e=>{if(!isGA)e.currentTarget.style.background="#F8FAFC";}} onMouseOut={e=>{if(!isGA)e.currentTarget.style.background=isGA?"#EFF6FF":"transparent";}}>
+                              {g.icon}
+                            </button>
+                            {badge>0&&<span style={{position:"absolute",top:1,right:1,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:7,fontWeight:800,width:13,height:13,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>{badge>9?"9+":badge}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ):(
+                    // Mode complet avec sections dépliables
+                    visibleGroups.map(g=>{
+                      const isGA=g.tabs.includes(view);
+                      const isClosed=closedGroups.includes(g.id);
+                      if(g.tabs.length===1){
+                        return(
+                          <button key={g.id} onClick={()=>goTo(g.tabs[0])} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isGA?"#EFF6FF":"transparent",borderLeft:isGA?"3px solid #2563EB":"3px solid transparent",marginBottom:2}}
+                            onMouseOver={e=>{if(!isGA)e.currentTarget.style.background="#F8FAFC";}} onMouseOut={e=>{if(!isGA)e.currentTarget.style.background=isGA?"#EFF6FF":"transparent";}}>
                             <span style={{fontSize:15}}>{g.icon}</span>
                             <span style={{fontSize:13,fontWeight:isGA?700:500,color:isGA?"#2563EB":"#475569"}}>{g.label}</span>
                           </button>
-                        ):(
-                          <div>
-                            <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:700,textTransform:"uppercase",color:"#94A3B8",letterSpacing:"0.08em"}}>
-                              {g.icon} {g.label}
-                            </div>
-                            {g.tabs.map(t=>{
-                              const isAct=view===t;
-                              let _b=0,_bc="#EF4444";
-                              if(t==="factures"){_b=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;}
-                              else if(t==="chantier"){_b=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;_bc="#F59E0B";}
-                              else if(t==="commandes"){_b=orders.filter(o=>o.statut==="en_attente").length;_bc="#F59E0B";}
-                              else if(t==="sav"){_b=savTickets.filter(s=>s.statut==="ouvert").length;}
-                              else if(t==="administratif"){_b=acomptes.filter(a=>a.statut==="a_envoyer").length;_bc="#F59E0B";}
-                              else if(t==="leads"){const tISO=new Date().toISOString().split("T")[0];_b=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===tISO&&!l.rapport_rdv;}).length;_bc="#A855F7";}
-                              return(
-                                <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"#EFF6FF":"transparent",borderLeft:isAct?"3px solid #2563EB":"3px solid transparent"}}
-                                  onMouseOver={e=>{if(!isAct)e.currentTarget.style.background="#F8FAFC";}}
-                                  onMouseOut={e=>{if(!isAct)e.currentTarget.style.background="transparent";}}>
-                                  <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
-                                  <span style={{fontSize:12,fontWeight:isAct?700:400,color:isAct?"#2563EB":"#475569"}}>{TAB_LABELS[t]}</span>
-                                  {_b>0&&<span style={{marginLeft:"auto",background:_bc,color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:16,textAlign:"center"}}>{_b>99?"99+":_b}</span>}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        );
+                      }
+                      return(
+                        <div key={g.id} style={{marginBottom:2}}>
+                          {/* En-tête de groupe cliquable */}
+                          <button onClick={()=>toggleGroup(g.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:6,padding:"6px 10px 4px",background:"transparent",border:"none",cursor:"pointer",fontFamily:'"Outfit",sans-serif',borderRadius:6}}
+                            onMouseOver={e=>e.currentTarget.style.background="#F8FAFC"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                            <span style={{fontSize:12}}>{g.icon}</span>
+                            <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",color:"#94A3B8",letterSpacing:"0.07em",flex:1,textAlign:"left"}}>{g.label}</span>
+                            <span style={{fontSize:10,color:"#CBD5E1",transition:"transform 0.15s",display:"inline-block",transform:isClosed?"rotate(-90deg)":"rotate(0deg)"}}>▾</span>
+                          </button>
+                          {/* Sous-éléments */}
+                          {!isClosed&&g.tabs.map(t=>{
+                            const isAct=view===t;
+                            let _b=0,_bc="#EF4444";
+                            if(t==="factures"){_b=chantiersPipeline.filter(ch=>ch.statut==="termine"&&(ch.facture?.statut||"a_facturer")==="a_facturer").length;}
+                            else if(t==="chantier"){_b=chantiersPipeline.filter(ch=>ch.statut==="a_planifier").length;_bc="#F59E0B";}
+                            else if(t==="commandes"){_b=(orders||[]).filter(o=>o.statut==="en_attente").length;_bc="#F59E0B";}
+                            else if(t==="sav"){_b=(savTickets||[]).filter(s=>s.statut==="ouvert").length;}
+                            else if(t==="administratif"){_b=(acomptes||[]).filter(a=>a.statut==="a_envoyer").length;_bc="#F59E0B";}
+                            else if(t==="leads"){const tISO3=new Date().toISOString().split("T")[0];_b=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===tISO3&&!l.rapport_rdv;}).length;_bc="#A855F7";}
+                            return(
+                              <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"#EFF6FF":"transparent",borderLeft:isAct?"3px solid #2563EB":"3px solid transparent"}}
+                                onMouseOver={e=>{if(!isAct)e.currentTarget.style.background="#F8FAFC";}} onMouseOut={e=>{if(!isAct)e.currentTarget.style.background=isAct?"#EFF6FF":"transparent";}}>
+                                <span style={{fontSize:13}}>{TAB_ICONS[t]}</span>
+                                <span style={{fontSize:12,fontWeight:isAct?700:400,color:isAct?"#2563EB":"#475569"}}>{TAB_LABELS[t]}</span>
+                                {_b>0&&<span style={{marginLeft:"auto",background:_bc,color:"#FFF",borderRadius:20,fontSize:9,fontWeight:800,padding:"1px 6px",minWidth:16,textAlign:"center"}}>{_b>99?"99+":_b}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })
+                  )}
                 </nav>
-                {/* Footer sidebar */}
-                <div style={{borderTop:"1px solid #F1F5F9",padding:"10px 8px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 12px",marginBottom:6}}>
-                    {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
-                    <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#F8FAFC",borderRadius:8,marginBottom:6,border:"1px solid #F1F5F9"}}>
-                    <span style={{fontSize:18}}>{rCfg.icon}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:"#1E293B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.nom||rCfg.label}</div>
-                      <div style={{fontSize:10,color:"#94A3B8"}}>{rCfg.label}</div>
+
+                {/* Footer */}
+                <div style={{borderTop:"1px solid #F1F5F9",padding:"8px 6px"}}>
+                  {!sidebarCollapsed&&<>
+                    <div style={{display:"flex",alignItems:"center",gap:5,padding:"3px 10px",marginBottom:4}}>
+                      {sc2.spin&&<div style={{width:5,height:5,borderRadius:"50%",border:`1.5px solid ${sc2.c}`,borderTopColor:"transparent",animation:"spin 0.8s linear infinite"}}/>}
+                      <span style={{fontSize:10,color:sc2.c,fontWeight:600}}>{sc2.t}</span>
                     </div>
-                  </div>
-                  <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:"transparent",border:"1px solid #E2E8F0",borderRadius:8,color:"#64748B",cursor:"pointer",fontSize:12,fontWeight:500,fontFamily:'"Outfit",sans-serif'}}
+                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"#F8FAFC",borderRadius:8,marginBottom:6,border:"1px solid #F1F5F9"}}>
+                      <span style={{fontSize:16}}>{rCfg.icon}</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#1E293B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{profile?.nom||rCfg.label}</div>
+                        <div style={{fontSize:10,color:"#94A3B8"}}>{rCfg.label}</div>
+                      </div>
+                    </div>
+                  </>}
+                  {sidebarCollapsed&&<div style={{display:"flex",justifyContent:"center",padding:"4px 0",marginBottom:4}}>
+                    <span title={profile?.nom||rCfg.label} style={{fontSize:18}}>{rCfg.icon}</span>
+                  </div>}
+                  <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:sidebarCollapsed?"center":"flex-start",gap:7,padding:"7px 10px",background:"transparent",border:"1px solid #E2E8F0",borderRadius:8,color:"#64748B",cursor:"pointer",fontSize:12,fontWeight:500,fontFamily:'"Outfit",sans-serif'}}
                     onMouseOver={e=>e.currentTarget.style.background="#F8FAFC"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                    <span>🚪</span><span>Déconnexion</span>
+                    <span>🚪</span>{!sidebarCollapsed&&<span>Déconnexion</span>}
                   </button>
                 </div>
               </aside>
