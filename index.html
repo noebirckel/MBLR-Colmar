@@ -7401,6 +7401,62 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
     }
 
 
+    function ReonicMappingConfig({mapping, saveMapping, stock}){
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:8,color:"#FFF",padding:"8px 12px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:'"Outfit",sans-serif',...e});
+      const INP=()=>({background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,color:"#0F172A",padding:"7px 10px",fontSize:12,fontFamily:'"Outfit",sans-serif',outline:"none"});
+      const rows=mapping||[];
+
+      const update=(idx,patch)=>saveMapping(rows.map((r,i)=>i===idx?{...r,...patch}:r));
+      const remove=(idx)=>saveMapping(rows.filter((_,i)=>i!==idx));
+      const add=()=>saveMapping([...rows,{reonic_name:"",stock_id:"",qty:1}]);
+
+      const BORNES=stock.filter(s=>s.unite!=="ml");
+
+      return(
+        <div style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"16px 18px",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{width:36,height:36,borderRadius:8,background:"#EFF6FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🔗</div>
+            <div>
+              <div style={{fontWeight:700,fontSize:14,color:"#0F172A"}}>Mapping composants Reonic</div>
+              <div style={{fontSize:11,color:"#64748B"}}>Lie chaque composant Reonic à un article du stock pour calculer la marge</div>
+            </div>
+          </div>
+
+          {rows.length===0&&<div style={{textAlign:"center",padding:"20px 0",fontSize:12,color:"#94A3B8"}}>
+            Aucun mapping configuré — ajoute les composants Reonic que tu utilises
+          </div>}
+
+          {rows.map((row,idx)=>(
+            <div key={idx} style={{display:"grid",gridTemplateColumns:"1fr 1fr 80px 32px",gap:6,marginBottom:8,alignItems:"center"}}>
+              <input value={row.reonic_name||""} onChange={e=>update(idx,{reonic_name:e.target.value})}
+                placeholder="Nom composant Reonic (ex: Wallbox 11kW)"
+                style={{...INP(),fontSize:11}}/>
+              <select value={row.stock_id||""} onChange={e=>update(idx,{stock_id:e.target.value})}
+                style={{...INP(),fontSize:11,cursor:"pointer"}}>
+                <option value="">— Article stock —</option>
+                {BORNES.map(s=>(
+                  <option key={s.id} value={s.id}>{s.article} {s.marque?`(${s.marque})`:""} — {s.prix}€</option>
+                ))}
+              </select>
+              <input type="number" value={row.qty||1} min={1} onChange={e=>update(idx,{qty:Number(e.target.value)})}
+                placeholder="Qté" style={{...INP(),textAlign:"center",fontSize:11}}/>
+              <button onClick={()=>remove(idx)}
+                style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:8,color:"#DC2626",padding:"6px",cursor:"pointer",fontSize:14,lineHeight:1}}>✕</button>
+            </div>
+          ))}
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10}}>
+            <button onClick={add} style={BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{fontSize:12})}>+ Ajouter un composant</button>
+            {rows.length>0&&<div style={{fontSize:11,color:"#10B981",fontWeight:600}}>✅ {rows.filter(r=>r.reonic_name&&r.stock_id).length}/{rows.length} mappings configurés</div>}
+          </div>
+
+          {rows.length>0&&<div style={{marginTop:10,padding:"8px 12px",background:"#F0FDF4",borderRadius:8,fontSize:11,color:"#16A34A"}}>
+            Lors de la conversion d'une offre Reonic en vente, les matériels seront pré-remplis automatiquement avec les articles mappés.
+          </div>}
+        </div>
+      );
+    }
+
     function ReonicConfig({reonicApiKey,saveReonicApiKey,supabaseUrl,supabaseKey}){
       const EDGE_URL=`${supabaseUrl}/functions/v1/reonic-proxy`;
       const[testStatus,setTestStatus]=useState(null);
@@ -7488,7 +7544,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       {children&&<div style={{padding:"13px 16px"}}>{children}</div>}
     </div>);}
 
-    function VentesTab({isMobile, ventes, setVentes, setVentesRaw, stock, profile, fmt, role, installConfigs, marqueConfigs, onVenteSaved, onDeleteVente}) {
+    function VentesTab({isMobile, ventes, setVentes, setVentesRaw, stock, profile, fmt, role, installConfigs, marqueConfigs, reonicMapping, onVenteSaved, onDeleteVente}) {
       const CABLES = stock.filter(s=>s.unite==="ml");
       const BORNES = stock.filter(s=>s.unite!=="ml");
 
@@ -7585,6 +7641,37 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         setCItem({id:"",qty:""});
         goToView("form");
       };
+
+      // Pré-remplir la vente depuis un lead Reonic converti
+      useEffect(()=>{
+        const lead=window._leadToConvert;
+        if(!lead)return;
+        window._leadToConvert=null;
+        // Construire les matériels depuis les composants Reonic + mapping
+        const mapping=reonicMapping||[];
+        const components=[
+          ...(lead._components||[]), // si on a les composants directement
+        ];
+        const matsFromMapping=mapping
+          .filter(m=>m.stock_id)
+          .map(m=>{
+            const stockItem=stock.find(s=>s.id===Number(m.stock_id));
+            if(!stockItem)return null;
+            return{id:stockItem.id,article:stockItem.article,cat:stockItem.cat,unite:stockItem.unite||"pce",qty:Number(m.qty||1),prix_unit:stockItem.prix||0};
+          }).filter(Boolean);
+        setEditId(null);
+        setForm({
+          ...emptyForm(),
+          client:lead.client||"",
+          adresse:lead.adresse||"",
+          prix_ht:lead.prix_reonic>0?String(lead.prix_reonic):"",
+          description:lead.message||"",
+          materiels:matsFromMapping,
+        });
+        setMItem({id:"",qty:""});
+        setCItem({id:"",qty:""});
+        goToView("form");
+      },[]);
       const openEdit = v => {
         setEditId(v.id);
         setForm({...v});
@@ -9197,6 +9284,12 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         try{localStorage.setItem("reonic_api_key",k);}catch(e){}
         sb.from("app_configs").upsert({key:"reonic_api_key",value:k,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>{if(error)console.error("saveReonicApiKey:",error.message);});
       };
+      const[reonicMapping,setReonicMapping]=React.useState(()=>{try{const s=localStorage.getItem("reonic_mapping");return s?JSON.parse(s):[];}catch(e){return [];}});
+      const saveReonicMapping=m=>{
+        setReonicMapping(m);
+        try{localStorage.setItem("reonic_mapping",JSON.stringify(m));}catch(e){}
+        sb.from("app_configs").upsert({key:"reonic_mapping",value:m,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>{if(error)console.error("saveReonicMapping:",error.message);});
+      };
       const[rapports,setRapports]=React.useState([]);
       const[view,setView]=React.useState(()=>{try{return localStorage.getItem("app_view")||"accueil";}catch(e){return "accueil";}});
       const[fCat,setFCat]=React.useState("Toutes");
@@ -9433,6 +9526,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 if(row.key==="reonic_api_key"&&row.value){
                   setReonicApiKey(row.value);
                   try{localStorage.setItem("reonic_api_key",row.value);}catch(e){}
+                }
+                if(row.key==="reonic_mapping"&&row.value){
+                  setReonicMapping(Array.isArray(row.value)?row.value:[]);
+                  try{localStorage.setItem("reonic_mapping",JSON.stringify(row.value));}catch(e){}
                 }
               });
             }
@@ -10098,7 +10195,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                       window._leadToConvert=lead;
                     },100);
                   }}/>}
-                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} setVentesRaw={setVentes} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs}
+                {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} setVentesRaw={setVentes} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} reonicMapping={reonicMapping}
                   onVenteSaved={v=>{
                     SC2(p=>[{id:Date.now(),vente_id:v.id,client:v.client,materiels:v.materiels||[],cables:v.cables||[],date_creation:new Date().toLocaleDateString("fr-FR"),statut:"a_planifier",adresse:v.adresse||"",notes:"",technicien:installerName||"",duree_chantier:v.duree_chantier||"1j"},...p]);
                     SA(p=>[{id:Date.now()+1,vente_id:v.id,client:v.client,montant_vente:v.prix_ht,montant_acompte:Math.round(v.prix_ht*(acompteDefPct/100)),statut:"a_envoyer",date_creation:new Date().toLocaleDateString("fr-FR")},...p]);
@@ -11621,6 +11718,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
                   {/* ── INTÉGRATION REONIC ── */}
                   <ReonicConfig reonicApiKey={reonicApiKey} saveReonicApiKey={saveReonicApiKey} supabaseUrl={SUPABASE_URL} supabaseKey={SUPABASE_KEY}/>
+                  {reonicApiKey&&<ReonicMappingConfig mapping={reonicMapping} saveMapping={saveReonicMapping} stock={stock}/>}
                   <div style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"14px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <span style={{fontSize:13,color:"#475569",fontWeight:600}}>💰 Acompte par défaut :</span>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
