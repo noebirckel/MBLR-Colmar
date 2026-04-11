@@ -10267,11 +10267,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                     });
                   }}
                   onLeadConverted={(lead)=>{
-                    // Pre-fill vente form via navigation
+                    window._leadToConvert=lead;
                     goTo("ventes");
-                    setTimeout(()=>{
-                      window._leadToConvert=lead;
-                    },100);
                   }}/>}
                 {view==="ventes"&&<VentesTab isMobile={isMobile} ventes={ventes} setVentes={SV} setVentesRaw={setVentes} stock={stock} profile={profile} fmt={fmt} role={role} installConfigs={installConfigs} marqueConfigs={marqueConfigs} reonicMapping={reonicMapping}
                   onVenteSaved={v=>{
@@ -10300,7 +10297,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
-                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} onLeadConverted={(lead)=>{goTo("ventes");setTimeout(()=>{window._leadToConvert=lead;},100);}}/>}
+                {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
 
