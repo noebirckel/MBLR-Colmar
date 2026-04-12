@@ -480,6 +480,14 @@
       const [perdreConf,setPerdreConf]=useState(null);
       const [gagnéModal,setGagnéModal]=useState(null);
       const [search,setSearch]=useState("");
+      const [subViewOffres,setSubViewOffres]=useState("actives");
+      const [perduOffreModal,setPerduOffreModal]=useState(null);
+      const [perduOffreForm,setPerduOffreForm]=useState({raison:"",notes:""});
+      const perduesOffres=useMemo(()=>leads.filter(l=>l.statut==="perdu"&&l.reonic_id).sort((a,b)=>{
+        const da=a.date_creation?a.date_creation.split("/").reverse().join("-"):"";
+        const db=b.date_creation?b.date_creation.split("/").reverse().join("-"):"";
+        return db.localeCompare(da);
+      }),[leads]);
 
       // ── Import Reonic ──
       const[importModal,setImportModal]=useState(false);
@@ -700,15 +708,44 @@
 
       return(
         <div>
-          {/* Modal confirmation perdu */}
-          {perdreConf&&<div style={OVL} onClick={()=>setPerdreConf(null)}><div style={{...MBX,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+          {/* Modal perdu offre — avec raisons */}
+          {(perdreConf||perduOffreModal)&&<div style={OVL} onClick={()=>{setPerdreConf(null);setPerduOffreModal(null);}}><div style={{...MBX,maxWidth:440}} onClick={e=>e.stopPropagation()}>
             {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
-            <div style={{fontSize:36,marginBottom:10}}>😞</div>
-            <h3 style={{margin:"0 0 6px",fontWeight:800,fontSize:16,color:"#0F172A"}}>Marquer comme perdu ?</h3>
-            <p style={{margin:"0 0 20px",fontSize:13,color:"#64748B"}}><strong>{perdreConf.client}</strong> — cette offre sera archivée.</p>
+            <div style={{fontSize:28,marginBottom:6,textAlign:"center"}}>❌</div>
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,color:"#0F172A",textAlign:"center"}}>Marquer comme perdu</h3>
+            <p style={{margin:"0 0 16px",fontSize:12,color:"#64748B",textAlign:"center"}}>{(perdreConf||perduOffreModal).client}</p>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Raison *</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                {[
+                  {key:"prix",label:"Prix trop élevé",icon:"1️⃣"},
+                  {key:"concurrent",label:"Concurrent choisi",icon:"2️⃣"},
+                  {key:"abandonne",label:"Projet abandonné",icon:"3️⃣"},
+                  {key:"reporte",label:"Projet reporté",icon:"4️⃣"},
+                  {key:"injoignable",label:"Pas de réponse / injoignable",icon:"5️⃣"},
+                  {key:"technique",label:"Contraintes techniques chantier",icon:"6️⃣"},
+                ].map(r=>(
+                  <button key={r.key} onClick={()=>setPerduOffreForm(p=>({...p,raison:r.key}))}
+                    style={{padding:"9px 10px",borderRadius:9,border:`2px solid ${perduOffreForm.raison===r.key?"#EF4444":"#E2E8F0"}`,background:perduOffreForm.raison===r.key?"#FEF2F2":"#FAFAFA",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"flex-start",gap:6}}>
+                    <span style={{fontSize:14,flexShrink:0}}>{r.icon}</span>
+                    <span style={{fontSize:11,fontWeight:perduOffreForm.raison===r.key?700:400,color:perduOffreForm.raison===r.key?"#DC2626":"#64748B",lineHeight:1.3}}>{r.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Commentaire (optionnel)</div>
+              <textarea value={perduOffreForm.notes} onChange={e=>setPerduOffreForm(p=>({...p,notes:e.target.value}))} placeholder="Précisions, retour client…" style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,color:"#0F172A",padding:"8px 10px",fontSize:12,fontFamily:'"Outfit",sans-serif',outline:"none",width:"100%",boxSizing:"border-box",height:70,resize:"none",lineHeight:1.5}}/>
+            </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setPerdreConf(null)} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
-              <button onClick={()=>{updateLead(perdreConf.id,{statut:"perdu"});setPerdreConf(null);}} style={BTN("linear-gradient(135deg,#EF4444,#DC2626)",{flex:2})}>❌ Confirmer perdu</button>
+              <button onClick={()=>{setPerdreConf(null);setPerduOffreModal(null);setPerduOffreForm({raison:"",notes:""}); }} style={BTN("#F1F5F9",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button disabled={!perduOffreForm.raison} onClick={()=>{
+                const lead=perdreConf||perduOffreModal;
+                const RAISONS={prix:"Prix trop élevé",concurrent:"Concurrent choisi",abandonne:"Projet abandonné",reporte:"Projet reporté",injoignable:"Pas de réponse / injoignable",technique:"Contraintes techniques chantier"};
+                const noteFinale=[RAISONS[perduOffreForm.raison],perduOffreForm.notes].filter(Boolean).join(" — ");
+                updateLead(lead.id,{statut:"perdu",notes:noteFinale});
+                setPerdreConf(null);setPerduOffreModal(null);setPerduOffreForm({raison:"",notes:""});
+              }} style={BTN(!perduOffreForm.raison?"#E2E8F0":"linear-gradient(135deg,#EF4444,#DC2626)",{flex:2,opacity:!perduOffreForm.raison?0.5:1})}>❌ Confirmer perdu</button>
             </div>
           </div></div>}
 
@@ -813,10 +850,10 @@
           </div></div>}
 
           {/* Header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:10}}>
             <div>
-              <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres en cours</h2>
-              <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} offre{offres.length>1?"s":""} · {signés.length} signée{signés.length>1?"s":""}</p>
+              <h2 style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📋 Offres</h2>
+              <p style={{margin:0,fontSize:12,color:"#64748B"}}>{offres.length} en cours · {perduesOffres.length} perdue{perduesOffres.length>1?"s":""}</p>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               {/* Badge sync */}
@@ -840,6 +877,18 @@
             </div>
           </div>
 
+          {/* Tabs actives / perdues */}
+          <div style={{display:"flex",gap:6,marginBottom:14}}>
+            {[{v:"actives",label:"📋 En cours",count:offres.length},{v:"perdues",label:"❌ Perdues",count:perduesOffres.length}].map(t=>(
+              <button key={t.v} onClick={()=>setSubViewOffres(t.v)}
+                style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${subViewOffres===t.v?"#3B82F6":"#E2E8F0"}`,background:subViewOffres===t.v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#FFFFFF",color:subViewOffres===t.v?"#FFF":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"center",gap:6}}>
+                {t.label}
+                {t.count>0&&<span style={{background:subViewOffres===t.v?"rgba(255,255,255,0.25)":"#E2E8F0",color:subViewOffres===t.v?"#FFF":"#64748B",borderRadius:20,fontSize:10,fontWeight:800,padding:"1px 7px"}}>{t.count}</span>}
+              </button>
+            ))}
+          </div>
+
+          {subViewOffres==="actives"&&<>
           {/* KPIs */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
             {[
@@ -915,6 +964,89 @@
               );
             })
           }
+          </>}
+
+          {subViewOffres==="perdues"&&<>
+            {(()=>{
+              const RAISONS_OFFRE=[
+                {key:"prix",label:"Prix trop élevé",icon:"1️⃣",color:"#EF4444"},
+                {key:"concurrent",label:"Concurrent choisi",icon:"2️⃣",color:"#F59E0B"},
+                {key:"abandonne",label:"Projet abandonné",icon:"3️⃣",color:"#64748B"},
+                {key:"reporte",label:"Projet reporté",icon:"4️⃣",color:"#6366F1"},
+                {key:"injoignable",label:"Pas de réponse",icon:"5️⃣",color:"#94A3B8"},
+                {key:"technique",label:"Contraintes techniques",icon:"6️⃣",color:"#D97706"},
+              ];
+              const total=perduesOffres.length;
+              const countByRaison={};
+              perduesOffres.forEach(o=>{
+                const note=o.notes||"";
+                const found=RAISONS_OFFRE.find(r=>note.includes(r.label));
+                const key=found?found.key:"autre";
+                countByRaison[key]=(countByRaison[key]||0)+1;
+              });
+              return(<>
+                {/* Stats raisons */}
+                {total>0&&<div style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"14px 16px",marginBottom:14}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:12,textTransform:"uppercase",letterSpacing:"0.05em"}}>📊 Raisons de refus</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {RAISONS_OFFRE.map(r=>{
+                      const nb=countByRaison[r.key]||0;
+                      const pct=total>0?Math.round((nb/total)*100):0;
+                      if(nb===0)return null;
+                      return(
+                        <div key={r.key}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                            <span style={{fontSize:12,color:"#475569"}}>{r.icon} {r.label}</span>
+                            <span style={{fontSize:12,fontWeight:700,color:r.color}}>{nb} · {pct}%</span>
+                          </div>
+                          <div style={{height:6,borderRadius:3,background:"#F1F5F9",overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${pct}%`,background:r.color,borderRadius:3,transition:"width 0.3s"}}/>
+                          </div>
+                        </div>
+                      );
+                    }).filter(Boolean)}
+                  </div>
+                  <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid #F1F5F9",display:"flex",gap:16}}>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:20,fontWeight:800,color:"#EF4444"}}>{total}</div>
+                      <div style={{fontSize:10,color:"#94A3B8"}}>Total perdues</div>
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:20,fontWeight:800,color:"#F59E0B"}}>{offres.length>0?Math.round((total/(total+offres.length))*100):0}%</div>
+                      <div style={{fontSize:10,color:"#94A3B8"}}>Taux de perte</div>
+                    </div>
+                  </div>
+                </div>}
+                {/* Liste perdues */}
+                {perduesOffres.length===0
+                  ?<div style={{textAlign:"center",padding:"50px 0",color:"#94A3B8"}}><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700}}>Aucune offre perdue</div></div>
+                  :perduesOffres.map(o=>{
+                    const raison=o.notes?RAISONS_OFFRE.find(r=>o.notes.includes(r.label)):null;
+                    return(
+                      <div key={o.id} style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"12px 14px",marginBottom:7,opacity:0.8,cursor:"pointer"}}
+                        onMouseOver={e=>e.currentTarget.style.opacity="1"} onMouseOut={e=>e.currentTarget.style.opacity="0.8"}
+                        onClick={()=>setDetailModal(o)}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                          <div style={{display:"flex",gap:10,flex:1}}>
+                            <div style={{width:36,height:36,borderRadius:"50%",background:ac(o.client)+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:ac(o.client),flexShrink:0}}>{ini(o.client)}</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:2}}>
+                                <span style={{fontWeight:800,fontSize:13,color:"#64748B"}}>{o.client}</span>
+                                {raison&&<span style={{background:raison.color+"15",color:raison.color,padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>{raison.icon} {raison.label}</span>}
+                              </div>
+                              <div style={{fontSize:11,color:"#94A3B8"}}>{o.date_creation}{o.prix_reonic>0&&` · ${fmt(o.prix_reonic)} €`}</div>
+                              {o.notes&&!raison&&<div style={{fontSize:11,color:"#94A3B8",marginTop:2,fontStyle:"italic"}}>"{o.notes}"</div>}
+                            </div>
+                          </div>
+                          <button onClick={e=>{e.stopPropagation();updateLead(o.id,{statut:"devis_ligne",notes:""});}} style={{background:"#3B82F620",border:"none",borderRadius:8,color:"#3B82F6",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif',flexShrink:0}}>↩ Réactiver</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </>);
+            })()}
+          </>}
         </div>
       );
     }
