@@ -113,6 +113,12 @@
     const canParams    = r => r === "administrateur";
 
     const fmt = n => (n??0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+    const fmtDate = d => {
+      if(!d)return "";
+      // Accepte yyyy-mm-dd ou dd/mm/yyyy
+      const iso=d.includes("/")?d.split("/").reverse().join("-"):d;
+      try{return new Date(iso+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});}catch(e){return d;}
+    };
     const gS  = (s,seuil,rupt,ord,sans) => {
       if(sans) return "sans_gestion";
       if(rupt) return "rupture";
@@ -6974,7 +6980,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 </div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"#64748B",alignItems:"center"}}>
                   {lead.telephone&&<span>📞 {lead.telephone}</span>}
-                  {lead.date_rdv&&<span style={{color:"#A855F7"}}>📅 {lead.date_rdv}{lead.heure_rdv&&" "+lead.heure_rdv}</span>}
+                  {lead.date_rdv&&<span style={{color:"#A855F7"}}>📅 {fmtDate(lead.date_rdv)}{lead.heure_rdv&&" "+lead.heure_rdv}</span>}
                   {lead.canal&&<span style={{color:canalColor}}>{CANAL_ICONS[lead.canal]||"📡"} {lead.canal}</span>}
                   {lead.notes&&<span style={{color:"#64748B",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📝 {lead.notes}</span>}
                   {lead.rapport_rdv&&<span style={{color:"#06B6D4"}}>✓ {lead.rapport_rdv.nb_ml}ml</span>}
@@ -7307,7 +7313,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               {rapportStep>1&&<button onClick={()=>setRapportStep(s=>s-1)} style={{background:"#E2E8F0",border:"none",borderRadius:8,color:"#94A3B8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>←</button>}
               <div style={{flex:1}}>
                 <div style={{fontWeight:800,fontSize:15,color:"#0F172A"}}>{rapportModal.prenom} {rapportModal.nom}</div>
-                <div style={{fontSize:11,color:"#64748B"}}>{rapportModal.date_rdv&&rapportModal.date_rdv}{rapportModal.heure_rdv&&" à "+rapportModal.heure_rdv}</div>
+                <div style={{fontSize:11,color:"#64748B"}}>{rapportModal.date_rdv&&fmtDate(rapportModal.date_rdv)}{rapportModal.heure_rdv&&" à "+rapportModal.heure_rdv}</div>
               </div>
               <button onClick={()=>{setRapportModal(null);setRapportStep(1);}} style={{background:"#E2E8F0",border:"none",borderRadius:8,color:"#94A3B8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>✕</button>
             </div>
@@ -7522,7 +7528,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                   </button>
                 </div>
               </div>
-              <div style={{fontSize:13,color:"#1E293B"}}>{detailModal.date_rdv}{detailModal.heure_rdv&&` à ${detailModal.heure_rdv}`}</div>
+              <div style={{fontSize:13,color:"#1E293B"}}>{fmtDate(detailModal.date_rdv)}{detailModal.heure_rdv&&` à ${detailModal.heure_rdv}`}</div>
             </div>}
 
             {/* Rapport RDV */}
