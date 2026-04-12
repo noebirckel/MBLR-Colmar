@@ -6533,6 +6533,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const[rapportStep,setRapportStep]=useState(1);
       const[noteModal,setNoteModal]=useState(null);
       const[noteDraft,setNoteDraft]=useState("");
+      const[veilleModal,setVeilleModal]=useState(null);
+      const[veilleForm,setVeilleForm]=useState({date_relance:"",notes:""});
+      const[perduModal,setPerduModal]=useState(null);
+      const[perduForm,setPerduForm]=useState({raison:"",notes:""});
       const[newForm,setNewForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
       const[editForm,setEditForm]=useState({nom:"",prenom:"",email:"",telephone:"",adresse:"",message:"",canal:""});
       const[rdvForm,setRdvForm]=useState({date_rdv:"",heure_rdv:""});
@@ -7444,6 +7448,69 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             </div>
           </div></div>}
 
+          {/* Modal En veille */}
+          {veilleModal&&<div style={OVL} onClick={()=>setVeilleModal(null)}><div style={{...MBX,maxWidth:400}} onClick={e=>e.stopPropagation()}>
+            <Handle/>
+            <div style={{fontSize:28,marginBottom:8,textAlign:"center"}}>💤</div>
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,textAlign:"center"}}>Mettre en veille</h3>
+            <p style={{margin:"0 0 16px",fontSize:12,color:"#64748B",textAlign:"center"}}>{veilleModal.prenom} {veilleModal.nom}</p>
+            <div style={{marginBottom:12}}>
+              <L c="DATE DE RELANCE (optionnel)"/>
+              <input type="date" value={veilleForm.date_relance} onChange={e=>setVeilleForm(p=>({...p,date_relance:e.target.value}))} style={{...INP(),width:"100%",boxSizing:"border-box"}}/>
+              {veilleForm.date_relance&&<div style={{fontSize:11,color:"#6366F1",marginTop:4}}>📅 Relance prévue le {fmtDate(veilleForm.date_relance)}</div>}
+            </div>
+            <div style={{marginBottom:16}}>
+              <L c="COMMENTAIRE (optionnel)"/>
+              <textarea value={veilleForm.notes} onChange={e=>setVeilleForm(p=>({...p,notes:e.target.value}))} placeholder="Ex: Projet prévu dans 6 mois, attend accord banque…" style={{...INP(),height:80,resize:"none",lineHeight:1.5,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setVeilleModal(null)} style={BTN("#E2E8F0",{flex:1})}>Annuler</button>
+              <button onClick={()=>{
+                updateLead(veilleModal.id,{statut:"en_veille",date_relance:veilleForm.date_relance||"",notes:veilleForm.notes||veilleModal.notes||""});
+                setVeilleModal(null);
+              }} style={BTN("linear-gradient(135deg,#6366F1,#4338CA)",{flex:2})}>💤 Mettre en veille</button>
+            </div>
+          </div></div>}
+
+          {/* Modal Perdu */}
+          {perduModal&&<div style={OVL} onClick={()=>setPerduModal(null)}><div style={{...MBX,maxWidth:400}} onClick={e=>e.stopPropagation()}>
+            <Handle/>
+            <div style={{fontSize:28,marginBottom:8,textAlign:"center"}}>❌</div>
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16,textAlign:"center"}}>Marquer comme perdu</h3>
+            <p style={{margin:"0 0 16px",fontSize:12,color:"#64748B",textAlign:"center"}}>{perduModal.prenom} {perduModal.nom}</p>
+            <div style={{marginBottom:14}}>
+              <L c="RAISON *"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                {[
+                  {key:"annule",label:"Projet annulé ou reporté",icon:"🚫"},
+                  {key:"mauvais_contact",label:"Mauvais contact",icon:"👤"},
+                  {key:"concurrence",label:"Concurrence",icon:"⚡"},
+                  {key:"non_qualifie",label:"Lead non qualifié",icon:"📋"},
+                ].map(r=>(
+                  <button key={r.key} onClick={()=>setPerduForm(p=>({...p,raison:r.key}))}
+                    style={{padding:"10px 10px",borderRadius:9,border:`2px solid ${perduForm.raison===r.key?"#64748B":"#E2E8F0"}`,background:perduForm.raison===r.key?"#F1F5F9":"#FAFAFA",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',display:"flex",alignItems:"flex-start",gap:7}}>
+                    <span style={{fontSize:16,flexShrink:0}}>{r.icon}</span>
+                    <span style={{fontSize:11,fontWeight:perduForm.raison===r.key?700:400,color:perduForm.raison===r.key?"#1E293B":"#64748B",lineHeight:1.3}}>{r.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{marginBottom:16}}>
+              <L c="COMMENTAIRE (optionnel)"/>
+              <textarea value={perduForm.notes} onChange={e=>setPerduForm(p=>({...p,notes:e.target.value}))} placeholder="Précisions supplémentaires…" style={{...INP(),height:70,resize:"none",lineHeight:1.5,width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setPerduModal(null)} style={BTN("#E2E8F0",{flex:1})}>Annuler</button>
+              <button onClick={()=>{
+                if(!perduForm.raison)return;
+                const RAISONS={annule:"Projet annulé ou reporté",mauvais_contact:"Mauvais contact",concurrence:"Concurrence",non_qualifie:"Lead non qualifié"};
+                const noteFinale=[RAISONS[perduForm.raison],perduForm.notes].filter(Boolean).join(" — ");
+                updateLead(perduModal.id,{statut:"perdu",notes:noteFinale});
+                setPerduModal(null);
+              }} disabled={!perduForm.raison} style={BTN(!perduForm.raison?"#E2E8F0":"linear-gradient(135deg,#64748B,#475569)",{flex:2,opacity:!perduForm.raison?0.5:1})}>❌ Confirmer perdu</button>
+            </div>
+          </div></div>}
+
           {/* Conversion */}
           {convertModal&&<div style={OVL} onClick={()=>setConvertModal(null)}><div style={{...MBX,maxWidth:420}} onClick={e=>e.stopPropagation()}>
             <Handle/>
@@ -7573,11 +7640,15 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {["rdv_fixe","rdv_fait","relance","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportStep(1);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:detailModal.rapport_rdv?.type_logement||"",tableau:detailModal.rapport_rdv?.tableau||"",suite:""});}} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport RDV"}</button>}
                 {["rdv_fait","relance","rdv_fixe","converti","devis_ligne"].includes(detailModal.statut)&&<button onClick={()=>{setConvertModal(detailModal);setDetailModal(null);}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 {detailModal.statut==="converti"?"Recréer vente":"Convertir"}</button>}
                 {!["en_veille","perdu","converti","sans_reponse"].includes(detailModal.statut)&&<button onClick={()=>{
-                  const d=prompt("Relancer à partir du (jj/mm/aaaa) — laisser vide pour sans date :");
-                  if(d===null)return;
-                  updateLead(detailModal.id,{statut:"en_veille",date_relance:d||""});
+                  setVeilleModal(detailModal);
+                  setVeilleForm({date_relance:"",notes:""});
                   setDetailModal(null);
                 }} style={BTN("linear-gradient(135deg,#6366F1,#4338CA)",{flex:1,fontSize:12})}>💤 En veille</button>}
+                {!["en_veille","perdu","converti"].includes(detailModal.statut)&&<button onClick={()=>{
+                  setPerduModal(detailModal);
+                  setPerduForm({raison:"",notes:""});
+                  setDetailModal(null);
+                }} style={BTN("#64748B20",{flex:1,fontSize:12,color:"#64748B",border:"1px solid #CBD5E1"})}>❌ Perdu</button>}
                 {detailModal.statut==="en_veille"&&<button onClick={()=>{updateLead(detailModal.id,{statut:"a_appeler",date_relance:""});setDetailModal(p=>({...p,statut:"a_appeler"}));}} style={BTN("linear-gradient(135deg,#F59E0B,#D97706)",{flex:1,fontSize:12})}>↩ Réactiver</button>}
               </div>
               <div style={{display:"flex",gap:6}}>
@@ -7827,7 +7898,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                       <div style={{display:"flex",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                         {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞</a>}
                         <button onClick={()=>updateLead(lead.id,{statut:"a_appeler",nb_appels:0,historique_appels:[]})} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩</button>
-                        <button onClick={()=>updateLead(lead.id,{statut:"perdu"})} style={{background:"transparent",border:"1px solid #CBD5E1",borderRadius:8,color:"#64748B",padding:"5px 9px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>❌</button>
+                        <button onClick={()=>{setPerduModal(lead);setPerduForm({raison:"",notes:""}); }} style={{background:"transparent",border:"1px solid #CBD5E1",borderRadius:8,color:"#64748B",padding:"5px 9px",cursor:"pointer",fontSize:11,fontFamily:'"Outfit",sans-serif'}}>❌</button>
                       </div>
                     </div>
                   </div>
