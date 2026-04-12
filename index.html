@@ -6851,7 +6851,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const relancesEnRetard=leads.filter(l=>l.date_relance&&!["converti","perdu","sans_reponse","devis_ligne"].includes(l.statut)&&parseD(l.date_relance)<=Date.now()).length;
 
       const filteredLeads=useMemo(()=>{
-        let l=leads.filter(x=>!["sans_reponse","devis_ligne","converti","en_veille"].includes(x.statut));
+        let l=leads.filter(x=>!["sans_reponse","devis_ligne","converti","en_veille","perdu"].includes(x.statut));
         if(filtre!=="tous") l=l.filter(x=>x.statut===filtre);
         if(filterCanal!=="tous") l=l.filter(x=>x.canal===filterCanal);
         if(search) l=l.filter(x=>(x.nom+" "+x.prenom+" "+(x.email||"")+" "+(x.telephone||"")).toLowerCase().includes(search.toLowerCase()));
@@ -6869,6 +6869,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const sansReponseleads=useMemo(()=>leads.filter(l=>l.statut==="sans_reponse").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const enVeilleleads=useMemo(()=>leads.filter(l=>l.statut==="en_veille").sort((a,b)=>parseD(a.date_relance||"99/99/9999")-parseD(b.date_relance||"99/99/9999")),[leads]);
+      const perdusLeads=useMemo(()=>leads.filter(l=>l.statut==="perdu").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const nouveauxLeads=useMemo(()=>leads.filter(l=>l.statut==="a_appeler"&&!(l.nb_appels>0)).sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;return parseD(l.date_relance)<=Date.now();}).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
       const rdvDuJour=useMemo(()=>leads.filter(l=>{if(!l.date_rdv)return false;const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return rdv===todayISO;}).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||"")),[leads]);
@@ -7598,12 +7599,13 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{leads.filter(l=>!["perdu","sans_reponse"].includes(l.statut)).length} actifs · {relancesEnRetard>0&&<span style={{color:"#EF4444",fontWeight:700}}>{relancesEnRetard} relance{relancesEnRetard>1?"s":""} en retard</span>}</p>
             </div>
             <div style={{display:"flex",gap:6}}>
-              {["liste","relances","sans_reponse","en_veille"].map(v=>(
+              {["liste","relances","sans_reponse","en_veille","perdu"].map(v=>(
                 <button key={v} onClick={()=>setSubView(v)} style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${subView===v?"#3B82F6":"#E2E8F0"}`,background:subView===v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#FFFFFF",color:subView===v?"#FFF":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',position:"relative",whiteSpace:"nowrap"}}>
-                  {v==="liste"?"📋 Leads":v==="relances"?"📅 Agenda":v==="sans_reponse"?"📵 Sans réponse":"💤 En veille"}
+                  {v==="liste"?"📋 Leads":v==="relances"?"📅 Agenda":v==="sans_reponse"?"📵 Sans réponse":v==="en_veille"?"💤 En veille":"❌ Perdus"}
                   {v==="relances"&&(rdvDuJour.length+relancesUrgentes.length)>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{rdvDuJour.length+relancesUrgentes.length}</span>}
                   {v==="sans_reponse"&&sansReponseleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#64748B",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{sansReponseleads.length}</span>}
                   {v==="en_veille"&&enVeilleleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#6366F1",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{enVeilleleads.length}</span>}
+                  {v==="perdu"&&perdusLeads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#94A3B8",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{perdusLeads.length}</span>}
                 </button>
               ))}
               {canEdit(role)&&<button onClick={()=>{setNewRdvModal(true);setNewRdvMode("nouveau");setNewRdvForm({prenom:"",nom:"",telephone:"",email:"",adresse:"",date_rdv:"",heure_rdv:"",canal:""});setNewRdvSearch("");setNewRdvLead(null);setNewRdvDate({date_rdv:"",heure_rdv:""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{padding:"8px 13px",fontSize:13})}>📅 RDV</button>}
@@ -7868,6 +7870,39 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                     </div>
                   );
                 })}
+              </>
+            }
+          </>}
+
+          {/* ── VUE PERDUS ── */}
+          {subView==="perdu"&&<>
+            {perdusLeads.length===0
+              ?<div style={{textAlign:"center",padding:"50px 0",color:"#CBD5E1"}}><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700,fontSize:14}}>Aucun lead perdu</div></div>
+              :<>
+                <div style={{background:"#64748B10",border:"1px solid #64748B25",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#94A3B8"}}>
+                  ❌ {perdusLeads.length} lead{perdusLeads.length>1?"s":""} perdu{perdusLeads.length>1?"s":""}. Certains peuvent être relancés plus tard.
+                </div>
+                {perdusLeads.map(lead=>(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"12px 14px",marginBottom:7,cursor:"pointer",opacity:0.75}}
+                    onMouseOver={e=>{e.currentTarget.style.opacity="1";}} onMouseOut={e=>{e.currentTarget.style.opacity="0.75";}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                      <div style={{display:"flex",gap:10,flex:1}}>
+                        <div style={{width:36,height:36,borderRadius:"50%",background:"#94A3B815",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:"#94A3B8",flexShrink:0}}>{initials(lead.prenom,lead.nom)}</div>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:800,fontSize:13,color:"#64748B"}}>{lead.prenom} {lead.nom}</span>
+                            {lead.canal&&<span style={{background:"#F1F5F9",color:"#94A3B8",padding:"1px 7px",borderRadius:20,fontSize:10}}>{lead.canal}</span>}
+                          </div>
+                          <div style={{fontSize:11,color:"#94A3B8"}}>{lead.telephone&&"📞 "+lead.telephone+" · "}{lead.date_creation}</div>
+                          {lead.notes&&<div style={{fontSize:11,color:"#94A3B8",marginTop:3,fontStyle:"italic"}}>"{lead.notes}"</div>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                        <button onClick={()=>updateLead(lead.id,{statut:"a_appeler"})} style={{background:"#F59E0B20",border:"none",borderRadius:8,color:"#F59E0B",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>↩ Réactiver</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </>
             }
           </>}
