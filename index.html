@@ -483,7 +483,12 @@
       const [subViewOffres,setSubViewOffres]=useState("actives");
       const [perduOffreModal,setPerduOffreModal]=useState(null);
       const [perduOffreForm,setPerduOffreForm]=useState({raison:"",notes:""});
-      const perduesOffres=useMemo(()=>leads.filter(l=>l.statut==="perdu"&&l.reonic_id).sort((a,b)=>{
+      const OFFRE_PERDU_KEYS=["Prix trop élevé","Concurrent choisi","Projet abandonné","Projet reporté","Pas de réponse / injoignable","Contraintes techniques"];
+      const LEAD_PERDU_KEYS=["Projet annulé ou reporté","Mauvais contact","Concurrence","Lead non qualifié"];
+      const isOffrePerdue=l=>l.statut==="perdu"&&(OFFRE_PERDU_KEYS.some(r=>(l.notes||"").includes(r))||(l.reonic_id&&!LEAD_PERDU_KEYS.some(r=>(l.notes||"").includes(r))));
+      const isLeadPerdu=l=>l.statut==="perdu"&&!isOffrePerdue(l);
+      const perduesOffres=useMemo(()=>leads.filter(isOffrePerdue).sort((a,b)=>{
+
         const da=a.date_creation?a.date_creation.split("/").reverse().join("-"):"";
         const db=b.date_creation?b.date_creation.split("/").reverse().join("-"):"";
         return db.localeCompare(da);
@@ -7005,7 +7010,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const sansReponseleads=useMemo(()=>leads.filter(l=>l.statut==="sans_reponse").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const enVeilleleads=useMemo(()=>leads.filter(l=>l.statut==="en_veille").sort((a,b)=>parseD(a.date_relance||"99/99/9999")-parseD(b.date_relance||"99/99/9999")),[leads]);
-      const perdusLeads=useMemo(()=>leads.filter(l=>l.statut==="perdu").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
+      const OFFRE_PERDU_KEYS_L=["Prix trop élevé","Concurrent choisi","Projet abandonné","Projet reporté","Pas de réponse / injoignable","Contraintes techniques"];
+      const perdusLeads=useMemo(()=>leads.filter(l=>l.statut==="perdu"&&!OFFRE_PERDU_KEYS_L.some(r=>(l.notes||"").includes(r))).sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const nouveauxLeads=useMemo(()=>leads.filter(l=>l.statut==="a_appeler"&&!(l.nb_appels>0)).sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;return parseD(l.date_relance)<=Date.now();}).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
       const rdvDuJour=useMemo(()=>leads.filter(l=>{if(!l.date_rdv)return false;const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return rdv===todayISO;}).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||"")),[leads]);
