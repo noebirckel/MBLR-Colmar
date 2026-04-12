@@ -6512,7 +6512,8 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       const initials=(prenom,nom)=>((prenom||"").charAt(0)+(nom||"").charAt(0)).toUpperCase()||"?";
 
       const[subView,setSubView]=useState("liste");
-      const[viewMode,setViewMode]=useState("liste"); // liste | kanban
+      const[viewMode,setViewMode]=useState("liste");
+      const[showNouveaux,setShowNouveaux]=useState(false);
       const[filtre,setFiltre]=useState("tous");
       const[search,setSearch]=useState("");
       const[sortBy,setSortBy]=useState("date_desc");
@@ -6868,6 +6869,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
       const sansReponseleads=useMemo(()=>leads.filter(l=>l.statut==="sans_reponse").sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const enVeilleleads=useMemo(()=>leads.filter(l=>l.statut==="en_veille").sort((a,b)=>parseD(a.date_relance||"99/99/9999")-parseD(b.date_relance||"99/99/9999")),[leads]);
+      const nouveauxLeads=useMemo(()=>leads.filter(l=>l.statut==="a_appeler"&&!(l.nb_appels>0)).sort((a,b)=>parseD(b.date_creation)-parseD(a.date_creation)),[leads]);
       const relancesUrgentes=useMemo(()=>leads.filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;return parseD(l.date_relance)<=Date.now();}).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
       const rdvDuJour=useMemo(()=>leads.filter(l=>{if(!l.date_rdv)return false;const rdv=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return rdv===todayISO;}).sort((a,b)=>(a.heure_rdv||"").localeCompare(b.heure_rdv||"")),[leads]);
 
@@ -7644,6 +7646,51 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 </div>
               </div>
             </div>
+
+            {/* ── BOUTON NOUVEAUX LEADS ── */}
+            {nouveauxLeads.length>0&&<button onClick={()=>setShowNouveaux(p=>!p)}
+              style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",marginBottom:10,borderRadius:10,border:`2px solid ${showNouveaux?"#3B82F6":"#BFDBFE"}`,background:showNouveaux?"#EFF6FF":"#F8FBFF",cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:32,height:32,borderRadius:8,background:"#3B82F6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>🆕</div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:14,fontWeight:800,color:"#1D4ED8"}}>{nouveauxLeads.length} nouveau{nouveauxLeads.length>1?"x":""} lead{nouveauxLeads.length>1?"s":""}</div>
+                  <div style={{fontSize:11,color:"#3B82F6",marginTop:1}}>Jamais contactés — à appeler en priorité</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{background:"#3B82F6",color:"#FFF",borderRadius:20,fontSize:11,fontWeight:800,padding:"2px 10px"}}>{nouveauxLeads.length}</div>
+                <span style={{color:"#3B82F6",fontSize:14,fontWeight:700,display:"inline-block",transform:showNouveaux?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+              </div>
+            </button>}
+
+            {/* ── VUE NOUVEAUX LEADS ── */}
+            {showNouveaux&&<div style={{marginBottom:10}}>
+              {nouveauxLeads.map(lead=>{
+                const isToday=lead.date_creation===new Date().toLocaleDateString("fr-FR");
+                return(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)}
+                    style={{background:"#FFFFFF",borderRadius:10,border:"0.5px solid #BFDBFE",borderLeft:"3px solid #3B82F6",padding:"12px 14px",marginBottom:6,cursor:"pointer",display:"flex",alignItems:"center",gap:12}}
+                    onMouseOver={e=>e.currentTarget.style.background="#F5F9FF"}
+                    onMouseOut={e=>e.currentTarget.style.background="#FFFFFF"}>
+                    <div style={{width:38,height:38,borderRadius:"50%",background:avatarColor(lead.prenom||lead.nom)+"25",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:avatarColor(lead.prenom||lead.nom),flexShrink:0}}>
+                      {initials(lead.prenom,lead.nom)}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:2}}>
+                        <span style={{fontWeight:800,fontSize:13,color:"#0F172A"}}>{lead.prenom} {lead.nom}</span>
+                        {isToday&&<span style={{background:"#DBEAFE",color:"#1D4ED8",fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:20}}>Aujourd'hui</span>}
+                        {lead.canal&&<span style={{background:"#F1F5F9",color:"#64748B",fontSize:10,padding:"1px 7px",borderRadius:20}}>{lead.canal}</span>}
+                      </div>
+                      <div style={{fontSize:11,color:"#64748B"}}>
+                        {lead.telephone&&<span style={{marginRight:10}}>📞 {lead.telephone}</span>}
+                        {lead.date_creation&&<span>{lead.date_creation}</span>}
+                      </div>
+                    </div>
+                    <span style={{color:"#94A3B8",fontSize:18,flexShrink:0}}>›</span>
+                  </div>
+                );
+              })}
+            </div>}
 
             {/* Filtres + recherche */}
             <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
