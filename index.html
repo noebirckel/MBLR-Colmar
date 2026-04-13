@@ -8294,6 +8294,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         marque_borne:"",
         modele_borne:"",
         puissance_install:"",
+        cable_id:null,
       });
 
       // viewMode: "list" | "stats" | "form"
@@ -8565,7 +8566,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
         const cfg=form.puissance_install?(installConfigs||{})[form.puissance_install]:null;
         const mqCfg=(marqueConfigs||{})[form.marque_borne]||{};
-        const cableAlimStock=cfg?.cable_id?stock.find(s=>s.id===Number(cfg.cable_id)):null;
+        // Câble sélectionné : priorité à form.cable_id, sinon cfg, sinon premier câble stock
+        const selectedCableId=form.cable_id||cfg?.cable_id||null;
+        const cableAlimStock=selectedCableId?stock.find(s=>s.id===Number(selectedCableId)):(CABLES[0]||null);
         const cableCommStock=mqCfg?.cable_comm_active&&mqCfg?.cable_comm_id?stock.find(s=>s.id===Number(mqCfg.cable_comm_id)):null;
 
         const addCables=()=>{
@@ -8663,6 +8666,18 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
 
             {/* 3. Câble */}
             <SCard n={3} title="Longueur de câble" icon="🔌" done={form.cables.length>0}>
+              {/* Sélecteur type de câble */}
+              {CABLES.length>0&&<div style={{marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#64748B",marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em"}}>Type de câble</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {CABLES.map(c=>(
+                    <button key={c.id} onClick={()=>setForm(p=>({...p,cable_id:c.id}))}
+                      style={{padding:"6px 12px",borderRadius:8,border:`2px solid ${(form.cable_id||CABLES[0]?.id)===c.id?"#3B82F6":"#E2E8F0"}`,background:(form.cable_id||CABLES[0]?.id)===c.id?"#EFF6FF":"#F8FAFC",cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontSize:12,fontWeight:(form.cable_id||CABLES[0]?.id)===c.id?700:400,color:(form.cable_id||CABLES[0]?.id)===c.id?"#2563EB":"#64748B"}}>
+                      {c.article}
+                    </button>
+                  ))}
+                </div>
+              </div>}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                 <button onClick={()=>setCableMl(v=>Math.max(1,v-5))} style={{width:44,height:44,borderRadius:10,background:"#E2E8F0",border:"none",color:"#1E293B",fontSize:22,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:'"Outfit",sans-serif'}}>−</button>
                 <div style={{flex:1,position:"relative"}}>
