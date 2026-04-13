@@ -8201,6 +8201,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           if(data.ok){
             saveReonicApiKey(keyDraft.trim());
             try{localStorage.setItem("reonic_client_id",clientIdDraft.trim());}catch(e){}
+            // Sauvegarder client_id en base pour tous les utilisateurs
+            sb.from("app_configs").upsert({key:"reonic_client_id",value:clientIdDraft.trim(),updated_at:new Date().toISOString()},{onConflict:"key"})
+              .then(({error})=>{if(error)console.error("saveClientId:",error.message);});
             setTestStatus("ok");
           } else {setTestStatus({err:data.error||"Erreur inconnue"});}
         }catch(e){setTestStatus("error");}
@@ -10319,6 +10322,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 if(row.key==="reonic_api_key"&&row.value){
                   setReonicApiKey(row.value);
                   try{localStorage.setItem("reonic_api_key",row.value);}catch(e){}
+                }
+                if(row.key==="reonic_client_id"&&row.value){
+                  try{localStorage.setItem("reonic_client_id",row.value);}catch(e){}
                 }
                 if(row.key==="reonic_mapping"&&row.value){
                   setReonicMapping(Array.isArray(row.value)?row.value:[]);
