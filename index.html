@@ -608,8 +608,16 @@
           const produits=[wallbox,solar].filter(Boolean).join(" · ");
           const ti=RTYPE_INFO[offer._type]||RTYPE_INFO.devis;
 
-          if(offer._canUpgrade&&offer._existingLead){
-            // Mettre à jour le lead existant → devis_ligne
+          // Toujours upgrader si un lead existant est trouvé et pas déjà en offre/vente
+          if(offer._existingLead){
+            const existingStatut=offer._existingLead.statut||"";
+            const hasVente=!!(offer._existingLead.vente_id);
+            if(existingStatut==="devis_ligne"||existingStatut==="converti"&&hasVente){
+              console.log("[Import] Skipping — already offer/vente:",offer._existingLead.client);
+              return; // vraie doublon bloquante
+            }
+            // Upgrader vers devis_ligne
+            console.log("[Import] Upgrading lead:",offer._existingLead.client,"from",existingStatut,"→",ti.statut);
             toUpdate.push({
               id:offer._existingLead.id,
               statut:ti.statut,
@@ -622,6 +630,7 @@
             // Créer un nouveau lead
             const prenom=c?.firstName||"";const nom=c?.lastName||"";
             const adresse=[c?.street,c?.number,c?.postcode,c?.city].filter(Boolean).join(" ");
+            console.log("[Import] Creating new lead:",prenom,nom);
             toCreate.push({
               id:base+idx,reonic_id:offer.id,prenom,nom,
               client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
