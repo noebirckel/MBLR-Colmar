@@ -9044,7 +9044,15 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             <SCard n={1} title="Client" icon="👤" done={!!form.client}>
               <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"2fr 1fr",gap:10,marginBottom:10}}>
                 <div><L c="NOM / SOCIÉTÉ"/><input value={form.client} onChange={e=>setForm(p=>({...p,client:e.target.value}))} placeholder="Ex: Martin Jean" style={INP()}/></div>
-                <div><L c="DATE"/><input value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={INP()}/></div>
+                <div><L c="DATE"/><input type="date"
+                  value={form.date&&form.date.includes("/")?form.date.split("/").reverse().join("-"):form.date||""}
+                  onChange={e=>{
+                    const iso=e.target.value; // yyyy-mm-dd
+                    if(!iso)return;
+                    const[y,m,d]=iso.split("-");
+                    setForm(p=>({...p,date:`${d}/${m}/${y}`}));
+                  }}
+                  style={INP()}/></div>
               </div>
               <div style={{position:"relative"}}>
                 <L c="ADRESSE"/>
@@ -10736,7 +10744,17 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             load("acomptes","id"),
             load("sav_tickets","id"),
           ]);
-          if(rv){setVentes(rv);cacheSet("ventes",rv);}
+          if(rv){
+            // Normaliser les dates en dd/mm/yyyy (certaines peuvent être en yyyy-mm-dd)
+            const normalizedVentes=rv.map(v=>{
+              if(v.date&&v.date.includes("-")&&!v.date.includes("/")){
+                const[y,m,d]=v.date.split("-");
+                return{...v,date:`${d}/${m}/${y}`};
+              }
+              return v;
+            });
+            setVentes(normalizedVentes);cacheSet("ventes",normalizedVentes);
+          }
           if(rc){setChantiersPipeline(rc);cacheSet("chantiers",rc);}
           if(ra){setAcomptes(ra);cacheSet("acomptes",ra);}
           if(rsav){setSavTickets(rsav);cacheSet("sav_tickets",rsav);}
