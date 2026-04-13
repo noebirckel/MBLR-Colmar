@@ -100,10 +100,10 @@
     };
     // Tabs accessibles par rôle
     const ROLE_TABS = {
-      administrateur:["accueil","stock","chantier","commandes","ventes","leads","offres","administratif","factures","impayes","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
-      commercial:["accueil","cartes","clients","ventes","leads","offres","impayes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
+      administrateur:["accueil","stock","chantier","commandes","ventes","leads","rdv","offres","administratif","factures","impayes","cartes","clients","stats","suivi_chantier","sav","rapports","suivi_comm","parametres","equipe","mes_objectifs"],
+      commercial:["accueil","cartes","clients","ventes","leads","rdv","offres","impayes","mes_objectifs","suivi_comm","chantier","sav","rapports"],
       installateur:["accueil","cartes","clients","chantier","sav","rapports","stock","commandes"],
-      secretaire:["accueil","cartes","clients","ventes","leads","offres","administratif","factures","impayes","chantier","sav","rapports"],
+      secretaire:["accueil","cartes","clients","ventes","leads","rdv","offres","administratif","factures","impayes","chantier","sav","rapports"],
     };
     // Permissions
     const canEditStock = r => ["administrateur","installateur"].includes(r);
@@ -6595,6 +6595,388 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       perdu:        {label:"Perdu",        color:"#64748B", icon:"❌"},
     };
 
+    function RdvTab({isMobile, leads, setLeads, profile, fmt, role, goTo}){
+      const BTN=(bg,e={})=>({background:bg,border:"none",borderRadius:10,color:"#FFF",padding:"9px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:'"Outfit",sans-serif',...e});
+      const OVL={position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:999,display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",padding:isMobile?0:"16px"};
+      const MBX=isMobile?{background:"#FFFFFF",borderRadius:"20px 20px 0 0",padding:"16px 20px 32px",width:"100%",maxHeight:"80vh",overflowY:"auto"}:{background:"#FFFFFF",borderRadius:16,padding:24,width:480,maxWidth:"96vw"};
+      const INP=(e={})=>({background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,color:"#0F172A",padding:"8px 10px",fontSize:12,fontFamily:'"Outfit",sans-serif',outline:"none",width:"100%",boxSizing:"border-box",...e});
+
+      const[subView,setSubView]=useState("aujourd_hui");
+      const[detailModal,setDetailModal]=useState(null);
+      const[rapportModal,setRapportModal]=useState(null);
+      const[rapportStep,setRapportStep]=useState(1);
+      const[rapportForm,setRapportForm]=useState({description:"",nb_ml:20,duree_chantier:"1j",date_relance:"",type_logement:"",tableau:"",suite:""});
+      const[rdvModal,setRdvModal]=useState(null);
+      const[rdvForm,setRdvForm]=useState({date_rdv:"",heure_rdv:""});
+      const[calYear,setCalYear]=useState(new Date().getFullYear());
+      const[calMonth,setCalMonth]=useState(new Date().getMonth());
+
+      const parseD=d=>{if(!d)return 0;const[j,m,a]=(d||"").split("/");return new Date(Number(a),Number(m)-1,Number(j)).getTime();};
+      const toISO=d=>{if(!d)return "";return d.includes("-")?d:d.split("/").reverse().join("-");};
+      const todayISO=new Date().toISOString().split("T")[0];
+
+      const allRdvLeads=useMemo(()=>(leads||[]).filter(l=>l.date_rdv).sort((a,b)=>{
+        const da=toISO(a.date_rdv)+(a.heure_rdv||"00:00");
+        const db=toISO(b.date_rdv)+(b.heure_rdv||"00:00");
+        return da.localeCompare(db);
+      }),[leads]);
+
+      const rdvToday=useMemo(()=>allRdvLeads.filter(l=>toISO(l.date_rdv)===todayISO),[allRdvLeads,todayISO]);
+      const rdvSemaine=useMemo(()=>{
+        const mon=new Date();mon.setDate(mon.getDate()-mon.getDay()+1);mon.setHours(0,0,0,0);
+        const sun=new Date(mon);sun.setDate(sun.getDate()+6);sun.setHours(23,59,59,999);
+        return allRdvLeads.filter(l=>{const d=new Date(toISO(l.date_rdv));return d>=mon&&d<=sun;});
+      },[allRdvLeads]);
+      const rdvSansRapport=useMemo(()=>allRdvLeads.filter(l=>toISO(l.date_rdv)<todayISO&&!l.rapport_rdv),[allRdvLeads,todayISO]);
+      const relancesUrgentes=useMemo(()=>(leads||[]).filter(l=>{if(!l.date_relance||["converti","perdu","sans_reponse"].includes(l.statut))return false;return parseD(l.date_relance)<=Date.now();}).sort((a,b)=>parseD(a.date_relance)-parseD(b.date_relance)),[leads]);
+      const rdvAvecRapport=useMemo(()=>allRdvLeads.filter(l=>l.rapport_rdv).sort((a,b)=>toISO(b.date_rdv).localeCompare(toISO(a.date_rdv))),[allRdvLeads]);
+
+      const updateLead=(id,patch)=>{
+        setLeads(prev=>prev.map(l=>l.id===id?{...l,...patch}:l));
+        sb.from("leads").update(patch).eq("id",id).then(({error})=>{if(error)console.error("rdvTab update:",error.message);});
+      };
+
+      const saveRdv=()=>{
+        if(!rdvForm.date_rdv)return;
+        updateLead(rdvModal.id,{...rdvForm,statut:["rdv_fait","relance","converti"].includes(rdvModal.statut)?rdvModal.statut:"rdv_fixe"});
+        setRdvModal(null);setRdvForm({date_rdv:"",heure_rdv:""});
+      };
+
+      const saveRapport=()=>{
+        const statut=rapportForm.date_relance?"relance":"rdv_fait";
+        updateLead(rapportModal.id,{rapport_rdv:{description:rapportForm.description,nb_ml:rapportForm.nb_ml,duree_chantier:rapportForm.duree_chantier,type_logement:rapportForm.type_logement,tableau:rapportForm.tableau,suite:rapportForm.suite},statut,date_relance:rapportForm.date_relance||""});
+        setRapportModal(null);setRapportStep(1);
+      };
+
+      const initials=(p,n)=>((p||"")[0]||(n||"")[0]||"?").toUpperCase()+((n||"")[0]||"").toUpperCase();
+      const avatarColor=n=>{const colors=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444","#06B6D4","#EC4899","#8B5CF6"];return colors[((n||"").charCodeAt(0)||0)%colors.length];};
+
+      const RdvCard=({lead,showDate=false})=>{
+        const isToday=toISO(lead.date_rdv)===todayISO;
+        const isPast=toISO(lead.date_rdv)<todayISO;
+        const hasRapport=!!lead.rapport_rdv;
+        const mapsUrl=lead.adresse?`https://maps.google.com/?q=${encodeURIComponent(lead.adresse)}`:null;
+        return(
+          <div onClick={()=>setDetailModal(lead)} style={{background:"#FFFFFF",borderRadius:12,border:`1px solid ${hasRapport?"#10B98125":isToday?"#A855F740":"#E2E8F0"}`,padding:"12px 14px",marginBottom:8,cursor:"pointer",borderLeft:`3px solid ${hasRapport?"#10B981":isToday?"#A855F7":isPast&&!hasRapport?"#F59E0B":"#E2E8F0"}`}}
+            onMouseOver={e=>e.currentTarget.style.background="#F8FAFC"} onMouseOut={e=>e.currentTarget.style.background="#FFFFFF"}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <div style={{display:"flex",gap:10,flex:1}}>
+                <div style={{width:38,height:38,borderRadius:"50%",background:avatarColor(lead.prenom||lead.nom)+"25",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:avatarColor(lead.prenom||lead.nom),flexShrink:0}}>{initials(lead.prenom,lead.nom)}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}}>
+                    {lead.heure_rdv&&<span style={{background:"#A855F715",color:"#A855F7",padding:"1px 8px",borderRadius:20,fontSize:11,fontWeight:700}}>{lead.heure_rdv}</span>}
+                    <span style={{fontWeight:800,fontSize:13,color:"#0F172A"}}>{lead.prenom} {lead.nom}</span>
+                    {showDate&&<span style={{fontSize:11,color:"#94A3B8"}}>{fmtDate(lead.date_rdv)}</span>}
+                    {hasRapport?<span style={{background:"#10B98115",color:"#10B981",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>✅ Rapport</span>
+                    :isPast?<span style={{background:"#F59E0B15",color:"#F59E0B",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>⚠️ Rapport manquant</span>:null}
+                  </div>
+                  {lead.telephone&&<div style={{fontSize:11,color:"#64748B",marginBottom:1}}>📞 {lead.telephone}</div>}
+                  {lead.adresse&&<div style={{fontSize:11,color:"#64748B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📍 {lead.adresse}</div>}
+                  {hasRapport&&<div style={{fontSize:11,color:"#06B6D4",marginTop:2}}>📝 {lead.rapport_rdv.nb_ml}ml · {lead.rapport_rdv.duree_chantier==="demi"?"½j":"1j"} · {(lead.rapport_rdv.description||"").substring(0,50)}{(lead.rapport_rdv.description||"").length>50?"…":""}</div>}
+                </div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📞</a>}
+                {mapsUrl&&<a href={mapsUrl} target="_blank" rel="noopener" style={{background:"#10B98115",border:"1px solid #10B98130",borderRadius:8,color:"#10B981",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none",textAlign:"center"}}>📍</a>}
+                <button onClick={()=>{setRapportModal(lead);setRapportStep(1);setRapportForm({description:lead.rapport_rdv?.description||"",nb_ml:lead.rapport_rdv?.nb_ml||20,duree_chantier:lead.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:lead.rapport_rdv?.type_logement||"",tableau:lead.rapport_rdv?.tableau||"",suite:""});}}
+                  style={{background:hasRapport?"#E2E8F0":"linear-gradient(135deg,#A855F7,#7C3AED)",border:"none",borderRadius:8,color:"#FFF",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>📝</button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      return(
+        <div>
+          {/* Modal détail lead */}
+          {detailModal&&<div style={OVL} onClick={()=>setDetailModal(null)}><div style={MBX} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 12px"}}/>}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:avatarColor(detailModal.prenom||detailModal.nom)+"25",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:avatarColor(detailModal.prenom||detailModal.nom)}}>{initials(detailModal.prenom,detailModal.nom)}</div>
+              <div><div style={{fontWeight:800,fontSize:15}}>{detailModal.prenom} {detailModal.nom}</div>
+              <div style={{fontSize:11,color:"#A855F7",fontWeight:600}}>📅 {fmtDate(detailModal.date_rdv)}{detailModal.heure_rdv&&` à ${detailModal.heure_rdv}`}</div></div>
+              <button onClick={()=>setDetailModal(null)} style={{marginLeft:"auto",background:"#F1F5F9",border:"none",borderRadius:8,color:"#94A3B8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>✕</button>
+            </div>
+            {detailModal.telephone&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #F1F5F9",fontSize:13}}><span style={{color:"#64748B"}}>📞 Téléphone</span><a href={`tel:${detailModal.telephone}`} style={{color:"#3B82F6",fontWeight:700,textDecoration:"none"}}>{detailModal.telephone}</a></div>}
+            {detailModal.adresse&&<div style={{padding:"8px 0",borderBottom:"1px solid #F1F5F9",fontSize:13}}><span style={{color:"#64748B"}}>📍 </span><span>{detailModal.adresse}</span></div>}
+            {detailModal.rapport_rdv&&<div style={{background:"#06B6D410",borderRadius:10,padding:"10px 12px",margin:"10px 0"}}>
+              <div style={{fontWeight:700,fontSize:12,color:"#06B6D4",marginBottom:6}}>📝 Rapport de visite</div>
+              <div style={{fontSize:12,color:"#475569"}}>{detailModal.rapport_rdv.description}</div>
+              <div style={{display:"flex",gap:12,marginTop:6,fontSize:11,color:"#64748B"}}>
+                <span>🔌 {detailModal.rapport_rdv.nb_ml}ml</span>
+                <span>⏱️ {detailModal.rapport_rdv.duree_chantier==="demi"?"½ journée":"1 journée"}</span>
+                {detailModal.rapport_rdv.suite&&<span style={{color:"#A855F7",fontWeight:600}}>→ {detailModal.rapport_rdv.suite==="rdv"?"Nouveau RDV":detailModal.rapport_rdv.suite==="devis"?"Envoyer devis":detailModal.rapport_rdv.suite==="signe"?"Signé !":detailModal.rapport_rdv.suite}</span>}
+              </div>
+            </div>}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+              <button onClick={()=>{const d=detailModal.date_rdv;const isoDate=d&&d.includes("/")?d.split("/").reverse().join("-"):d||"";setRdvModal(detailModal);setDetailModal(null);setRdvForm({date_rdv:isoDate,heure_rdv:detailModal.heure_rdv||""}); }} style={BTN("linear-gradient(135deg,#A855F7,#7C3AED)",{flex:1,fontSize:12})}>📅 Modifier RDV</button>
+              <button onClick={()=>{setRapportModal(detailModal);setDetailModal(null);setRapportStep(1);setRapportForm({description:detailModal.rapport_rdv?.description||"",nb_ml:detailModal.rapport_rdv?.nb_ml||20,duree_chantier:detailModal.rapport_rdv?.duree_chantier||"1j",date_relance:"",type_logement:detailModal.rapport_rdv?.type_logement||"",tableau:detailModal.rapport_rdv?.tableau||"",suite:""}); }} style={BTN("linear-gradient(135deg,#06B6D4,#0891B2)",{flex:1,fontSize:12})}>📝 {detailModal.rapport_rdv?"Modifier rapport":"Rapport"}</button>
+              {["rdv_fait","relance","rdv_fixe"].includes(detailModal.statut)&&<button onClick={()=>{window._leadToConvert=detailModal;setDetailModal(null);goTo("ventes");}} style={BTN("linear-gradient(135deg,#10B981,#059669)",{flex:1,fontSize:12})}>💰 Créer vente</button>}
+            </div>
+          </div></div>}
+
+          {/* Modal RDV calendrier */}
+          {rdvModal&&<div style={OVL} onClick={()=>setRdvModal(null)}><div style={{...MBX,maxWidth:380}} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <h3 style={{margin:"0 0 4px",fontWeight:800,fontSize:16}}>📅 Modifier le RDV</h3>
+            <p style={{margin:"0 0 14px",fontSize:12,color:"#64748B"}}>{rdvModal.prenom} {rdvModal.nom}</p>
+            <RdvCalendar rdvForm={rdvForm} setRdvForm={setRdvForm}/>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setRdvModal(null)} style={BTN("#E2E8F0",{flex:1,color:"#64748B"})}>Annuler</button>
+              <button onClick={saveRdv} disabled={!rdvForm.date_rdv} style={BTN(!rdvForm.date_rdv?"#E2E8F0":"linear-gradient(135deg,#A855F7,#7C3AED)",{flex:2,opacity:!rdvForm.date_rdv?0.5:1})}>📅 Confirmer</button>
+            </div>
+          </div></div>}
+
+          {/* Modal rapport RDV */}
+          {rapportModal&&<div style={OVL} onClick={()=>{setRapportModal(null);setRapportStep(1);}}><div style={MBX} onClick={e=>e.stopPropagation()}>
+            {isMobile&&<div style={{width:36,height:4,background:"#E2E8F0",borderRadius:2,margin:"0 auto 16px"}}/>}
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+              {rapportStep>1&&<button onClick={()=>setRapportStep(s=>s-1)} style={{background:"#E2E8F0",border:"none",borderRadius:8,color:"#94A3B8",padding:"6px 10px",cursor:"pointer",fontSize:14,fontFamily:'"Outfit",sans-serif'}}>←</button>}
+              <div style={{flex:1}}>
+                <div style={{fontWeight:800,fontSize:15}}>{rapportModal.prenom} {rapportModal.nom}</div>
+                <div style={{fontSize:11,color:"#64748B"}}>{fmtDate(rapportModal.date_rdv)}{rapportModal.heure_rdv&&` à ${rapportModal.heure_rdv}`} · Étape {rapportStep}/3</div>
+              </div>
+              <div style={{display:"flex",gap:4}}>{[1,2,3].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:rapportStep>=i?"#A855F7":"#E2E8F0"}}/>)}</div>
+            </div>
+            {rapportStep===1&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Type de logement</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:14}}>
+                {["Maison","Appartement","Pro/Tertiaire"].map(t=>(
+                  <button key={t} onClick={()=>setRapportForm(p=>({...p,type_logement:t}))} style={{padding:"10px 6px",borderRadius:9,border:`2px solid ${rapportForm.type_logement===t?"#A855F7":"#E2E8F0"}`,background:rapportForm.type_logement===t?"#A855F715":"#F8FAFC",cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontSize:12,fontWeight:rapportForm.type_logement===t?700:400,color:rapportForm.type_logement===t?"#A855F7":"#64748B"}}>
+                    {t==="Maison"?"🏠":t==="Appartement"?"🏢":"🏗️"} {t}
+                  </button>
+                ))}
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tableau électrique</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:14}}>
+                {["Mono 16A","Mono 32A","Tri 20A","Tri 32A","Tri 63A","Non accessible"].map(t=>(
+                  <button key={t} onClick={()=>setRapportForm(p=>({...p,tableau:t}))} style={{padding:"8px 4px",borderRadius:9,border:`2px solid ${rapportForm.tableau===t?"#06B6D4":"#E2E8F0"}`,background:rapportForm.tableau===t?"#06B6D415":"#F8FAFC",cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontSize:11,fontWeight:rapportForm.tableau===t?700:400,color:rapportForm.tableau===t?"#06B6D4":"#64748B",textAlign:"center"}}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setRapportStep(2)} style={{...BTN("linear-gradient(135deg,#A855F7,#7C3AED)"),width:"100%"}}>Suivant →</button>
+            </>}
+            {rapportStep===2&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Longueur de câble (ml)</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <button onClick={()=>setRapportForm(p=>({...p,nb_ml:Math.max(1,p.nb_ml-5)}))} style={{width:44,height:44,borderRadius:10,background:"#E2E8F0",border:"none",fontSize:22,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>−</button>
+                <input type="number" value={rapportForm.nb_ml} onChange={e=>setRapportForm(p=>({...p,nb_ml:Number(e.target.value)||1}))} style={{...INP({textAlign:"center",fontSize:18,fontWeight:800,flex:1})}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#64748B"}}>ml</span>
+                <button onClick={()=>setRapportForm(p=>({...p,nb_ml:p.nb_ml+5}))} style={{width:44,height:44,borderRadius:10,background:"#E2E8F0",border:"none",fontSize:22,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif'}}>+</button>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Durée chantier estimée</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:14}}>
+                {[{v:"demi",l:"½ journée"},{v:"1j",l:"1 journée"}].map(d=>(
+                  <button key={d.v} onClick={()=>setRapportForm(p=>({...p,duree_chantier:d.v}))} style={{padding:"10px",borderRadius:9,border:`2px solid ${rapportForm.duree_chantier===d.v?"#A855F7":"#E2E8F0"}`,background:rapportForm.duree_chantier===d.v?"#A855F715":"#F8FAFC",cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontSize:13,fontWeight:700,color:rapportForm.duree_chantier===d.v?"#A855F7":"#64748B"}}>
+                    {d.l}
+                  </button>
+                ))}
+              </div>
+              <button onClick={()=>setRapportStep(3)} style={{...BTN("linear-gradient(135deg,#A855F7,#7C3AED)"),width:"100%"}}>Suivant →</button>
+            </>}
+            {rapportStep===3&&<>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Notes / Observations</div>
+              <textarea value={rapportForm.description} onChange={e=>setRapportForm(p=>({...p,description:e.target.value}))} placeholder="Observations sur le chantier, contraintes, notes client…" style={{...INP({height:80,resize:"none",lineHeight:1.5,marginBottom:12})}}/>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Suite à donner</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:7,marginBottom:12}}>
+                {[{v:"devis",l:"📋 Envoyer devis"},{v:"rdv",l:"📅 Nouveau RDV"},{v:"signe",l:"✅ Signé !"},{v:"perdu",l:"❌ Perdu"}].map(s=>(
+                  <button key={s.v} onClick={()=>setRapportForm(p=>({...p,suite:s.v}))} style={{padding:"9px 8px",borderRadius:9,border:`2px solid ${rapportForm.suite===s.v?"#A855F7":"#E2E8F0"}`,background:rapportForm.suite===s.v?"#A855F715":"#F8FAFC",cursor:"pointer",fontFamily:'"Outfit",sans-serif',fontSize:12,fontWeight:rapportForm.suite===s.v?700:400,color:rapportForm.suite===s.v?"#A855F7":"#64748B"}}>
+                    {s.l}
+                  </button>
+                ))}
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.05em"}}>Date de relance (optionnel)</div>
+              <input type="date" value={rapportForm.date_relance} onChange={e=>setRapportForm(p=>({...p,date_relance:e.target.value}))} style={{...INP({marginBottom:14})}}/>
+              <button onClick={saveRapport} style={{...BTN("linear-gradient(135deg,#A855F7,#7C3AED)"),width:"100%",fontSize:14,padding:"13px"}}>💾 Enregistrer le rapport</button>
+            </>}
+          </div></div>}
+
+          {/* Header + KPIs */}
+          <div style={{marginBottom:14}}>
+            <h2 style={{margin:"0 0 12px",fontSize:17,fontWeight:800,color:"#0F172A"}}>📅 RDV & Suivi commercial</h2>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}}>
+              {[
+                {icon:"📅",label:"Aujourd'hui",val:rdvToday.length,color:"#A855F7"},
+                {icon:"📆",label:"Cette semaine",val:rdvSemaine.length,color:"#3B82F6"},
+                {icon:"⚠️",label:"Rapports manquants",val:rdvSansRapport.length,color:"#F59E0B"},
+                {icon:"🔔",label:"Relances urgentes",val:relancesUrgentes.length,color:"#EF4444"},
+              ].map(k=>(
+                <div key={k.label} style={{background:"#FFFFFF",borderRadius:10,padding:"10px 8px",border:`1px solid ${k.color}20`,textAlign:"center",cursor:"pointer"}}
+                  onClick={()=>setSubView(k.label==="Aujourd'hui"?"aujourd_hui":k.label==="Cette semaine"?"calendrier":k.label==="Relances urgentes"?"relances":"rapports")}>
+                  <div style={{fontSize:16,marginBottom:2}}>{k.icon}</div>
+                  <div style={{fontSize:20,fontWeight:800,color:k.color}}>{k.val}</div>
+                  <div style={{fontSize:9,color:"#64748B",marginTop:1,fontWeight:600,lineHeight:1.2}}>{k.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+            {[
+              {v:"aujourd_hui",label:"📅 Aujourd'hui",badge:rdvToday.length,bc:"#A855F7"},
+              {v:"calendrier",label:"📆 Calendrier",badge:0,bc:""},
+              {v:"rapports",label:"📝 Rapports",badge:rdvSansRapport.length,bc:"#F59E0B"},
+              {v:"relances",label:"🔔 Relances",badge:relancesUrgentes.length,bc:"#EF4444"},
+            ].map(t=>(
+              <button key={t.v} onClick={()=>setSubView(t.v)} style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${subView===t.v?"#A855F7":"#E2E8F0"}`,background:subView===t.v?"linear-gradient(135deg,#A855F7,#7C3AED)":"#FFFFFF",color:subView===t.v?"#FFF":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',position:"relative",whiteSpace:"nowrap"}}>
+                {t.label}
+                {t.badge>0&&<span style={{position:"absolute",top:-5,right:-5,background:t.bc,color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{t.badge}</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* ── AUJOURD'HUI ── */}
+          {subView==="aujourd_hui"&&<>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:4,height:18,borderRadius:2,background:"#A855F7"}}/>
+              <span style={{fontWeight:700,fontSize:14}}>RDV du jour</span>
+              <span style={{fontSize:11,color:"#94A3B8"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</span>
+            </div>
+            {rdvToday.length===0
+              ?<div style={{textAlign:"center",padding:"40px 0",color:"#CBD5E1"}}><div style={{fontSize:36,marginBottom:8}}>✅</div><div style={{fontWeight:700}}>Aucun RDV aujourd'hui</div><button onClick={()=>goTo("leads")} style={{marginTop:12,...BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)",{fontSize:12})}}>📥 Voir les leads</button></div>
+              :rdvToday.map(lead=><RdvCard key={lead.id} lead={lead}/>)
+            }
+            {rdvSansRapport.length>0&&<>
+              <div style={{display:"flex",alignItems:"center",gap:8,margin:"18px 0 10px"}}>
+                <div style={{width:4,height:18,borderRadius:2,background:"#F59E0B"}}/>
+                <span style={{fontWeight:700,fontSize:14}}>⚠️ Rapports manquants</span>
+                <span style={{background:"#F59E0B15",color:"#F59E0B",padding:"1px 8px",borderRadius:20,fontSize:11,fontWeight:700}}>{rdvSansRapport.length}</span>
+              </div>
+              {rdvSansRapport.slice(0,3).map(lead=><RdvCard key={lead.id} lead={lead} showDate={true}/>)}
+              {rdvSansRapport.length>3&&<div style={{textAlign:"center",fontSize:12,color:"#94A3B8",marginTop:6,cursor:"pointer"}} onClick={()=>setSubView("rapports")}>+{rdvSansRapport.length-3} autres → Voir tous les rapports</div>}
+            </>}
+          </>}
+
+          {/* ── CALENDRIER ── */}
+          {subView==="calendrier"&&(()=>{
+            const MONTHS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+            const DAYS=["Lu","Ma","Me","Je","Ve","Sa","Di"];
+            const firstDay=(new Date(calYear,calMonth,1).getDay()+6)%7;
+            const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+            const cells=[];
+            for(let i=0;i<firstDay;i++)cells.push(null);
+            for(let d=1;d<=daysInMonth;d++)cells.push(d);
+            return(<>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+                <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}} style={{...BTN("#F1F5F9",{color:"#475569",padding:"8px 14px"})}}>‹</button>
+                <span style={{fontWeight:800,fontSize:16,color:"#0F172A"}}>{MONTHS[calMonth]} {calYear}</span>
+                <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}} style={{...BTN("#F1F5F9",{color:"#475569",padding:"8px 14px"})}}>›</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
+                {DAYS.map(d=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:"#94A3B8",padding:"4px 0"}}>{d}</div>)}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:16}}>
+                {cells.map((d,i)=>{
+                  if(!d)return <div key={i}/>;
+                  const dateStr=`${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+                  const dayRdvs=allRdvLeads.filter(l=>toISO(l.date_rdv)===dateStr);
+                  const hasRapportAll=dayRdvs.length>0&&dayRdvs.every(l=>l.rapport_rdv);
+                  const hasMissing=dayRdvs.some(l=>!l.rapport_rdv&&toISO(l.date_rdv)<todayISO);
+                  const isToday=dateStr===todayISO;
+                  const bg=dayRdvs.length===0?"transparent":hasRapportAll?"#10B98115":hasMissing?"#F59E0B15":"#A855F715";
+                  const dotColor=dayRdvs.length===0?"":hasRapportAll?"#10B981":hasMissing?"#F59E0B":"#A855F7";
+                  return(
+                    <div key={i} style={{minHeight:52,borderRadius:8,border:isToday?"2px solid #A855F7":"1px solid #E2E8F0",background:bg,padding:"4px",cursor:dayRdvs.length>0?"pointer":"default",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}
+                      onClick={()=>{if(dayRdvs.length>0){setSubView("aujourd_hui_custom");}}}>
+                      <span style={{fontSize:12,fontWeight:isToday?800:400,color:isToday?"#A855F7":"#475569"}}>{d}</span>
+                      {dayRdvs.length>0&&<>
+                        <div style={{width:16,height:16,borderRadius:"50%",background:dotColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#FFF"}}>{dayRdvs.length}</div>
+                      </>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{display:"flex",gap:10,fontSize:11,color:"#64748B",flexWrap:"wrap",marginBottom:14}}>
+                <span><span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#A855F7",marginRight:4}}/> RDV prévu</span>
+                <span><span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#10B981",marginRight:4}}/> Rapport OK</span>
+                <span><span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#F59E0B",marginRight:4}}/> Rapport manquant</span>
+              </div>
+              {/* Tous les RDV du mois */}
+              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>RDV — {MONTHS[calMonth]}</div>
+              {allRdvLeads.filter(l=>{const d=new Date(toISO(l.date_rdv));return d.getMonth()===calMonth&&d.getFullYear()===calYear;}).length===0
+                ?<div style={{textAlign:"center",color:"#CBD5E1",padding:"20px"}}>Aucun RDV ce mois</div>
+                :allRdvLeads.filter(l=>{const d=new Date(toISO(l.date_rdv));return d.getMonth()===calMonth&&d.getFullYear()===calYear;}).map(lead=><RdvCard key={lead.id} lead={lead} showDate={true}/>)
+              }
+            </>);
+          })()}
+
+          {/* ── RAPPORTS ── */}
+          {subView==="rapports"&&(()=>{
+            const totalMl=rdvAvecRapport.reduce((s,l)=>s+Number(l.rapport_rdv?.nb_ml||0),0);
+            const convertis=rdvAvecRapport.filter(l=>l.statut==="converti").length;
+            const txConv=rdvAvecRapport.length>0?Math.round((convertis/rdvAvecRapport.length)*100):0;
+            return(<>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+                {[
+                  {icon:"📝",label:"Rapports réalisés",val:rdvAvecRapport.length,color:"#06B6D4"},
+                  {icon:"🔌",label:"ML total prévu",val:totalMl+"ml",color:"#A855F7"},
+                  {icon:"💰",label:"Taux conversion",val:txConv+"%",color:"#10B981"},
+                ].map(k=>(
+                  <div key={k.label} style={{background:"#FFFFFF",borderRadius:10,padding:"10px 8px",border:`1px solid ${k.color}20`,textAlign:"center"}}>
+                    <div style={{fontSize:16,marginBottom:2}}>{k.icon}</div>
+                    <div style={{fontSize:20,fontWeight:800,color:k.color}}>{k.val}</div>
+                    <div style={{fontSize:9,color:"#64748B",marginTop:1,lineHeight:1.2}}>{k.label}</div>
+                  </div>
+                ))}
+              </div>
+              {rdvSansRapport.length>0&&<div style={{background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#92400E"}}>
+                ⚠️ {rdvSansRapport.length} RDV passé{rdvSansRapport.length>1?"s":""} sans rapport
+              </div>}
+              {rdvSansRapport.length>0&&<>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:8,color:"#F59E0B"}}>Sans rapport</div>
+                {rdvSansRapport.map(lead=><RdvCard key={lead.id} lead={lead} showDate={true}/>)}
+                <div style={{borderTop:"1px solid #F1F5F9",margin:"14px 0"}}/>
+              </>}
+              <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>Rapports complétés</div>
+              {rdvAvecRapport.length===0
+                ?<div style={{textAlign:"center",color:"#CBD5E1",padding:"30px"}}>Aucun rapport</div>
+                :rdvAvecRapport.map(lead=><RdvCard key={lead.id} lead={lead} showDate={true}/>)
+              }
+            </>);
+          })()}
+
+          {/* ── RELANCES ── */}
+          {subView==="relances"&&<>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:4,height:18,borderRadius:2,background:"#EF4444"}}/>
+              <span style={{fontWeight:700,fontSize:14}}>🔔 Relances à effectuer</span>
+              {relancesUrgentes.length>0&&<span style={{background:"#EF444415",color:"#EF4444",borderRadius:20,padding:"1px 9px",fontSize:11,fontWeight:700}}>{relancesUrgentes.length}</span>}
+            </div>
+            {relancesUrgentes.length===0
+              ?<div style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #E2E8F0",padding:"16px",textAlign:"center",color:"#CBD5E1",fontSize:13}}>✅ Aucune relance en attente</div>
+              :relancesUrgentes.map(lead=>{
+                const j=Math.floor((Date.now()-parseD(lead.date_relance))/(1000*60*60*24));
+                return(
+                  <div key={lead.id} onClick={()=>setDetailModal(lead)} style={{background:"#FFFFFF",borderRadius:12,border:"1px solid #EF444430",borderLeft:"3px solid #EF4444",padding:"12px 14px",marginBottom:7,cursor:"pointer"}}
+                    onMouseOver={e=>e.currentTarget.style.background="#FFF5F5"} onMouseOut={e=>e.currentTarget.style.background="#FFFFFF"}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                      <div style={{display:"flex",gap:10,flex:1}}>
+                        <div style={{width:36,height:36,borderRadius:"50%",background:avatarColor(lead.prenom||lead.nom)+"25",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:avatarColor(lead.prenom||lead.nom),flexShrink:0}}>{initials(lead.prenom,lead.nom)}</div>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:800,fontSize:13,color:"#0F172A"}}>{lead.prenom} {lead.nom}</span>
+                            <span style={{background:"#EF444415",color:"#EF4444",padding:"1px 7px",borderRadius:20,fontSize:10,fontWeight:700}}>{j===0?"Aujourd'hui":j>0?j+"j de retard":"Bientôt"}</span>
+                          </div>
+                          <div style={{fontSize:11,color:"#64748B"}}>{lead.date_relance&&"🔔 "+lead.date_relance}{lead.telephone&&" · 📞 "+lead.telephone}</div>
+                          {lead.rapport_rdv&&<div style={{fontSize:11,color:"#06B6D4",marginTop:2}}>📝 {lead.rapport_rdv.nb_ml}ml · {(lead.rapport_rdv.description||"").substring(0,50)}</div>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                        {lead.telephone&&<a href={`tel:${lead.telephone}`} style={{background:"linear-gradient(135deg,#3B82F6,#1D4ED8)",borderRadius:8,color:"#FFF",padding:"5px 10px",fontSize:12,fontWeight:700,textDecoration:"none"}}>📞</a>}
+                        <button onClick={()=>updateLead(lead.id,{date_relance:"",statut:"rdv_fait"})} style={{background:"#10B98115",border:"none",borderRadius:8,color:"#10B981",padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:'"Outfit",sans-serif'}}>✅</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            }
+          </>}
+        </div>
+      );
+    }
+
     function RdvCalendar({rdvForm,setRdvForm}){
       const selDate=rdvForm.date_rdv?new Date(rdvForm.date_rdv):null;
       const[calYear,setCalYear]=useState(selDate?selDate.getFullYear():new Date().getFullYear());
@@ -7827,10 +8209,9 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               <p style={{margin:0,fontSize:12,color:"#64748B"}}>{leads.filter(l=>!["perdu","sans_reponse"].includes(l.statut)).length} actifs · {relancesEnRetard>0&&<span style={{color:"#EF4444",fontWeight:700}}>{relancesEnRetard} relance{relancesEnRetard>1?"s":""} en retard</span>}</p>
             </div>
             <div style={{display:"flex",gap:6}}>
-              {["liste","relances","sans_reponse","en_veille","perdu"].map(v=>(
+              {["liste","sans_reponse","en_veille","perdu"].map(v=>(
                 <button key={v} onClick={()=>setSubView(v)} style={{padding:"7px 13px",borderRadius:20,border:`1px solid ${subView===v?"#3B82F6":"#E2E8F0"}`,background:subView===v?"linear-gradient(135deg,#3B82F6,#1D4ED8)":"#FFFFFF",color:subView===v?"#FFF":"#64748B",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:'"Outfit",sans-serif',position:"relative",whiteSpace:"nowrap"}}>
-                  {v==="liste"?"📋 Leads":v==="relances"?"📅 Agenda":v==="sans_reponse"?"📵 Sans réponse":v==="en_veille"?"💤 En veille":"❌ Perdus"}
-                  {v==="relances"&&(rdvDuJour.length+relancesUrgentes.length)>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#EF4444",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{rdvDuJour.length+relancesUrgentes.length}</span>}
+                  {v==="liste"?"📋 Leads":v==="sans_reponse"?"📵 Sans réponse":v==="en_veille"?"💤 En veille":"❌ Perdus"}
                   {v==="sans_reponse"&&sansReponseleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#64748B",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{sansReponseleads.length}</span>}
                   {v==="en_veille"&&enVeilleleads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#6366F1",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{enVeilleleads.length}</span>}
                   {v==="perdu"&&perdusLeads.length>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#94A3B8",color:"#FFF",borderRadius:"50%",fontSize:9,fontWeight:800,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center"}}>{perdusLeads.length}</span>}
@@ -10717,14 +11098,14 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
         {id:"cartes",icon:"🗺️",label:"Cartes",tabs:["cartes"]},
         {id:"clients",icon:"👤",label:"Clients",tabs:["clients"]},
         {id:"pilotage",icon:"📊",label:"Pilotage",tabs:["stats","suivi_chantier"]},
-        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","offres","ventes","mes_objectifs","suivi_comm"]},
+        {id:"ventes",icon:"💰",label:"Ventes",tabs:["leads","rdv","offres","ventes","mes_objectifs","suivi_comm"]},
         {id:"administratif",icon:"📄",label:"Administratif",tabs:["administratif","factures","impayes"]},
         {id:"terrain",icon:"🔧",label:"Terrain",tabs:["chantier","sav","rapports"]},
         {id:"stock",icon:"📦",label:"Stock",tabs:["stock","commandes"]},
         {id:"admin",icon:"⚙️",label:"Admin",tabs:["parametres","equipe"]},
       ];
-      const TAB_LABELS={leads:"Leads",offres:"Offres",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
-      const TAB_ICONS={leads:"📥",offres:"📋",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
+      const TAB_LABELS={leads:"Leads",rdv:"RDV",offres:"Offres",impayes:"Impayés",accueil:"Accueil",stock:"Stock",chantier:"Chantier",commandes:"Commandes",ventes:"Ventes",administratif:"Acomptes",factures:"Factures",cartes:"Cartes",clients:"Clients",stats:"Statistiques",marges:"Marges",suivi_comm:"Suivi commercial",sav:"SAV",rapports:"Rapports",parametres:"Paramètres",equipe:"Équipe",mes_objectifs:"Mes Objectifs",suivi_chantier:"Suivi chantier"};
+      const TAB_ICONS={leads:"📥",rdv:"📅",offres:"📋",impayes:"⏳",accueil:"🏠",stock:"📦",chantier:"🔧",commandes:"🛒",ventes:"💰",administratif:"📄",factures:"🧾",cartes:"🗺️",clients:"👤",stats:"📊",marges:"📉",suivi_comm:"📞",sav:"🛠️",rapports:"📋",parametres:"⚙️",equipe:"👥",mes_objectifs:"🎯",suivi_chantier:"📈"};
       const NAV_GROUP_ORDER={
         administrateur:["accueil","cartes","clients","ventes","pilotage","administratif","terrain","stock","admin"],
         commercial:["accueil","cartes","clients","ventes","terrain"],
@@ -11006,6 +11387,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                             else if(t==="sav"){_b=(savTickets||[]).filter(s=>s.statut==="ouvert").length;}
                             else if(t==="administratif"){_b=(acomptes||[]).filter(a=>a.statut==="a_envoyer").length;_bc="#F59E0B";}
                             else if(t==="leads"){const tISO3=new Date().toISOString().split("T")[0];_b=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===tISO3&&!l.rapport_rdv;}).length;_bc="#A855F7";}
+                            else if(t==="rdv"){const tISO4=new Date().toISOString().split("T")[0];_b=(leads||[]).filter(l=>{if(!l.date_rdv)return false;const r=l.date_rdv.includes("-")?l.date_rdv:l.date_rdv.split("/").reverse().join("-");return r===tISO4;}).length;_bc="#A855F7";}
                             return(
                               <button key={t} onClick={()=>goTo(t)} style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px 7px 24px",borderRadius:8,border:"none",cursor:"pointer",textAlign:"left",fontFamily:'"Outfit",sans-serif',background:isAct?"#EFF6FF":"transparent",borderLeft:isAct?"3px solid #2563EB":"3px solid transparent"}}
                                 onMouseOver={e=>{if(!isAct)e.currentTarget.style.background="#F8FAFC";}} onMouseOut={e=>{if(!isAct)e.currentTarget.style.background=isAct?"#EFF6FF":"transparent";}}>
@@ -11163,6 +11545,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 {view==="cartes"&&<CarteTab isMobile={isMobile} ventes={ventes} setVentes={SV} chantiers={chantiersPipeline} fmt={fmt} role={role} allProfiles={allProfiles}/>}
                 {view==="clients"&&<ClientsTab isMobile={isMobile} ventes={ventes} chantiers={chantiersPipeline} savTickets={savTickets} rapports={rapports} acomptes={acomptes} fmt={fmt} role={role} goTo={goTo} initClient={clientInitSearch} onInitUsed={()=>setClientInitSearch("")}/>}
                 {view==="messagerie"&&<MessagerieTab isMobile={isMobile} profile={profile} authUser={authUser}/>}
+                {view==="rdv"&&<RdvTab isMobile={isMobile} leads={leads} setLeads={SLeads} profile={profile} fmt={fmt} role={role} goTo={goTo}/>}
                 {view==="offres"&&<OffresTab isMobile={isMobile} leads={leads} setLeads={SLeads} ventes={ventes} profile={profile} fmt={fmt} role={role} reonicApiKey={reonicApiKey} reonicClientId={reonicApiKey?localStorage.getItem("reonic_client_id"):""} supabaseUrl={SUPABASE_URL} onLeadConverted={(lead)=>{window._leadToConvert=lead;goTo("ventes");}}/>}
                 {view==="impayes"&&<ImpaiesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} profile={profile} role={role} fmt={fmt}/>}
                 {view==="factures"&&<FacturesTab isMobile={isMobile} chantiers={chantiersPipeline} setChantiers={SC2} ventes={ventes} savTickets={savTickets} setTickets={SSAV} profile={profile} role={role} addNotif={addNotif}/>}
