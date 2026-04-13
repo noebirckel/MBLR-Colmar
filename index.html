@@ -616,15 +616,16 @@
               console.log("[Import] Skipping — already offer/vente:",offer._existingLead.client);
               return; // vraie doublon bloquante
             }
-            // Upgrader vers devis_ligne
-            console.log("[Import] Upgrading lead:",offer._existingLead.client,"from",existingStatut,"→",ti.statut);
+            // Upgrader vers devis_ligne — toujours, pour qu'il apparaisse dans l'onglet Offres
+            console.log("[Import] Upgrading lead:",offer._existingLead.client,"from",existingStatut,"→ devis_ligne");
             toUpdate.push({
               id:offer._existingLead.id,
-              statut:ti.statut,
+              statut:"devis_ligne",
               reonic_id:offer.id,
               prix_reonic:offer.totalPlannedPrice||0,
               reonic_status:offer.currentSignature?.state||offer.status||"",
               message:offer.customerMessage||produits||offer._existingLead.message||"",
+              vente_id:null,
             });
           } else if(!offer._duplicate){
             // Créer un nouveau lead
@@ -636,7 +637,7 @@
               client:`${prenom} ${nom}`.trim()||c?.email||"Client Reonic",
               email:c?.email||"",telephone:c?.telephone||c?.mobilePhone||"",
               adresse,message:offer.customerMessage||produits||"",canal:"Site web",
-              statut:ti.statut,date_creation:now,
+              statut:"devis_ligne",date_creation:now,
               prix_reonic:offer.totalPlannedPrice||0,
               reonic_status:offer.currentSignature?.state||offer.status||"",
               nb_appels:0,historique_appels:[],date_rdv:"",heure_rdv:"",rapport_rdv:null,
