@@ -9400,6 +9400,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
       return (
         <div>
           <DelModal/>
+          {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
             <div>
               <h2 style={{margin:"0 0 3px",fontSize:17,fontWeight:800}}>📊 Statistiques de ventes</h2>
@@ -9412,112 +9413,146 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
           </div>
 
           {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(3,1fr)",gap:8,marginBottom:18}}>
+          <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:10,marginBottom:18}}>
             {[
-              {l:"CA Total",v:fmt(caTotal),c:"#10B981",i:"💶",sub:`${ventes.length} vente(s)`},
-              {l:"CA ce mois",v:fmt(caMonth),c:"#3B82F6",i:"📅",sub:moisActuel},
-              {l:"Panier moyen",v:ventes.length>0?fmt(caTotal/ventes.length):"—",c:"#F59E0B",i:"📊",sub:"par vente"},
-            ].map(({l,v,c,i,sub})=>(
-              <div key={l} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 16px",border:`1px solid ${c}30`}}>
-                <div style={{fontSize:20,marginBottom:5}}>{i}</div>
-                <div style={{fontSize:isMobile?15:19,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
-                <div style={{fontSize:11,color:"#64748B",marginTop:4}}>{l}</div>
-                <div style={{fontSize:10,color:"#CBD5E1",marginTop:2}}>{sub}</div>
+              {l:"CA Total",v:fmt(caTotal),c:"#10B981",sub:`${ventes.length} vente${ventes.length>1?"s":""}`,icon:"💶"},
+              {l:"CA ce mois",v:fmt(caMonth),c:"#3B82F6",sub:moisActuel,icon:"📅"},
+              {l:"Panier moyen",v:ventes.length>0?fmt(Math.round(caTotal/ventes.length)):"—",c:"#F59E0B",sub:"par vente",icon:"📊"},
+            ].map(({l,v,c,sub,icon})=>(
+              <div key={l} style={{background:"#FFFFFF",borderRadius:14,padding:"16px 18px",border:"1px solid #E2E8F0",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <div style={{width:34,height:34,borderRadius:9,background:`${c}15`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{icon}</div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#64748B",textTransform:"uppercase",letterSpacing:"0.04em"}}>{l}</div>
+                </div>
+                <div style={{fontSize:isMobile?18:22,fontWeight:900,color:c,lineHeight:1,marginBottom:4}}>{v}</div>
+                <div style={{fontSize:10,color:"#94A3B8"}}>{sub}</div>
               </div>
             ))}
           </div>
 
           {/* CA par vendeur */}
-          <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:16,marginBottom:16}}>
-            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>👤 CA par vendeur</h3>
-            {vendeurs.length===0?<p style={{color:"#CBD5E1",fontSize:13}}>Aucune vente enregistrée.</p>
-              :<div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>
-                    {["Vendeur","Nb ventes","CA Total","CA ce mois","Panier moy."].map(h=>(
-                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Vendeur"?"left":"center",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #E2E8F0",whiteSpace:"nowrap"}}>{h}</th>
+          <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:"16px 18px",marginBottom:14,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:4,height:16,background:"#3B82F6",borderRadius:2}}/>
+              <h3 style={{margin:0,fontSize:14,fontWeight:800,color:"#0F172A"}}>CA par vendeur</h3>
+            </div>
+            {vendeurs.length===0
+              ?<p style={{color:"#CBD5E1",fontSize:13,textAlign:"center",padding:"20px 0"}}>Aucune vente enregistrée.</p>
+              :<>
+                {/* Bar chart CA par vendeur */}
+                {(()=>{
+                  const maxCa=Math.max(...caByVendeur.map(v=>v.ca),1);
+                  return(
+                    <div style={{marginBottom:16}}>
+                      {caByVendeur.map((v,i)=>{
+                        const pct=Math.round((v.ca/maxCa)*100);
+                        const pctMois=Math.round((v.caMois/maxCa)*100);
+                        return(
+                          <div key={v.nom} style={{marginBottom:10}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                              <span style={{fontSize:12,fontWeight:700,color:"#1E293B"}}>{v.nom}</span>
+                              <div style={{display:"flex",gap:14,fontSize:12}}>
+                                <span style={{color:"#10B981",fontWeight:700}}>{fmt(v.ca)}</span>
+                                <span style={{color:"#3B82F6",fontWeight:600}}>{fmt(v.caMois)} / mois</span>
+                                <span style={{color:"#94A3B8"}}>{v.nb} vente{v.nb>1?"s":""}</span>
+                              </div>
+                            </div>
+                            <div style={{height:8,borderRadius:4,background:"#F1F5F9",overflow:"hidden",position:"relative"}}>
+                              <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#34D399,#10B981)",borderRadius:4,position:"absolute",top:0,left:0}}/>
+                              <div style={{height:"100%",width:`${pctMois}%`,background:"linear-gradient(90deg,#60A5FA,#3B82F6)",borderRadius:4,position:"absolute",top:0,left:0,opacity:0.7}}/>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {/* Tableau détail */}
+                <div style={{borderRadius:10,overflow:"hidden",border:"1px solid #F1F5F9"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1.2fr 1.2fr",background:"#F8FAFC",padding:"8px 14px"}}>
+                    {["Vendeur","Ventes","CA Total","CA mois","Panier"].map(h=>(
+                      <div key={h} style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.05em",textAlign:h==="Vendeur"?"left":"right"}}>{h}</div>
                     ))}
-                  </tr></thead>
-                  <tbody>
-                    {caByVendeur.map((v,idx)=>{
-                      const pct=caTotal>0?((v.ca/caTotal)*100).toFixed(0):0;
-                      return(
-                        <tr key={v.nom} style={{background:idx%2===0?"#FFFFFF":"#182030"}}>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #FFFFFF44"}}>
-                            <div style={{fontWeight:700}}>{v.nom}</div>
-                            <div style={{marginTop:4,background:"#F1F5F9",borderRadius:4,height:4,width:"100%"}}><div style={{background:"#3B82F6",height:4,borderRadius:4,width:`${pct}%`}}/></div>
-                          </td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #FFFFFF44",textAlign:"center",fontWeight:700}}>{v.nb}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #FFFFFF44",textAlign:"center",fontWeight:800,color:"#10B981",fontSize:15}}>{fmt(v.ca)}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #FFFFFF44",textAlign:"center",color:"#3B82F6",fontWeight:700}}>{fmt(v.caMois)}</td>
-                          <td style={{padding:"10px 12px",borderBottom:"1px solid #FFFFFF44",textAlign:"center",color:"#F59E0B",fontWeight:700}}>{v.nb>0?fmt(v.ca/v.nb):"—"}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr style={{background:"#F1F5F9",borderTop:"2px solid #E2E8F0"}}>
-                      <td style={{padding:"10px 12px",fontWeight:800,color:"#0F172A"}}>🏆 TOTAL</td>
-                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800}}>{ventes.length}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#10B981",fontSize:15}}>{fmt(caTotal)}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#3B82F6"}}>{fmt(caMonth)}</td>
-                      <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#F59E0B"}}>{ventes.length>0?fmt(caTotal/ventes.length):"—"}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                  {caByVendeur.map((v,i)=>(
+                    <div key={v.nom} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1.2fr 1.2fr",padding:"10px 14px",borderTop:"1px solid #F1F5F9",background:i%2===0?"#FFFFFF":"#FAFAFA"}}>
+                      <div style={{fontWeight:700,fontSize:13,color:"#1E293B"}}>{v.nom}</div>
+                      <div style={{textAlign:"right",fontWeight:700,color:"#64748B"}}>{v.nb}</div>
+                      <div style={{textAlign:"right",fontWeight:800,color:"#10B981",fontSize:13}}>{fmt(v.ca)}</div>
+                      <div style={{textAlign:"right",fontWeight:700,color:"#3B82F6"}}>{fmt(v.caMois)}</div>
+                      <div style={{textAlign:"right",fontWeight:700,color:"#F59E0B"}}>{v.nb>0?fmt(Math.round(v.ca/v.nb)):"—"}</div>
+                    </div>
+                  ))}
+                  <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 1.2fr 1.2fr",padding:"10px 14px",borderTop:"2px solid #E2E8F0",background:"#F8FAFC"}}>
+                    <div style={{fontWeight:800,fontSize:13,color:"#0F172A"}}>🏆 Total</div>
+                    <div style={{textAlign:"right",fontWeight:800,color:"#1E293B"}}>{ventes.length}</div>
+                    <div style={{textAlign:"right",fontWeight:800,color:"#10B981",fontSize:13}}>{fmt(caTotal)}</div>
+                    <div style={{textAlign:"right",fontWeight:800,color:"#3B82F6"}}>{fmt(caMonth)}</div>
+                    <div style={{textAlign:"right",fontWeight:800,color:"#F59E0B"}}>{ventes.length>0?fmt(Math.round(caTotal/ventes.length)):"—"}</div>
+                  </div>
+                </div>
+              </>
             }
           </div>
 
-          {/* CA par marque */}
-          <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:16}}>
-            <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:800}}>⚡ Ventes par marque</h3>
-            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+          {/* Ventes par marque */}
+          <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:"16px 18px",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{width:4,height:16,background:"#A855F7",borderRadius:2}}/>
+              <h3 style={{margin:0,fontSize:14,fontWeight:800,color:"#0F172A"}}>Ventes par marque</h3>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:8,marginBottom:16}}>
               {ventesParBrand.map(({brand,list:bv,bornes:nb})=>{
                 const col=BC[brand]||"#94A3B8";
+                const pct=ventes.length>0?Math.round((bv.length/ventes.length)*100):0;
                 return(
-                  <div key={brand} style={{background:"#F1F5F9",borderRadius:12,padding:"12px 14px",border:`1px solid ${col}30`}}>
-                    <div style={{fontSize:12,fontWeight:800,color:col,marginBottom:4}}>{brand}</div>
-                    <div style={{fontSize:22,fontWeight:800,color:"#0F172A"}}>{bv.length}</div>
-                    <div style={{fontSize:10,color:"#64748B",marginTop:2}}>vente{bv.length>1?"s":""}</div>
-                    {nb>0&&<div style={{fontSize:11,color:col,marginTop:4,fontWeight:700}}>{nb} borne{nb>1?"s":""}</div>}
+                  <div key={brand} style={{borderRadius:12,padding:"14px",border:`1px solid ${col}25`,background:`${col}08`,position:"relative",overflow:"hidden"}}>
+                    <div style={{position:"absolute",top:0,left:0,width:`${pct}%`,height:3,background:col,borderRadius:"0 2px 0 0"}}/>
+                    <div style={{fontSize:11,fontWeight:700,color:col,marginBottom:6,letterSpacing:"0.02em"}}>{brand}</div>
+                    <div style={{fontSize:26,fontWeight:900,color:"#0F172A",lineHeight:1}}>{bv.length}</div>
+                    <div style={{fontSize:10,color:"#94A3B8",marginTop:2}}>vente{bv.length>1?"s":""}</div>
+                    {nb>0&&<div style={{fontSize:11,color:col,marginTop:6,fontWeight:700,background:`${col}15`,borderRadius:6,padding:"2px 8px",display:"inline-block"}}>{nb} borne{nb>1?"s":""}</div>}
                   </div>
                 );
               })}
             </div>
             {vendeurs.length>0&&<>
-              <div style={{fontSize:11,fontWeight:700,color:"#64748B",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Détail par vendeur</div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                  <thead><tr>
-                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#64748B",textTransform:"uppercase",borderBottom:"1px solid #E2E8F0"}}>Vendeur</th>
-                    {BRANDS.map(b=><th key={b} style={{padding:"8px 12px",textAlign:"center",fontSize:10,fontWeight:700,color:BC[b],borderBottom:"1px solid #E2E8F0",whiteSpace:"nowrap"}}>{b}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {vendeurs.map((nom,idx)=>(
-                      <tr key={nom} style={{background:idx%2===0?"#FFFFFF":"#182030"}}>
-                        <td style={{padding:"9px 12px",borderBottom:"1px solid #FFFFFF44",fontWeight:700}}>{nom}</td>
-                        {BRANDS.map(brand=>{
-                          const nb=ventes.filter(v=>(v.par||"Inconnu")===nom&&(v.materiels||[]).some(m=>m.cat===brand)).length;
-                          const nbB=ventes.filter(v=>(v.par||"Inconnu")===nom).reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
-                          const col=BC[brand]||"#94A3B8";
-                          return <td key={brand} style={{padding:"9px 12px",borderBottom:"1px solid #FFFFFF44",textAlign:"center"}}>
-                            {nb>0?<div><div style={{fontWeight:800,color:col,fontSize:14}}>{nb}</div><div style={{fontSize:10,color:"#64748B"}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#E2E8F0"}}>—</span>}
-                          </td>;
-                        })}
-                      </tr>
-                    ))}
-                    <tr style={{background:"#F1F5F9",borderTop:"2px solid #E2E8F0"}}>
-                      <td style={{padding:"9px 12px",fontWeight:800,color:"#0F172A"}}>TOTAL</td>
-                      {BRANDS.map(brand=>{
-                        const nb=ventes.filter(v=>(v.materiels||[]).some(m=>m.cat===brand)).length;
-                        const nbB=ventes.reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
-                        const col=BC[brand]||"#94A3B8";
-                        return <td key={brand} style={{padding:"9px 12px",textAlign:"center",fontWeight:800,color:col}}>
-                          {nb>0?<div><div>{nb}</div><div style={{fontSize:10}}>{nbB} borne{nbB>1?"s":""}</div></div>:<span style={{color:"#E2E8F0"}}>—</span>}
-                        </td>;
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
+              <div style={{fontSize:10,fontWeight:700,color:"#94A3B8",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>Détail par vendeur</div>
+              <div style={{borderRadius:10,overflow:"hidden",border:"1px solid #F1F5F9"}}>
+                <div style={{display:"grid",gridTemplateColumns:`2fr ${BRANDS.map(()=>"1fr").join(" ")}`,background:"#F8FAFC",padding:"8px 14px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#94A3B8",textTransform:"uppercase"}}>Vendeur</div>
+                  {BRANDS.map(b=><div key={b} style={{fontSize:10,fontWeight:700,color:BC[b]||"#94A3B8",textAlign:"center",textTransform:"uppercase"}}>{b}</div>)}
+                </div>
+                {vendeurs.map((nom,idx)=>(
+                  <div key={nom} style={{display:"grid",gridTemplateColumns:`2fr ${BRANDS.map(()=>"1fr").join(" ")}`,padding:"9px 14px",borderTop:"1px solid #F1F5F9",background:idx%2===0?"#FFFFFF":"#FAFAFA"}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#1E293B"}}>{nom}</div>
+                    {BRANDS.map(brand=>{
+                      const nb=ventes.filter(v=>(v.par||"Inconnu")===nom&&(v.materiels||[]).some(m=>m.cat===brand)).length;
+                      const nbB=ventes.filter(v=>(v.par||"Inconnu")===nom).reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
+                      const col=BC[brand]||"#94A3B8";
+                      return(
+                        <div key={brand} style={{textAlign:"center"}}>
+                          {nb>0?<><div style={{fontWeight:800,color:col,fontSize:14}}>{nb}</div><div style={{fontSize:9,color:"#94A3B8"}}>{nbB} borne{nbB>1?"s":""}</div></>
+                          :<span style={{color:"#E2E8F0",fontSize:13}}>—</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                <div style={{display:"grid",gridTemplateColumns:`2fr ${BRANDS.map(()=>"1fr").join(" ")}`,padding:"9px 14px",borderTop:"2px solid #E2E8F0",background:"#F8FAFC"}}>
+                  <div style={{fontWeight:800,fontSize:12,color:"#0F172A"}}>Total</div>
+                  {BRANDS.map(brand=>{
+                    const nb=ventes.filter(v=>(v.materiels||[]).some(m=>m.cat===brand)).length;
+                    const nbB=ventes.reduce((s,v)=>(v.materiels||[]).filter(m=>m.cat===brand).reduce((ss,m)=>ss+m.qty,0)+s,0);
+                    const col=BC[brand]||"#94A3B8";
+                    return(
+                      <div key={brand} style={{textAlign:"center"}}>
+                        {nb>0?<><div style={{fontWeight:800,color:col,fontSize:13}}>{nb}</div><div style={{fontSize:9,color:col}}>{nbB} borne{nbB>1?"s":""}</div></>
+                        :<span style={{color:"#E2E8F0"}}>—</span>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </>}
           </div>
