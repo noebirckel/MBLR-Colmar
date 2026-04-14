@@ -2807,57 +2807,111 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
     }
 
     // ── Composant graphe pleine page ──────────────────────────────────────────
+    function MiniBarChart({months, height=120}){
+      if(!months||!months.length)return null;
+      const maxCA=Math.max(...months.map(m=>m.ca),1);
+      const pad={t:8,r:8,b:24,l:44};
+      const W=600, H=height;
+      const innerW=W-pad.l-pad.r, innerH=H-pad.t-pad.b;
+      const barW=Math.floor(innerW/months.length);
+      const gap=Math.max(2,Math.floor(barW*0.18));
+      const bw=barW-gap;
+      const yGridVals=[0,25,50,75,100];
+      const isCurrent=(m)=>m.isCurrent;
+      return(
+        <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+          <defs>
+            <linearGradient id="barGradBlue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3B82F6" stopOpacity="1"/>
+              <stop offset="100%" stopColor="#1D4ED8" stopOpacity="1"/>
+            </linearGradient>
+            <linearGradient id="barGradGreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#34D399" stopOpacity="0.9"/>
+              <stop offset="100%" stopColor="#10B981" stopOpacity="0.9"/>
+            </linearGradient>
+          </defs>
+          {/* Grid lines */}
+          {yGridVals.map(p=>{
+            const yp=pad.t+innerH*(1-p/100);
+            return(
+              <g key={p}>
+                <line x1={pad.l} y1={yp} x2={W-pad.r} y2={yp} stroke={p===0?"#CBD5E1":"#E2E8F0"} strokeWidth={p===0?1.5:1} strokeDasharray={p===0?"none":"4,3"}/>
+                <text x={pad.l-6} y={yp+3.5} textAnchor="end" fontSize="9" fill="#94A3B8" fontFamily="system-ui,sans-serif">{p===0?"0":Math.round(maxCA*p/100/1000)+"k"}</text>
+              </g>
+            );
+          })}
+          {/* Bars */}
+          {months.map((m,i)=>{
+            const x=pad.l+i*barW+gap/2;
+            const caH=Math.max(3,(m.ca/maxCA)*innerH);
+            const maH=m.marge>0?Math.max(2,(m.marge/maxCA)*innerH):0;
+            const caY=pad.t+innerH-caH;
+            const maY=pad.t+innerH-maH;
+            const cur=isCurrent(m);
+            return(
+              <g key={i}>
+                {/* CA bar */}
+                <rect x={x} y={caY} width={bw} height={caH} fill={cur?"url(#barGradBlue)":"#93C5FD"} rx="3" ry="3"/>
+                {/* Marge bar (overlay, narrower) */}
+                {maH>0&&<rect x={x+bw*0.3} y={maY} width={bw*0.4} height={maH} fill={cur?"url(#barGradGreen)":"#6EE7B7"} rx="2" ry="2" opacity="0.95"/>}
+                {/* CA value label on current month */}
+                {cur&&m.ca>0&&<text x={x+bw/2} y={caY-5} textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#3B82F6" fontFamily="system-ui,sans-serif">{Math.round(m.ca/1000)}k€</text>}
+                {/* Month label */}
+                <text x={x+bw/2} y={H-5} textAnchor="middle" fontSize="9" fill={cur?"#3B82F6":"#94A3B8"} fontWeight={cur?700:400} fontFamily="system-ui,sans-serif">{m.label}</text>
+              </g>
+            );
+          })}
+        </svg>
+      );
+    }
+
     function ChartFullPage({type, data, onClose, isMobile, fmt}) {
       const pct=(m,ca)=>ca>0?Math.round((m/ca)*100):0;
       const txColor=t=>t>=40?"#10B981":t>=20?"#3B82F6":t>=0?"#F59E0B":"#EF4444";
       const medals=["🥇","🥈","🥉"];
       const BRAND_COLORS={"Easee":"#1A73E8","Ohme":"#00897B","Zaptec":"#7B1FA2","V2C":"#E53935","Tesla":"#E31937","Smappee":"#FF6B35"};
 
-      // SVG line chart helper
+      // SVG full chart — grouped bars CA + marge
       const SvgLineChart=({months,height=260,width=700})=>{
         if(!months.length) return null;
-        const pad={t:20,r:20,b:40,l:60};
+        const pad={t:24,r:24,b:44,l:64};
         const W=width-pad.l-pad.r, H=height-pad.t-pad.b;
         const maxV=Math.max(...months.map(m=>m.ca),1);
-        const x=(i)=>pad.l+(i/(months.length-1||1))*W;
-        const y=(v)=>pad.t+H-(v/maxV)*H;
-        const caPath=months.map((m,i)=>`${i===0?"M":"L"}${x(i)},${y(m.ca)}`).join(" ");
-        const margePath=months.filter(m=>m.marge>0).map((m,i)=>{
-          const origI=months.indexOf(m);
-          return `${origI===0?"M":"L"}${x(origI)},${y(m.marge)}`;
-        }).join(" ");
-        const areaPath=`${caPath} L${x(months.length-1)},${pad.t+H} L${x(0)},${pad.t+H} Z`;
+        const barW=Math.floor(W/months.length);
+        const gap=Math.max(4,Math.floor(barW*0.2));
+        const bw=barW-gap;
+        const yVals=[0,25,50,75,100];
         return(
-          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:"auto"}}>
+          <svg viewBox={`0 0 ${width} ${height}`} style={{width:"100%",height:"auto",display:"block"}}>
             <defs>
-              <linearGradient id="caGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3"/>
-                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.02"/>
+              <linearGradient id="fblue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#60A5FA"/><stop offset="100%" stopColor="#2563EB"/>
+              </linearGradient>
+              <linearGradient id="fgreen" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34D399"/><stop offset="100%" stopColor="#059669"/>
               </linearGradient>
             </defs>
-            {/* Grid lines */}
-            {[0,25,50,75,100].map(p=>{
+            {/* Grid */}
+            {yVals.map(p=>{
               const yp=pad.t+H*(1-p/100);
               return(<g key={p}>
-                <line x1={pad.l} y1={yp} x2={pad.l+W} y2={yp} stroke="#E2E8F0" strokeWidth="1"/>
-                <text x={pad.l-8} y={yp+4} textAnchor="end" fontSize="9" fill="#64748B">{Math.round(maxV*p/100/1000)}k</text>
+                <line x1={pad.l} y1={yp} x2={pad.l+W} y2={yp} stroke={p===0?"#94A3B8":"#E2E8F0"} strokeWidth={p===0?1.5:1} strokeDasharray={p>0?"5,4":"none"}/>
+                <text x={pad.l-8} y={yp+4} textAnchor="end" fontSize="10" fill="#64748B" fontFamily="system-ui">{p===0?"0€":Math.round(maxV*p/100/1000)+"k"}</text>
               </g>);
             })}
-            {/* Area */}
-            <path d={areaPath} fill="url(#caGrad)"/>
-            {/* CA line */}
-            <path d={caPath} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            {/* Marge line */}
-            {margePath&&<path d={margePath} fill="none" stroke="#10B981" strokeWidth="2" strokeDasharray="5,3" strokeLinecap="round"/>}
-            {/* Points + labels */}
-            {months.map((m,i)=>(
-              <g key={i}>
-                <circle cx={x(i)} cy={y(m.ca)} r="4" fill="#3B82F6" stroke="#F1F5F9" strokeWidth="2"/>
-                <text x={x(i)} y={pad.t+H+16} textAnchor="middle" fontSize="9" fill="#64748B">{m.label}</text>
-                {i===months.length-1||i===0||m.ca===Math.max(...months.map(m=>m.ca))?
-                  <text x={x(i)} y={y(m.ca)-10} textAnchor="middle" fontSize="9" fill="#60A5FA" fontWeight="700">{Math.round(m.ca/1000)}k€</text>:null}
-              </g>
-            ))}
+            {/* Bars */}
+            {months.map((m,i)=>{
+              const x=pad.l+i*barW+gap/2;
+              const caH=Math.max(3,(m.ca/maxV)*H);
+              const maH=m.marge>0?Math.max(2,(m.marge/maxV)*H):0;
+              const isCur=m.isCurrent;
+              return(<g key={i}>
+                <rect x={x} y={pad.t+H-caH} width={bw} height={caH} fill={isCur?"url(#fblue)":"#BFDBFE"} rx="4"/>
+                {maH>0&&<rect x={x+bw*0.28} y={pad.t+H-maH} width={bw*0.44} height={maH} fill={isCur?"url(#fgreen)":"#A7F3D0"} rx="3"/>}
+                {m.ca>0&&<text x={x+bw/2} y={pad.t+H-caH-6} textAnchor="middle" fontSize={isCur?"11":"9"} fontWeight={isCur?700:400} fill={isCur?"#2563EB":"#64748B"} fontFamily="system-ui">{Math.round(m.ca/1000)}k</text>}
+                <text x={x+bw/2} y={height-8} textAnchor="middle" fontSize="10" fill={isCur?"#2563EB":"#64748B"} fontWeight={isCur?700:400} fontFamily="system-ui">{m.label}</text>
+              </g>);
+            })}
           </svg>
         );
       };
@@ -3223,19 +3277,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <h3 style={{margin:0,fontSize:14,fontWeight:800}}>💶 CA mensuel</h3>
                 <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Agrandir</span>
               </div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:80,paddingBottom:16,position:"relative"}}>
-                {caParMois.map((m,i)=>(
-                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",position:"relative"}}>
-                    <div style={{width:"65%",background:"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*76)+"%"}}/>
-                    <div style={{width:"40%",background:"#10B98170",borderRadius:"2px 2px 0 0",position:"absolute",bottom:16,left:"30%",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*76)+"%"}}/>
-                    <div style={{fontSize:8,color:"#64748B",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
-                  </div>
-                ))}
-                <div style={{position:"absolute",bottom:14,left:0,right:0,height:1,background:"#E2E8F0"}}/>
-              </div>
-              <div style={{display:"flex",gap:12,fontSize:10,color:"#64748B",marginTop:4}}>
-                <span><span style={{display:"inline-block",width:8,height:8,background:"#1D4ED8",borderRadius:1,marginRight:4}}/>CA</span>
-                <span><span style={{display:"inline-block",width:8,height:8,background:"#10B98170",borderRadius:1,marginRight:4}}/>Marge</span>
+              <MiniBarChart months={caParMois} height={110}/>
+              <div style={{display:"flex",gap:12,fontSize:10,color:"#64748B",marginTop:6}}>
+                <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:10,height:10,borderRadius:2,background:"#3B82F6",display:"inline-block"}}/>CA</span>
+                <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:10,height:10,borderRadius:2,background:"#10B981",display:"inline-block"}}/>Marge</span>
               </div>
             </div>
 
@@ -3289,19 +3334,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <h3 style={{margin:0,fontSize:14,fontWeight:800}}>📅 Évolution CA & Marge</h3>
                 <span style={{fontSize:11,color:"#3B82F6",fontWeight:700,background:"#3B82F620",padding:"3px 10px",borderRadius:20}}>🔍 Agrandir</span>
               </div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:4,height:110,paddingBottom:20,position:"relative"}}>
-                {caParMois.map((m,i)=>(
-                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end",position:"relative"}}>
-                    <div style={{width:"52%",background:"#1D4ED8",borderRadius:"3px 3px 0 0",height:Math.max(3,(m.ca/maxCA)*90)+"%",transition:"all 0.25s"}}/>
-                    <div style={{width:"35%",background:"#10B98180",borderRadius:"2px 2px 0 0",position:"absolute",bottom:18,left:"32%",height:Math.max(2,(Math.max(0,m.marge)/maxCA)*90)+"%"}}/>
-                    <div style={{fontSize:9,color:"#64748B",position:"absolute",bottom:0,whiteSpace:"nowrap"}}>{m.label}</div>
-                  </div>
-                ))}
-                <div style={{position:"absolute",bottom:18,left:0,right:0,height:1,background:"#E2E8F0"}}/>
-              </div>
-              <div style={{display:"flex",gap:14,fontSize:11,color:"#64748B",marginTop:4}}>
-                <span><span style={{display:"inline-block",width:10,height:10,background:"#1D4ED8",borderRadius:2,marginRight:4}}/>CA</span>
-                <span><span style={{display:"inline-block",width:10,height:10,background:"#10B98180",borderRadius:2,marginRight:4}}/>Marge</span>
+              <MiniBarChart months={caParMois} height={130}/>
+              <div style={{display:"flex",gap:14,fontSize:11,color:"#64748B",marginTop:6}}>
+                <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:10,height:10,borderRadius:2,background:"#3B82F6",display:"inline-block"}}/>CA</span>
+                <span style={{display:"flex",alignItems:"center",gap:5}}><span style={{width:10,height:10,borderRadius:2,background:"#10B981",display:"inline-block"}}/>Marge</span>
               </div>
             </div>
 
