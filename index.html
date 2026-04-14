@@ -719,7 +719,7 @@
 
       const AVATAR_COLORS=["#3B82F6","#10B981","#A855F7","#F59E0B","#EF4444","#06B6D4"];
       const ac=n=>AVATAR_COLORS[(n||"").charCodeAt(0)%AVATAR_COLORS.length];
-      const ini=(c="")=>c.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
+      const ini=(c="")=>(c||"").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)||"?";
 
       return(
         <div>
