@@ -11896,11 +11896,11 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
             // Mois précédent
             const prevM=String(_now.getMonth()===0?12:_now.getMonth()).padStart(2,"0");
             const prevY=String(_now.getMonth()===0?_now.getFullYear()-1:_now.getFullYear());
-            const _caPrevMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()+1===Number(prevM)&&d.getFullYear()===Number(prevY);}).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
+            const _caPrevMonth=ventes.filter(v=>v.date&&v.date.split("/")[1]===prevM&&v.date.split("/")[2]===prevY).reduce((s,v)=>s+(Number(v.prix_ht)||0),0);
             const _caEvol=_caPrevMonth>0?Math.round(((_caMonth-_caPrevMonth)/_caPrevMonth)*100):null;
             // Marge brute mois
             const coutVenteAcc=v=>((v.materiels||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0)+(v.cables||[]).reduce((s,m)=>s+Number(m.prix_unit||0)*Number(m.qty||0),0));
-            const _ventesMonth=ventes.filter(v=>{const d=new Date(v.id);return d.getMonth()===_now.getMonth()&&d.getFullYear()===_now.getFullYear();});
+            const _ventesMonth=ventes.filter(v=>v.date&&v.date.split("/")[1]===_mM&&v.date.split("/")[2]===_mY);
             const _margeMonth=_ventesMonth.reduce((s,v)=>s+(Number(v.prix_ht||0)-coutVenteAcc(v)),0);
             const _txMarge=_caMonth>0?Math.round((_margeMonth/_caMonth)*100):0;
             // Impayés
@@ -11920,7 +11920,7 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
               const mm=String(d.getMonth()+1).padStart(2,"0");
               const yy=String(d.getFullYear());
-              const ca=ventes.filter(v=>{const dv=new Date(v.id);return String(dv.getMonth()+1).padStart(2,"0")===mm&&String(dv.getFullYear())===yy;}).reduce((s,v)=>s+Number(v.prix_ht||0),0);
+              const ca=ventes.filter(v=>v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy).reduce((s,v)=>s+Number(v.prix_ht||0),0);
               return{label:d.toLocaleDateString("fr-FR",{month:"short"}),ca,isCur:i===0};
             }).reverse();
             const _maxCA=Math.max(..._hist6.map(h=>h.ca),1);
