@@ -11956,8 +11956,10 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
               const d=new Date(_now.getFullYear(),_now.getMonth()-i,1);
               const mm=String(d.getMonth()+1).padStart(2,"0");
               const yy=String(d.getFullYear());
-              const ca=ventes.filter(v=>v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy).reduce((s,v)=>s+Number(v.prix_ht||0),0);
-              return{label:d.toLocaleDateString("fr-FR",{month:"short"}),ca,isCur:i===0};
+              const vs=ventes.filter(v=>v.date&&v.date.split("/")[1]===mm&&v.date.split("/")[2]===yy);
+              const ca=vs.reduce((s,v)=>s+Number(v.prix_ht||0),0);
+              const marge=vs.reduce((s,v)=>s+(Number(v.prix_ht||0)-(v.materiels||[]).reduce((ms,m)=>ms+Number(m.prix_unit||0)*Number(m.qty||0),0)-(v.cables||[]).reduce((cs,c)=>cs+Number(c.prix_unit||0)*Number(c.qty||0),0)),0);
+              return{label:d.toLocaleDateString("fr-FR",{month:"short"}),ca,marge,isCur:i===0};
             }).reverse();
             const _maxCA=Math.max(..._hist6.map(h=>h.ca),1);
             // Actions à traiter
@@ -12015,23 +12017,47 @@ style={{background:"#FFFFFF",borderRadius:10,padding:"10px 14px",border:`1px sol
                 <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":_actions.length>0?"1fr 1fr":"1fr",gap:10,marginBottom:0}}>
                   {/* Mini graphe CA 6 mois */}
                   <div onClick={()=>goTo("stats")} style={{background:"#FFFFFF",borderRadius:12,padding:"14px 14px",border:"1px solid #E2E8F0",cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                       <div style={{fontSize:12,fontWeight:700,color:"#0F172A"}}>📊 CA — 6 derniers mois</div>
-                      <div style={{fontSize:11,color:"#10B981",fontWeight:700}}>{_caEvol!==null?(_caEvol>=0?"↑ ":"↓ ")+Math.abs(_caEvol)+"%":""}</div>
+                      <div style={{fontSize:11,color:_caEvol!==null&&_caEvol>=0?"#10B981":"#EF4444",fontWeight:700}}>{_caEvol!==null?(_caEvol>=0?"↑ ":"↓ ")+Math.abs(_caEvol)+"%":""}</div>
                     </div>
-                    <div style={{display:"flex",alignItems:"flex-end",gap:5,height:48}}>
-                      {_hist6.map((h,i)=>{
-                        const pct=Math.round((h.ca/_maxCA)*100);
-                        return(
-                          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,height:"100%",justifyContent:"flex-end"}}>
-                            <div style={{width:"100%",height:Math.max(pct,4)+"%",background:h.isCur?"#10B981":"#E2E8F0",borderRadius:"3px 3px 0 0",minHeight:4,transition:"height 0.4s"}}/>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div style={{display:"flex",gap:5,marginTop:4}}>
-                      {_hist6.map((h,i)=>(<div key={i} style={{flex:1,textAlign:"center",fontSize:8,color:h.isCur?"#10B981":"#94A3B8",fontWeight:h.isCur?700:400}}>{h.label}</div>))}
-                    </div>
+                    {(()=>{
+                      const maxCA=Math.max(..._hist6.map(h=>h.ca),1);
+                      const W=520,H=72,padL=32,padB=18,padT=6,padR=6;
+                      const innerW=W-padL-padR,innerH=H-padT-padB;
+                      const barW=Math.floor(innerW/_hist6.length);
+                      const gap=Math.max(3,Math.floor(barW*0.2));
+                      const bw=barW-gap;
+                      return(
+                        <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+                          <defs>
+                            <linearGradient id="hBlue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#60A5FA"/><stop offset="100%" stopColor="#2563EB"/>
+                            </linearGradient>
+                            <linearGradient id="hGreen" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#34D399"/><stop offset="100%" stopColor="#059669"/>
+                            </linearGradient>
+                          </defs>
+                          {/* Baseline */}
+                          <line x1={padL} y1={padT+innerH} x2={W-padR} y2={padT+innerH} stroke="#E2E8F0" strokeWidth="1"/>
+                          {/* Y axis label */}
+                          <text x={padL-4} y={padT+innerH} textAnchor="end" fontSize="8" fill="#CBD5E1" fontFamily="system-ui">0</text>
+                          {_hist6.map((h,i)=>{
+                            const x=padL+i*barW+gap/2;
+                            const caH=Math.max(3,(h.ca/maxCA)*innerH);
+                            const maH=h.marge>0?Math.max(2,(h.marge/maxCA)*innerH):0;
+                            return(
+                              <g key={i}>
+                                <rect x={x} y={padT+innerH-caH} width={bw} height={caH} fill={h.isCur?"url(#hBlue)":"#BFDBFE"} rx="2"/>
+                                {maH>0&&<rect x={x+bw*0.3} y={padT+innerH-maH} width={bw*0.4} height={maH} fill={h.isCur?"url(#hGreen)":"#A7F3D0"} rx="1.5"/>}
+                                {h.isCur&&h.ca>0&&<text x={x+bw/2} y={padT+innerH-caH-3} textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#2563EB" fontFamily="system-ui">{Math.round(h.ca/1000)}k</text>}
+                                <text x={x+bw/2} y={H-3} textAnchor="middle" fontSize="8" fill={h.isCur?"#2563EB":"#94A3B8"} fontWeight={h.isCur?700:400} fontFamily="system-ui">{h.label}</text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()}
                   </div>
 
                   {/* Bloc À traiter */}
