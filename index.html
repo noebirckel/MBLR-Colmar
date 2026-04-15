@@ -1583,7 +1583,7 @@ function OffresTab({
           reonic_id: offer.id,
           prix_reonic: offer.totalPlannedPrice || 0,
           reonic_status: ((_offer$currentSignatu2 = offer.currentSignature) === null || _offer$currentSignatu2 === void 0 ? void 0 : _offer$currentSignatu2.state) || offer.status || "",
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || offer.notes || produits || offer._existingLead.message || ""),
+          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || offer._existingLead.message || ""),
           vente_id: null
         });
       } else if (!offer._duplicate) {
@@ -1602,7 +1602,7 @@ function OffresTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || offer.notes || produits || ""),
+          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
           canal: "Site web",
           statut: "devis_ligne",
           date_creation: now,
@@ -20851,7 +20851,7 @@ function LeadsTab({
         const newMessage = offer.customerMessage
           || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
           || offer.description
-          || offer.notes
+         
           || "";
         // Ne pas écraser un statut avancé manuellement
         const canChangeStatut = !PROTECTED_STATUTS.includes(lead.statut);
@@ -20934,7 +20934,7 @@ function LeadsTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || offer.notes || produits || ""),
+          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
           canal: "Site web",
           statut: ti.statut,
           date_creation: now,
@@ -21135,7 +21135,7 @@ function LeadsTab({
         email: (contact === null || contact === void 0 ? void 0 : contact.email) || "",
         telephone: (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "",
         adresse,
-        message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || offer.notes || produits || ""),
+        message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
         canal: "Site web",
         statut: ti.statut,
         date_creation: now,
