@@ -2025,7 +2025,7 @@ function OffresTab({
       color: "#475569",
       marginTop: 4
     }
-  }, gagnéModal.message)), /*#__PURE__*/React.createElement("div", {
+  }, extractReonicMessage(gagnéModal.message) || gagnéModal.message)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -2683,7 +2683,7 @@ function OffresTab({
         borderRadius: 6,
         padding: "5px 8px"
       }
-    }, "\uD83D\uDD0C ", offre.message), canEdit(role) && /*#__PURE__*/React.createElement("div", {
+    }, "\uD83D\uDD0C ", extractReonicMessage(offre.message) || offre.message), canEdit(role) && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 6
@@ -23730,7 +23730,7 @@ function LeadsTab({
       lineHeight: 1.6,
       fontStyle: "italic"
     }
-  }, "\"", detailModal.message, "\""), detailModal.notes && /*#__PURE__*/React.createElement("div", {
+  }, "\"", extractReonicMessage(detailModal.message) || detailModal.message, "\""), detailModal.notes && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#3B82F615",
       border: "1px solid #3B82F625",
