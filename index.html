@@ -427,6 +427,34 @@ const canOrder = r => ["administrateur", "secretaire", "installateur"].includes(
 const canDeliver = r => ["administrateur", "secretaire", "installateur"].includes(r);
 const canRupture = r => ["administrateur"].includes(r);
 const canParams = r => r === "administrateur";
+// ── Extraction message client Reonic ──
+// Les notes Reonic peuvent être un tableau JSON [{message, createdAt, createdById}]
+// ou une simple string. On filtre les messages système automatiques.
+const _REONIC_SYSTEM_PATTERNS = [
+  "erstellt mittels api", "created via api", "api-integration",
+  "api integration", "automatically created", "automatisch erstellt",
+];
+const _isReonicSystemMsg = txt =>
+  _REONIC_SYSTEM_PATTERNS.some(p => (txt || "").toLowerCase().includes(p));
+
+const extractReonicMessage = raw => {
+  if (!raw) return "";
+  if (Array.isArray(raw)) {
+    const msgs = raw.map(n => (n && n.message) || "").filter(m => m && !_isReonicSystemMsg(m));
+    return msgs.join(" | ") || "";
+  }
+  if (typeof raw === "string" && raw.trim().startsWith("[")) {
+    try {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        const msgs = arr.map(n => (n && n.message) || "").filter(m => m && !_isReonicSystemMsg(m));
+        return msgs.join(" | ") || "";
+      }
+    } catch (e) {}
+  }
+  return typeof raw === "string" ? raw : "";
+};
+
 const fmt = n => (n !== null && n !== void 0 ? n : 0).toLocaleString("fr-FR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2
@@ -1583,7 +1611,7 @@ function OffresTab({
           reonic_id: offer.id,
           prix_reonic: offer.totalPlannedPrice || 0,
           reonic_status: ((_offer$currentSignatu2 = offer.currentSignature) === null || _offer$currentSignatu2 === void 0 ? void 0 : _offer$currentSignatu2.state) || offer.status || "",
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || offer._existingLead.message || ""),
+          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || offer._existingLead.message || ""),
           vente_id: null
         });
       } else if (!offer._duplicate) {
@@ -1602,7 +1630,7 @@ function OffresTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
+          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
           canal: "Site web",
           statut: "devis_ligne",
           date_creation: now,
@@ -20699,7 +20727,6 @@ function LeadsTab({
     suite: ""
   });
 
-  // ── REONIC IMPORT ──
   const getReonicTypeStatic = offer => {
     var _offer$currentSignatu4, _offer$options4, _offer$options4$, _offer$options4$$wall, _offer$options5, _offer$options5$, _offer$options5$$sola;
     if (offer.archived || offer.offerArchived || offer.requestArchived) return "perdu";
@@ -20847,11 +20874,10 @@ function LeadsTab({
         const newTi = RTYPE_INFO[newType] || RTYPE_INFO.lead;
         const newPrix = offer.totalPlannedPrice || 0;
         const newStatus = ((_offer$currentSignatu5 = offer.currentSignature) === null || _offer$currentSignatu5 === void 0 ? void 0 : _offer$currentSignatu5.state) || offer.status || "";
-        // Extraction du message client Reonic (plusieurs noms de champs possibles selon version API)
-        const newMessage = offer.customerMessage
-          || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
-          || offer.description
-         
+        // Extraction du message client Reonic (parsé et filtré via extractReonicMessage)
+        const newMessage = extractReonicMessage(offer.customerMessage)
+          || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
+          || extractReonicMessage(offer.description)
           || "";
         // Ne pas écraser un statut avancé manuellement
         const canChangeStatut = !PROTECTED_STATUTS.includes(lead.statut);
@@ -20934,7 +20960,7 @@ function LeadsTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
+          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
           canal: "Site web",
           statut: ti.statut,
           date_creation: now,
@@ -21135,7 +21161,7 @@ function LeadsTab({
         email: (contact === null || contact === void 0 ? void 0 : contact.email) || "",
         telephone: (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "",
         adresse,
-        message: ( offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description || produits || ""),
+        message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
         canal: "Site web",
         statut: ti.statut,
         date_creation: now,
