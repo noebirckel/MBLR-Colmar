@@ -9064,6 +9064,7 @@ function ChartFullPage({
 function StatsTab({
   isMobile,
   ventes,
+  leads,
   chantiers,
   acomptes,
   stock,
@@ -9074,181 +9075,375 @@ function StatsTab({
   role,
   addNotif
 }) {
+  const {
+    useState,
+    useMemo,
+    useCallback
+  } = React;
+
+  /* ── STATE ── */
   const [section, setSection] = useState("global");
-  const [period, setPeriod] = useState(6);
-  const [chartModal, setChartModal] = useState(null); // {type, data}
+  const [viewMode, setViewMode] = useState("3m"); // "mois" | "3m" | "6m" | "12m" | "tout"
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [chartModal, setChartModal] = useState(null);
   const canEdit = role === "administrateur";
+
+  /* ── HELPERS ── */
   const now = new Date();
-  const mM = String(now.getMonth() + 1).padStart(2, "0");
-  const mY = String(now.getFullYear());
   const coutVente = v => (v.materiels || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0);
   const txColor = t => t >= 40 ? "#10B981" : t >= 20 ? "#3B82F6" : t >= 0 ? "#F59E0B" : "#EF4444";
   const pct = (m, ca) => ca > 0 ? Math.round(m / ca * 100) : 0;
   const medals = ["🥇", "🥈", "🥉"];
-  const BRAND_COLORS = {
-    "Easee": "#1A73E8",
-    "Ohme": "#00897B",
-    "Zaptec": "#7B1FA2",
-    "V2C": "#E53935",
-    "Tesla": "#E31937",
-    "Smappee": "#FF6B35"
+  const parseVenteDate = v => {
+    if (!v.date) return null;
+    const [d, mo, y] = v.date.split("/");
+    if (!y) return null;
+    return new Date(Number(y), Number(mo) - 1, Number(d));
+  };
+  const venteMonthKey = v => {
+    const dt = parseVenteDate(v);
+    if (!dt) return null;
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
   };
 
-  // Filtre période
-  const ventesPeriod = useMemo(() => ventes.filter(v => {
-    if (period === 999) return true;
-    if (!v.date) return true;
-    const [d, mo, y] = (v.date || "").split("/");
-    if (!y) return true;
-    return (now - new Date(Number(y), Number(mo) - 1, Number(d))) / (1000 * 60 * 60 * 24 * 30) <= period;
-  }), [ventes, period]);
-  const savPeriod = useMemo(() => (savTickets || []).filter(t => Number(t.montant_facture_marque) > 0), [savTickets]);
-  const caSAV = savPeriod.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
-  const caTotal = ventesPeriod.reduce((s, v) => s + Number(v.prix_ht || 0), 0) + caSAV;
-  const coutTotal = ventesPeriod.reduce((s, v) => s + coutVente(v), 0);
-  const margeTotal = caTotal - coutTotal;
-  const txMarge = pct(margeTotal, caTotal);
-  const caMois = ventes.filter(v => v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY).reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-  const moisPrec = String(now.getMonth() === 0 ? 12 : now.getMonth()).padStart(2, "0");
-  const anneePrec = String(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
-  const caMoisPrec = ventes.filter(v => v.date && v.date.split("/")[1] === moisPrec && v.date.split("/")[2] === anneePrec).reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-  const evoMois = caMoisPrec > 0 ? Math.round((caMois - caMoisPrec) / caMoisPrec * 100) : null;
-
-  // CA par mois
-  const nMonths = period === 999 ? 12 : period;
-  const caParMois = useMemo(() => {
-    const months = [];
-    for (let i = nMonths - 1; i >= 0; i--) {
+  // Build a list of month keys to display based on viewMode / selectedMonth
+  const monthKeys = useMemo(() => {
+    if (viewMode === "mois") return [selectedMonth];
+    const n = viewMode === "3m" ? 3 : viewMode === "6m" ? 6 : viewMode === "12m" ? 12 : 24;
+    const keys = [];
+    for (let i = n - 1; i >= 0; i--) {
       const d2 = new Date();
+      d2.setDate(1);
       d2.setMonth(d2.getMonth() - i);
-      const mo = String(d2.getMonth() + 1).padStart(2, "0"),
-        y = String(d2.getFullYear());
-      const label = d2.toLocaleDateString("fr-FR", {
-        month: "short",
-        year: "2-digit"
-      });
-      const vv = ventes.filter(v => v.date && v.date.split("/")[1] === mo && v.date.split("/")[2] === y);
+      keys.push(`${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return keys;
+  }, [viewMode, selectedMonth]);
+  const monthLabel = key => {
+    if (!key) return "";
+    const [y, m] = key.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("fr-FR", {
+      month: "short",
+      year: "2-digit"
+    });
+  };
+  const prevMonthKey = key => {
+    const [y, m] = key.split("-").map(Number);
+    const d = new Date(y, m - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  // Ventes par mois clé
+  const ventesByMonth = useMemo(() => {
+    const map = {};
+    (ventes || []).forEach(v => {
+      const k = venteMonthKey(v);
+      if (!k) return;
+      if (!map[k]) map[k] = [];
+      map[k].push(v);
+    });
+    return map;
+  }, [ventes]);
+
+  // Leads par mois de création
+  const leadsByMonth = useMemo(() => {
+    const map = {};
+    (leads || []).forEach(l => {
+      if (!l.date_creation) return;
+      const [d, m, y] = l.date_creation.split("/");
+      if (!y) return;
+      const k = `${y}-${m.padStart(2, "0")}`;
+      if (!map[k]) map[k] = [];
+      map[k].push(l);
+    });
+    return map;
+  }, [leads]);
+
+  // Stats for a single month key
+  const statsForMonth = useCallback(key => {
+    const vv = ventesByMonth[key] || [];
+    const ll = leadsByMonth[key] || [];
+    const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
+    const cout = vv.reduce((s, v) => s + coutVente(v), 0);
+    const marge = ca - cout;
+    const allLeadsArr = leads || [];
+    // Conversion leads→ventes
+    const convertis = ll.filter(l => l.statut === "converti").length;
+    const nbLeads = ll.length;
+    const txConv = nbLeads > 0 ? Math.round(convertis / nbLeads * 100) : 0;
+    const perdus = ll.filter(l => l.statut === "perdu").length;
+    const rdvFixe = ll.filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length;
+    const txRdv = nbLeads > 0 ? Math.round(rdvFixe / nbLeads * 100) : 0;
+    // Canal breakdown
+    const canaux = {};
+    ll.forEach(l => {
+      const c = l.canal || "Inconnu";
+      canaux[c] = (canaux[c] || 0) + 1;
+    });
+    // Appels moy
+    const avgAppels = nbLeads > 0 ? Math.round(ll.reduce((s, l) => s + Number(l.nb_appels || 0), 0) / nbLeads * 10) / 10 : 0;
+    // Marque
+    const marques = {};
+    vv.forEach(v => {
+      const k = v.marque_borne || "Autre";
+      if (!marques[k]) marques[k] = {
+        ca: 0,
+        nb: 0,
+        cout: 0
+      };
+      marques[k].ca += Number(v.prix_ht || 0);
+      marques[k].cout += coutVente(v);
+      marques[k].nb++;
+    });
+    // Commerciaux
+    const comms = {};
+    vv.forEach(v => {
+      const k = v.par || "—";
+      if (!comms[k]) comms[k] = {
+        ca: 0,
+        nb: 0,
+        marge: 0
+      };
+      comms[k].ca += Number(v.prix_ht || 0);
+      comms[k].marge += Number(v.prix_ht || 0) - coutVente(v);
+      comms[k].nb++;
+    });
+    // Puissance
+    const puissances = {};
+    vv.forEach(v => {
+      const k = v.puissance_install || "N/A";
+      puissances[k] = (puissances[k] || 0) + 1;
+    });
+    // Logement
+    const logements = {};
+    ll.forEach(l => {
+      if (l.logement) {
+        logements[l.logement] = (logements[l.logement] || 0) + 1;
+      }
+    });
+    // Canal leads Reonic vs autre
+    const nbReonic = ll.filter(l => l.reonic_id).length;
+    const nbReonicConv = ll.filter(l => l.reonic_id && l.statut === "converti").length;
+    // SAV
+    const savMois = (savTickets || []).filter(t => {
+      if (!t.created_at) return false;
+      const d = new Date(t.created_at);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === key;
+    });
+    const savActifs = savMois.filter(t => ["ouvert", "marque_contactee"].includes(t.statut)).length;
+    const savResolus = savMois.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
+    const savCoutMarque = savMois.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
+    // Chantiers terminés ce mois (approx par date)
+    const chanterTermines = (chantiers || []).filter(ch => ch.statut === "termine").length;
+    return {
+      ca,
+      cout,
+      marge,
+      nb: vv.length,
+      txMarge: pct(marge, ca),
+      nbLeads,
+      convertis,
+      txConv,
+      perdus,
+      rdvFixe,
+      txRdv,
+      canaux,
+      avgAppels,
+      marques: Object.entries(marques).map(([k, v]) => ({
+        marque: k,
+        ...v,
+        tx: pct(v.ca - v.cout, v.ca)
+      })).sort((a, b) => b.ca - a.ca),
+      comms: Object.entries(comms).map(([k, v]) => ({
+        nom: k,
+        ...v
+      })).sort((a, b) => b.ca - a.ca),
+      puissances,
+      logements,
+      nbReonic,
+      nbReonicConv,
+      savActifs,
+      savResolus,
+      savCoutMarque,
+      chanterTermines
+    };
+  }, [ventesByMonth, leadsByMonth, leads, savTickets, chantiers]);
+
+  // Période agrégée (pour tous les modes sauf "mois")
+  const periodStats = useMemo(() => {
+    const vv = monthKeys.flatMap(k => ventesByMonth[k] || []);
+    const ll = monthKeys.flatMap(k => leadsByMonth[k] || []);
+    const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
+    const cout = vv.reduce((s, v) => s + coutVente(v), 0);
+    const marge = ca - cout;
+    const convertis = ll.filter(l => l.statut === "converti").length;
+    const perdus = ll.filter(l => l.statut === "perdu").length;
+    const nbLeads = ll.length;
+    const txConv = nbLeads > 0 ? Math.round(convertis / nbLeads * 100) : 0;
+    const nbReonic = ll.filter(l => l.reonic_id).length;
+    const savPeriode = (savTickets || []).filter(t => {
+      if (!t.created_at) return false;
+      const d = new Date(t.created_at);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return monthKeys.includes(k);
+    });
+    const savCout = savPeriode.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
+    const totalAcomptes = acomptes.reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const totalPaye = acomptes.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    return {
+      ca,
+      cout,
+      marge,
+      nb: vv.length,
+      txMarge: pct(marge, ca),
+      nbLeads,
+      convertis,
+      perdus,
+      txConv,
+      nbReonic,
+      savCout,
+      totalAcomptes,
+      totalPaye,
+      tauxEnc: totalAcomptes > 0 ? Math.round(totalPaye / totalAcomptes * 100) : 0
+    };
+  }, [monthKeys, ventesByMonth, leadsByMonth, acomptes, savTickets]);
+
+  // Comparaison mois courant vs mois précédent (mode "mois")
+  const currentStats = useMemo(() => statsForMonth(selectedMonth), [selectedMonth, statsForMonth]);
+  const prevStats = useMemo(() => statsForMonth(prevMonthKey(selectedMonth)), [selectedMonth, statsForMonth]);
+  const delta = (cur, prev) => {
+    if (prev === 0) return null;
+    return Math.round((cur - prev) / prev * 100);
+  };
+  const DeltaBadge = ({
+    cur,
+    prev,
+    suffix = ""
+  }) => {
+    const d = delta(cur, prev);
+    if (d === null) return null;
+    const up = d >= 0;
+    return React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        color: up ? "#10B981" : "#EF4444",
+        background: up ? "#10B98115" : "#EF444415",
+        borderRadius: 10,
+        padding: "1px 6px",
+        marginLeft: 4
+      }
+    }, up ? "↑" : "↓", Math.abs(d) + "%" + (suffix ? " " + suffix : ""));
+  };
+
+  // Données pour graphique barres mensuel
+  const chartMonths = useMemo(() => {
+    const n = viewMode === "mois" ? 6 : viewMode === "3m" ? 3 : viewMode === "6m" ? 6 : 12;
+    return Array.from({
+      length: n
+    }, (_, i) => {
+      const d2 = new Date();
+      d2.setDate(1);
+      d2.setMonth(d2.getMonth() - (n - 1 - i));
+      const key = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`;
+      const vv = ventesByMonth[key] || [];
       const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
       const cout = vv.reduce((s, v) => s + coutVente(v), 0);
-      months.push({
-        label,
+      return {
+        label: monthLabel(key),
         ca,
         marge: ca - cout,
         nb: vv.length,
-        mo,
-        y
-      });
-    }
-    return months;
-  }, [ventes, period]);
-  const maxCA = Math.max(...caParMois.map(m => m.ca), 1);
-
-  // CA par commercial
-  const caParComm = useMemo(() => {
-    const map = {};
-    ventesPeriod.forEach(v => {
-      const k = v.par || "Inconnu";
-      if (!map[k]) map[k] = {
-        nom: k,
-        ca: 0,
-        marge: 0,
-        nb: 0
+        mo: String(d2.getMonth() + 1).padStart(2, "0"),
+        y: String(d2.getFullYear())
       };
-      map[k].ca += Number(v.prix_ht || 0);
-      map[k].marge += Number(v.prix_ht || 0) - coutVente(v);
-      map[k].nb++;
     });
-    return Object.values(map).sort((a, b) => b.ca - a.ca);
-  }, [ventesPeriod]);
-  const maxComm = Math.max(...caParComm.map(v => v.ca), 1);
+  }, [viewMode, ventesByMonth]);
 
-  // Marges par marque
-  const marParMarque = useMemo(() => {
-    const map = {};
-    ventesPeriod.forEach(v => {
-      const k = v.marque_borne || "Autre";
-      if (!map[k]) map[k] = {
-        marque: k,
-        ca: 0,
-        cout: 0,
-        nb: 0
-      };
-      map[k].ca += Number(v.prix_ht || 0);
-      map[k].cout += coutVente(v);
-      map[k].nb++;
-    });
-    return Object.values(map).map(r => ({
-      ...r,
-      marge: r.ca - r.cout,
-      tx: pct(r.ca - r.cout, r.ca)
-    })).sort((a, b) => b.marge - a.marge);
-  }, [ventesPeriod]);
-
-  // Pipeline conversion
-  const nbPlan = chantiers.filter(c => c.statut === "planifie").length;
-  const nbTermine = chantiers.filter(c => c.statut === "termine").length;
-  const nbFacture = chantiers.filter(c => {
-    var _c$facture;
-    return c.statut === "termine" && ["facture", "paye"].includes((_c$facture = c.facture) === null || _c$facture === void 0 ? void 0 : _c$facture.statut);
-  }).length;
-  const nbPaye = chantiers.filter(c => {
-    var _c$facture2;
-    return c.statut === "termine" && ((_c$facture2 = c.facture) === null || _c$facture2 === void 0 ? void 0 : _c$facture2.statut) === "paye";
-  }).length;
-  const totalAcomptes = acomptes.reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
-  const totalPaye = acomptes.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
-  const tauxEnc = totalAcomptes > 0 ? Math.round(totalPaye / totalAcomptes * 100) : 0;
+  /* ── STYLE ATOMS ── */
   const CARD = {
     background: "#FFFFFF",
     borderRadius: 14,
     border: "1px solid #E2E8F0",
     padding: "16px"
   };
-  const clickCard = {
-    cursor: "pointer",
-    transition: "border-color 0.15s",
-    outline: "none"
+  const CARD_SM = {
+    background: "#FFFFFF",
+    borderRadius: 12,
+    border: "1px solid #E2E8F0",
+    padding: "12px"
   };
+  const SEC_TITLE = {
+    margin: "0 0 14px",
+    fontSize: 14,
+    fontWeight: 800,
+    color: "#1E293B"
+  };
+  const GRID4 = {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
+    gap: 10,
+    marginBottom: 14
+  };
+  const GRID3 = {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)",
+    gap: 10,
+    marginBottom: 14
+  };
+  const GRID2 = {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)",
+    gap: 10,
+    marginBottom: 14
+  };
+
+  /* ── COMPONENTS ── */
   const KPI = ({
     icon,
     label,
     value,
     sub,
     color,
-    onClick,
-    evo
-  }) => /*#__PURE__*/React.createElement("div", {
-    onClick: onClick,
+    evo,
+    prevVal,
+    curVal
+  }) => React.createElement("div", {
     style: {
-      ...CARD,
-      borderLeft: `3px solid ${color}`,
-      cursor: onClick ? "pointer" : "default"
+      ...CARD_SM,
+      borderLeft: `3px solid ${color}`
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("div", {
     style: {
-      fontSize: 20,
-      marginBottom: 6
+      fontSize: 18,
+      marginBottom: 4
     }
-  }, icon), /*#__PURE__*/React.createElement("div", {
+  }, icon), React.createElement("div", {
     style: {
-      fontSize: isMobile ? 16 : 21,
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 4
+    }
+  }, React.createElement("span", {
+    style: {
+      fontSize: isMobile ? 15 : 20,
       fontWeight: 800,
       color
     }
-  }, value), /*#__PURE__*/React.createElement("div", {
+  }, value), evo !== null && evo !== undefined ? React.createElement(DeltaBadge, {
+    cur: curVal || 0,
+    prev: prevVal || 0
+  }) : null), React.createElement("div", {
     style: {
       fontSize: 11,
       color: "#94A3B8",
-      marginTop: 2
+      marginTop: 1
     }
-  }, label), evo !== null && evo !== undefined && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: evo >= 0 ? "#10B981" : "#EF4444",
-      marginTop: 2,
-      fontWeight: 700
-    }
-  }, evo >= 0 ? "↑" : "↓", " ", Math.abs(evo), "% vs mois pr\xE9c."), sub && !evo && /*#__PURE__*/React.createElement("div", {
+  }, label), sub && React.createElement("div", {
     style: {
       fontSize: 10,
       color: "#64748B",
@@ -9259,14 +9454,14 @@ function StatsTab({
     w,
     color,
     h = 8
-  }) => /*#__PURE__*/React.createElement("div", {
+  }) => React.createElement("div", {
     style: {
       background: "#F1F5F9",
       borderRadius: h / 2,
       height: h,
       overflow: "hidden"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("div", {
     style: {
       height: h,
       borderRadius: h / 2,
@@ -9275,550 +9470,564 @@ function StatsTab({
       transition: "width 0.4s"
     }
   }));
-  const PipeStep = ({
-    label,
-    nb,
-    color,
-    arrow
-  }) => /*#__PURE__*/React.createElement("div", {
+  const SectionBtn = ({
+    k,
+    ic,
+    lbl
+  }) => React.createElement("button", {
+    onClick: () => setSection(k),
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6
+      padding: "7px 13px",
+      borderRadius: 20,
+      border: `1px solid ${section === k ? "#3B82F6" : "#E2E8F0"}`,
+      background: section === k ? "#3B82F6" : "transparent",
+      color: section === k ? "#FFF" : "#64748B",
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      flexShrink: 0,
+      whiteSpace: "nowrap",
+      fontFamily: '"Outfit",sans-serif'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, ic, " ", lbl);
+  const CompareTable = ({
+    rows
+  }) => React.createElement("div", {
     style: {
-      background: color + "20",
-      border: `1px solid ${color}40`,
-      borderRadius: 10,
-      padding: "10px 12px",
-      textAlign: "center",
-      minWidth: 80,
-      flex: 1
+      overflowX: "auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("table", {
     style: {
-      fontWeight: 900,
-      fontSize: 17,
-      color
+      width: "100%",
+      borderCollapse: "collapse",
+      fontSize: 12
     }
-  }, nb), /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("thead", null, React.createElement("tr", null, React.createElement("th", {
     style: {
-      fontSize: 10,
-      color: "#64748B",
-      marginTop: 2
+      textAlign: "left",
+      padding: "6px 8px",
+      color: "#94A3B8",
+      fontWeight: 600,
+      borderBottom: "1px solid #E2E8F0"
     }
-  }, label)), arrow && /*#__PURE__*/React.createElement("div", {
+  }, "Indicateur"), ...monthKeys.map((k, i) => React.createElement("th", {
+    key: k,
     style: {
-      color: "#CBD5E1",
-      fontSize: 14,
-      flexShrink: 0
+      textAlign: "right",
+      padding: "6px 8px",
+      color: i === monthKeys.length - 1 ? "#1E293B" : "#94A3B8",
+      fontWeight: i === monthKeys.length - 1 ? 800 : 600,
+      borderBottom: "1px solid #E2E8F0"
     }
-  }, "\u2192"));
-  const SECTIONS = [["global", "📊", "Vue globale"], ["ca_marges", "💰", "CA & Marges"], ["commerciaux", "👤", "Commerciaux"]];
-  return /*#__PURE__*/React.createElement("div", null, chartModal && /*#__PURE__*/React.createElement(ChartFullPage, {
-    type: chartModal.type,
-    data: chartModal.data,
-    onClose: () => setChartModal(null),
-    isMobile: isMobile,
-    fmt: fmt
-  }), /*#__PURE__*/React.createElement("div", {
+  }, monthLabel(k))), React.createElement("th", {
+    style: {
+      textAlign: "right",
+      padding: "6px 8px",
+      color: "#94A3B8",
+      fontWeight: 600,
+      borderBottom: "1px solid #E2E8F0"
+    }
+  }, "Évol."))), React.createElement("tbody", null, rows.map((row, ri) => {
+    const vals = monthKeys.map(k => row.getValue(statsForMonth(k)));
+    const last = vals[vals.length - 1];
+    const prev = vals[vals.length - 2];
+    const d = delta(last, prev);
+    return React.createElement("tr", {
+      key: ri,
+      style: {
+        borderBottom: "1px solid #F1F5F9"
+      }
+    }, React.createElement("td", {
+      style: {
+        padding: "7px 8px",
+        color: "#475569",
+        fontWeight: 500
+      }
+    }, row.label), ...vals.map((v, i) => React.createElement("td", {
+      key: i,
+      style: {
+        textAlign: "right",
+        padding: "7px 8px",
+        fontWeight: i === vals.length - 1 ? 700 : 400,
+        color: i === vals.length - 1 ? "#1E293B" : "#64748B"
+      }
+    }, row.format ? row.format(v) : v)), React.createElement("td", {
+      style: {
+        textAlign: "right",
+        padding: "7px 8px"
+      }
+    }, d !== null ? React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: d >= 0 ? "#10B981" : "#EF4444",
+        background: d >= 0 ? "#10B98115" : "#EF444415",
+        borderRadius: 8,
+        padding: "2px 6px"
+      }
+    }, d >= 0 ? "↑" : "↓", Math.abs(d) + "%") : React.createElement("span", {
+      style: {
+        color: "#CBD5E1"
+      }
+    }, "—")));
+  }))));
+
+  // Inline SVG bar chart
+  const InlineChart = ({
+    data
+  }) => {
+    const maxV = Math.max(...data.map(d => d.ca), 1);
+    const maxM = Math.max(...data.map(d => Math.max(d.marge, 0)), 1);
+    const W = 100,
+      H = 70,
+      n = data.length,
+      bw = Math.max(4, Math.floor(W / n) - 4);
+    return React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 2,
+        alignItems: "flex-end",
+        height: H + 30,
+        paddingTop: 4
+      }
+    }, data.map((d, i) => {
+      const hCA = d.ca > 0 ? Math.max(4, Math.round(d.ca / maxV * H)) : 2;
+      const hM = d.marge > 0 ? Math.max(2, Math.round(d.marge / maxV * H)) : 0;
+      const isLast = i === data.length - 1;
+      return React.createElement("div", {
+        key: i,
+        style: {
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 1
+        }
+      }, React.createElement("div", {
+        style: {
+          width: "100%",
+          display: "flex",
+          gap: 1,
+          alignItems: "flex-end",
+          height: H
+        }
+      }, React.createElement("div", {
+        style: {
+          flex: 1,
+          height: hCA,
+          background: isLast ? "#3B82F6" : "#3B82F640",
+          borderRadius: "2px 2px 0 0",
+          transition: "height 0.4s"
+        }
+      }), React.createElement("div", {
+        style: {
+          flex: 1,
+          height: hM,
+          background: isLast ? "#10B981" : "#10B98140",
+          borderRadius: "2px 2px 0 0",
+          transition: "height 0.4s"
+        }
+      })), React.createElement("div", {
+        style: {
+          fontSize: 9,
+          color: isLast ? "#1E293B" : "#94A3B8",
+          marginTop: 2,
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          fontWeight: isLast ? 700 : 400
+        }
+      }, d.label));
+    }));
+  };
+  const SECTIONS = [["global", "📊", "Vue globale"], ["ca_marges", "💰", "CA & Marges"], ["commerciaux", "👤", "Commerciaux"], ["pipeline", "🔄", "Pipeline leads"], ["reonic", "🔌", "Reonic"], ["chantiers", "🏗️", "Chantiers"], ["sav", "🛠️", "SAV"]];
+
+  // Navigation mois (mode "mois")
+  const goMonth = dir => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    const d2 = new Date(y, m - 1 + dir, 1);
+    setSelectedMonth(`${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`);
+  };
+  const isCurrentMonth = selectedMonth === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  /* ── RENDER ── */
+  return React.createElement("div", null,
+  // Header + sélecteurs
+  React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 14,
+      marginBottom: 12,
       flexWrap: "wrap",
       gap: 8
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+  }, React.createElement("div", null, React.createElement("h2", {
     style: {
       margin: "0 0 2px",
       fontSize: 17,
       fontWeight: 800
     }
-  }, "\uD83D\uDCCA Statistiques"), /*#__PURE__*/React.createElement("p", {
+  }, "📊 Statistiques"), React.createElement("p", {
     style: {
       margin: 0,
-      fontSize: 12,
+      fontSize: 11,
       color: "#64748B"
     }
-  }, ventesPeriod.length, " vente(s) \xB7 ", period === 999 ? "Tout" : period + " mois")), /*#__PURE__*/React.createElement("div", {
+  }, viewMode === "mois" ? `${new Date(selectedMonth + "-01T12:00:00").toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric"
+  })} vs mois précédent` : `${monthKeys.length} mois · ${(ventes || []).length} ventes au total`)), React.createElement("div", {
     style: {
       display: "flex",
-      gap: 5,
+      gap: 4,
       flexWrap: "wrap"
     }
-  }, [[1, "1m"], [3, "3m"], [6, "6m"], [12, "12m"], [999, "Tout"]].map(([p, l]) => /*#__PURE__*/React.createElement("button", {
-    key: p,
-    onClick: () => setPeriod(p),
+  }, [["mois", "Mois"], ["3m", "3 mois"], ["6m", "6 mois"], ["12m", "12 mois"]].map(([v, l]) => React.createElement("button", {
+    key: v,
+    onClick: () => setViewMode(v),
     style: {
       padding: "5px 11px",
       borderRadius: 20,
-      border: `1px solid ${period === p ? "#3B82F6" : "#E2E8F0"}`,
-      background: period === p ? "#3B82F625" : "transparent",
-      color: period === p ? "#3B82F6" : "#64748B",
+      border: `1px solid ${viewMode === v ? "#3B82F6" : "#E2E8F0"}`,
+      background: viewMode === v ? "#3B82F625" : "transparent",
+      color: viewMode === v ? "#3B82F6" : "#64748B",
       fontSize: 12,
       fontWeight: 700,
       cursor: "pointer",
       fontFamily: '"Outfit",sans-serif'
     }
-  }, l)))), /*#__PURE__*/React.createElement("div", {
+  }, l)))),
+  // Nav mois (mode mois uniquement)
+  viewMode === "mois" && React.createElement("div", {
     style: {
       display: "flex",
-      gap: 5,
-      marginBottom: 16,
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12,
+      background: "#F8FAFC",
+      borderRadius: 10,
+      padding: "6px 10px",
+      border: "1px solid #E2E8F0"
+    }
+  }, React.createElement("button", {
+    onClick: () => goMonth(-1),
+    style: {
+      border: "none",
+      background: "transparent",
+      cursor: "pointer",
+      fontSize: 16,
+      color: "#64748B",
+      padding: "0 4px"
+    }
+  }, "‹"), React.createElement("span", {
+    style: {
+      flex: 1,
+      textAlign: "center",
+      fontSize: 13,
+      fontWeight: 700,
+      color: "#1E293B"
+    }
+  }, new Date(selectedMonth + "-01T12:00:00").toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric"
+  })), React.createElement("button", {
+    onClick: () => goMonth(1),
+    disabled: isCurrentMonth,
+    style: {
+      border: "none",
+      background: "transparent",
+      cursor: isCurrentMonth ? "default" : "pointer",
+      fontSize: 16,
+      color: isCurrentMonth ? "#CBD5E1" : "#64748B",
+      padding: "0 4px"
+    }
+  }, "›"), React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: "#94A3B8",
+      paddingLeft: 8,
+      borderLeft: "1px solid #E2E8F0"
+    }
+  }, "vs ", new Date(prevMonthKey(selectedMonth) + "-01T12:00:00").toLocaleDateString("fr-FR", {
+    month: "short",
+    year: "2-digit"
+  }))),
+  // Onglets sections
+  React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      marginBottom: 14,
       overflowX: "auto",
       paddingBottom: 2,
       scrollbarWidth: "none"
     }
-  }, SECTIONS.map(([k, ic, lbl]) => /*#__PURE__*/React.createElement("button", {
+  }, SECTIONS.map(([k, ic, lbl]) => React.createElement(SectionBtn, {
     key: k,
-    onClick: () => setSection(k),
-    style: {
-      padding: "7px 14px",
-      borderRadius: 20,
-      border: `1px solid ${section === k ? "#3B82F6" : "#E2E8F0"}`,
-      background: section === k ? "linear-gradient(135deg,#3B82F6,#1D4ED8)" : "#FFFFFF",
-      color: section === k ? "#FFF" : "#64748B",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer",
-      flexShrink: 0,
-      fontFamily: '"Outfit",sans-serif',
-      whiteSpace: "nowrap"
-    }
-  }, ic, " ", lbl))), section === "global" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
-      gap: 10,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83D\uDCB6",
-    label: "CA total",
-    value: fmt(caTotal),
+    k,
+    ic,
+    lbl
+  }))),
+  // ── VUE GLOBALE ──
+  section === "global" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, React.createElement(KPI, {
+    icon: "💶",
+    label: "CA période",
+    value: fmt(viewMode === "mois" ? currentStats.ca : periodStats.ca),
     color: "#10B981",
-    onClick: () => setSection("ca_marges"),
-    sub: `${ventesPeriod.length} ventes`
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83D\uDCC5",
-    label: "CA ce mois",
-    value: fmt(caMois),
+    curVal: viewMode === "mois" ? currentStats.ca : null,
+    prevVal: viewMode === "mois" ? prevStats.ca : null,
+    evo: viewMode === "mois" ? true : null,
+    sub: `${viewMode === "mois" ? currentStats.nb : periodStats.nb} ventes`
+  }), React.createElement(KPI, {
+    icon: "📈",
+    label: "Marge brute",
+    value: (viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge) + "%",
+    color: txColor(viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge),
+    curVal: viewMode === "mois" ? currentStats.txMarge : null,
+    prevVal: viewMode === "mois" ? prevStats.txMarge : null,
+    evo: viewMode === "mois" ? true : null,
+    sub: fmt(viewMode === "mois" ? currentStats.marge : periodStats.marge)
+  }), React.createElement(KPI, {
+    icon: "🎯",
+    label: "Taux conversion",
+    value: (viewMode === "mois" ? currentStats.txConv : periodStats.txConv) + "%",
     color: "#3B82F6",
-    evo: evoMois,
-    onClick: () => setSection("ca_marges")
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83D\uDCC8",
-    label: "Taux de marge",
-    value: txMarge + "%",
-    color: txColor(txMarge),
-    sub: fmt(margeTotal),
-    onClick: () => setSection("ca_marges")
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\u2705",
-    label: "Acomptes encaiss\xE9s",
-    value: tauxEnc + "%",
-    color: "#F59E0B",
-    sub: `${fmt(totalPaye)} encaissé`
-  })), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setChartModal({
-      type: "ca_mensuel",
-      data: {
-        months: caParMois
-      }
-    }),
+    curVal: viewMode === "mois" ? currentStats.txConv : null,
+    prevVal: viewMode === "mois" ? prevStats.txConv : null,
+    evo: viewMode === "mois" ? true : null,
+    sub: `${viewMode === "mois" ? currentStats.convertis : periodStats.convertis} leads convertis`
+  }), React.createElement(KPI, {
+    icon: "📋",
+    label: "Leads entrants",
+    value: viewMode === "mois" ? currentStats.nbLeads : periodStats.nbLeads,
+    color: "#A855F7",
+    curVal: viewMode === "mois" ? currentStats.nbLeads : null,
+    prevVal: viewMode === "mois" ? prevStats.nbLeads : null,
+    evo: viewMode === "mois" ? true : null,
+    sub: `${viewMode === "mois" ? currentStats.perdus : periodStats.perdus} perdus`
+  })), React.createElement("div", {
     style: {
       ...CARD,
-      ...clickCard,
-      marginBottom: 14,
-      border: "1px solid #E2E8F0",
-      position: "relative"
+      marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
       marginBottom: 12
     }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: 0,
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\uD83D\uDCB6 CA mensuel"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#3B82F6",
-      fontWeight: 700,
-      background: "#3B82F620",
-      padding: "3px 10px",
-      borderRadius: 20
-    }
-  }, "\uD83D\uDD0D Agrandir")), /*#__PURE__*/React.createElement(MiniBarChart, {
-    months: caParMois,
-    height: 110
-  }), /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "💰 Évolution CA & Marge"), React.createElement("div", {
     style: {
       display: "flex",
       gap: 12,
       fontSize: 10,
-      color: "#64748B",
-      marginTop: 6
+      color: "#64748B"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, React.createElement("span", null, React.createElement("span", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: 2,
+      display: "inline-block",
+      width: 8,
+      height: 8,
+      borderRadius: 1,
       background: "#3B82F6",
-      display: "inline-block"
+      marginRight: 4
     }
-  }), "CA"), /*#__PURE__*/React.createElement("span", {
+  }), "CA"), React.createElement("span", null, React.createElement("span", {
     style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: 2,
+      display: "inline-block",
+      width: 8,
+      height: 8,
+      borderRadius: 1,
       background: "#10B981",
-      display: "inline-block"
+      marginRight: 4
     }
-  }), "Marge"))), /*#__PURE__*/React.createElement("div", {
+  }), "Marge"))), React.createElement(InlineChart, {
+    data: chartMonths
+  })),
+  // Pipeline chantiers
+  React.createElement("div", {
     style: {
       ...CARD,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 14px",
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\u26A1 Pipeline de conversion"), /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "⚡ Pipeline de conversion"), React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 6,
       flexWrap: isMobile ? "wrap" : "nowrap"
     }
-  }, /*#__PURE__*/React.createElement(PipeStep, {
-    label: "Ventes",
-    nb: ventesPeriod.length,
-    color: "#3B82F6",
-    arrow: true
-  }), /*#__PURE__*/React.createElement(PipeStep, {
-    label: "Planifi\xE9s",
-    nb: nbPlan,
-    color: "#A855F7",
-    arrow: true
-  }), /*#__PURE__*/React.createElement(PipeStep, {
-    label: "Termin\xE9s",
-    nb: nbTermine,
-    color: "#10B981",
-    arrow: true
-  }), /*#__PURE__*/React.createElement(PipeStep, {
-    label: "Factur\xE9s",
-    nb: nbFacture,
-    color: "#06B6D4",
-    arrow: true
-  }), /*#__PURE__*/React.createElement(PipeStep, {
-    label: "Pay\xE9s",
-    nb: nbPaye,
-    color: "#10B981"
-  }))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setChartModal({
-      type: "commerciaux",
-      data: {
-        comms: caParComm,
-        months: caParMois,
-        ventesRaw: ventes
-      }
-    }),
+  }, [["Leads", periodStats.nbLeads, "#3B82F6"], ["RDV", (leads || []).filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length, "#8B5CF6"], ["Offres", (leads || []).filter(l => l.statut === "devis_ligne").length, "#F59E0B"], ["Convertis", periodStats.convertis, "#10B981"]].map(([lbl, nb, col], i, arr) => React.createElement(React.Fragment, {
+    key: lbl
+  }, React.createElement("div", {
     style: {
-      ...CARD,
-      ...clickCard
+      background: col + "20",
+      border: `1px solid ${col}40`,
+      borderRadius: 10,
+      padding: "10px 12px",
+      textAlign: "center",
+      flex: 1,
+      minWidth: 60
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("div", {
     style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12
+      fontWeight: 900,
+      fontSize: 16,
+      color: col
     }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: 0,
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\uD83D\uDC64 Top commerciaux"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#3B82F6",
-      fontWeight: 700,
-      background: "#3B82F620",
-      padding: "3px 10px",
-      borderRadius: 20
-    }
-  }, "\uD83D\uDD0D D\xE9tail")), caParComm.slice(0, 3).map((v, i) => /*#__PURE__*/React.createElement("div", {
-    key: v.nom,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 18,
-      width: 26,
-      flexShrink: 0
-    }
-  }, medals[i] || "·"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      marginBottom: 3
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 700,
-      color: "#1E293B"
-    }
-  }, v.nom), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 800,
-      color: ["#F59E0B", "#94A3B8", "#C07850"][i] || "#3B82F6"
-    }
-  }, fmt(v.ca))), /*#__PURE__*/React.createElement(Bar, {
-    w: maxComm > 0 ? v.ca / maxComm * 100 : 0,
-    color: ["#F59E0B", "#94A3B8", "#C07850"][i] || "#3B82F6"
-  }), /*#__PURE__*/React.createElement("div", {
+  }, nb), React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#CBD5E1",
+      color: "#64748B",
       marginTop: 2
     }
-  }, v.nb, " vente(s) \xB7 ", pct(v.marge, v.ca), "% marge")))), caParComm.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }, lbl)), i < arr.length - 1 && React.createElement("div", {
     style: {
       color: "#CBD5E1",
-      fontSize: 12,
-      textAlign: "center",
-      padding: "20px 0"
+      fontSize: 14,
+      flexShrink: 0
     }
-  }, "Aucune vente enregistr\xE9e"))), section === "ca_marges" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
-      gap: 10,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83D\uDCB6",
+  }, "→")))))),
+  // ── CA & MARGES ──
+  section === "ca_marges" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, React.createElement(KPI, {
+    icon: "💶",
     label: "CA total",
-    value: fmt(caTotal),
-    sub: `${ventesPeriod.length} ventes`,
-    color: "#3B82F6"
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83C\uDFED",
-    label: "Co\xFBt mat\xE9riaux",
-    value: fmt(coutTotal),
-    color: "#F59E0B"
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83D\uDCC8",
+    value: fmt(viewMode === "mois" ? currentStats.ca : periodStats.ca),
+    color: "#3B82F6",
+    curVal: currentStats.ca,
+    prevVal: prevStats.ca,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "🏭",
+    label: "Coût matériaux",
+    value: fmt(viewMode === "mois" ? currentStats.cout : periodStats.cout),
+    color: "#F59E0B",
+    curVal: currentStats.cout,
+    prevVal: prevStats.cout,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "📊",
     label: "Marge brute",
-    value: fmt(margeTotal),
-    color: margeTotal >= 0 ? "#10B981" : "#EF4444"
-  }), /*#__PURE__*/React.createElement(KPI, {
-    icon: "\uD83C\uDFAF",
+    value: fmt(viewMode === "mois" ? currentStats.marge : periodStats.marge),
+    color: viewMode === "mois" ? txColor(currentStats.txMarge) : txColor(periodStats.txMarge),
+    curVal: currentStats.marge,
+    prevVal: prevStats.marge,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "🎯",
     label: "Taux de marge",
-    value: txMarge + "%",
-    color: txColor(txMarge)
-  })), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setChartModal({
-      type: "ca_mensuel",
-      data: {
-        months: caParMois
-      }
-    }),
+    value: (viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge) + "%",
+    color: txColor(viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge),
+    sub: `Panier moy: ${fmt(viewMode === "mois" ? currentStats.nb > 0 ? currentStats.ca / currentStats.nb : 0 : periodStats.nb > 0 ? periodStats.ca / periodStats.nb : 0)}`
+  })), viewMode !== "mois" && React.createElement("div", {
     style: {
       ...CARD,
-      ...clickCard,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: 0,
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\uD83D\uDCC5 \xC9volution CA & Marge"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#3B82F6",
-      fontWeight: 700,
-      background: "#3B82F620",
-      padding: "3px 10px",
-      borderRadius: 20
-    }
-  }, "\uD83D\uDD0D Agrandir")), /*#__PURE__*/React.createElement(MiniBarChart, {
-    months: caParMois,
-    height: 130
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 14,
-      fontSize: 11,
-      color: "#64748B",
-      marginTop: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: 2,
-      background: "#3B82F6",
-      display: "inline-block"
-    }
-  }), "CA"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 10,
-      height: 10,
-      borderRadius: 2,
-      background: "#10B981",
-      display: "inline-block"
-    }
-  }), "Marge"))), /*#__PURE__*/React.createElement("div", {
-    onClick: () => setChartModal({
-      type: "marques",
-      data: {
-        marques: marParMarque
-      }
-    }),
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "📅 Comparatif mensuel — CA & Marges"), React.createElement(CompareTable, {
+    rows: [{
+      label: "CA (€)",
+      getValue: s => s.ca,
+      format: v => fmt(v)
+    }, {
+      label: "Marge (€)",
+      getValue: s => s.marge,
+      format: v => fmt(v)
+    }, {
+      label: "Taux marge",
+      getValue: s => s.txMarge,
+      format: v => v + "%"
+    }, {
+      label: "Nb ventes",
+      getValue: s => s.nb
+    }, {
+      label: "Panier moyen",
+      getValue: s => s.nb > 0 ? Math.round(s.ca / s.nb) : 0,
+      format: v => fmt(v)
+    }]
+  })), React.createElement("div", {
     style: {
       ...CARD,
-      ...clickCard,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: 0,
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\u26A1 Marges par marque"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#3B82F6",
-      fontWeight: 700,
-      background: "#3B82F620",
-      padding: "3px 10px",
-      borderRadius: 20
-    }
-  }, "\uD83D\uDD0D D\xE9tail")), marParMarque.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "⚡ Marges par marque de borne"), (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.length === 0 ? React.createElement("div", {
     style: {
       color: "#CBD5E1",
       fontSize: 12,
       textAlign: "center",
-      padding: "20px 0"
+      padding: "16px 0"
     }
-  }, "Renseignez la marque dans vos ventes") : marParMarque.map((r, i) => {
-    const maxM = Math.max(...marParMarque.map(x => x.ca), 1);
+  }, "Renseignez la marque dans vos ventes") : (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.map((r, i) => {
+    const BRAND_COLORS = {
+      "Easee": "#1A73E8",
+      "Ohme": "#00897B",
+      "Zaptec": "#7B1FA2",
+      "V2C": "#E53935",
+      "Tesla": "#E31937",
+      "Smappee": "#FF6B35"
+    };
     const col = BRAND_COLORS[r.marque] || "#3B82F6";
-    return /*#__PURE__*/React.createElement("div", {
+    const maxM = Math.max(...(viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.map(x => x.ca), 1);
+    return React.createElement("div", {
       key: r.marque,
       style: {
         marginBottom: 10
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between",
         marginBottom: 4
       }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, React.createElement("span", {
       style: {
         fontSize: 12,
-        fontWeight: 800,
-        color: "#1E293B"
+        fontWeight: 800
       }
-    }, r.marque), /*#__PURE__*/React.createElement("div", {
+    }, r.marque), React.createElement("div", {
       style: {
         display: "flex",
         gap: 10
       }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, React.createElement("span", {
       style: {
         fontSize: 11,
         color: "#64748B"
       }
-    }, r.nb, " vente(s)"), /*#__PURE__*/React.createElement("span", {
+    }, r.nb, " vente(s)"), React.createElement("span", {
       style: {
         fontSize: 12,
         fontWeight: 800,
         color: txColor(r.tx)
       }
-    }, r.tx, "%"), /*#__PURE__*/React.createElement("span", {
+    }, r.tx, "%"), React.createElement("span", {
       style: {
         fontSize: 12,
         fontWeight: 800,
         color: col
       }
-    }, fmt(r.marge)))), /*#__PURE__*/React.createElement("div", {
+    }, fmt(r.marge)))), React.createElement("div", {
       style: {
-        height: 14,
+        height: 12,
         background: "#E2E8F0",
-        borderRadius: 7,
+        borderRadius: 6,
         overflow: "hidden",
         position: "relative"
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, React.createElement("div", {
       style: {
         position: "absolute",
         top: 0,
@@ -9826,9 +10035,9 @@ function StatsTab({
         height: "100%",
         width: r.ca / maxM * 100 + "%",
         background: col + "40",
-        borderRadius: 7
+        borderRadius: 6
       }
-    }), /*#__PURE__*/React.createElement("div", {
+    }), React.createElement("div", {
       style: {
         position: "absolute",
         top: 0,
@@ -9836,229 +10045,144 @@ function StatsTab({
         height: "100%",
         width: Math.max(0, r.marge / maxM * 100) + "%",
         background: col,
-        borderRadius: 7
+        borderRadius: 6
       }
     })));
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...CARD
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 14px",
-      fontSize: 14,
-      fontWeight: 800
-    }
-  }, "\uD83E\uDDFE Toutes les ventes \u2014 ", period === 999 ? "tout" : period + " mois"), ventesPeriod.map(v => {
-    const ca = Number(v.prix_ht || 0),
-      cout = coutVente(v),
-      marge = ca - cout,
-      tx = pct(marge, ca);
-    return /*#__PURE__*/React.createElement("div", {
-      key: v.id,
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "8px 0",
-        borderBottom: "1px solid #E2E8F018"
-      }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        fontWeight: 700,
-        color: "#1E293B"
-      }
-    }, v.client), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: "#64748B"
-      }
-    }, v.date, " \xB7 ", v.par || "—", v.marque_borne ? ` · ${v.marque_borne}` : "")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "right"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 13,
-        fontWeight: 800,
-        color: "#3B82F6"
-      }
-    }, fmt(ca)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: txColor(tx)
-      }
-    }, tx, "% marge")));
-  }), ventesPeriod.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: "#CBD5E1",
-      fontSize: 12,
-      textAlign: "center",
-      padding: "20px 0"
-    }
-  }, "Aucune vente sur la p\xE9riode"))), section === "commerciaux" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    onClick: () => setChartModal({
-      type: "commerciaux",
-      data: {
-        comms: caParComm,
-        months: caParMois,
-        ventesRaw: ventes
-      }
-    }),
+  })), React.createElement("div", {
     style: {
       ...CARD,
-      ...clickCard,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "💸 Acomptes & facturation"), React.createElement("div", {
+    style: GRID3
+  }, React.createElement(KPI, {
+    icon: "✅",
+    label: "Acomptes encaissés",
+    value: periodStats.tauxEnc + "%",
+    color: "#10B981",
+    sub: fmt(periodStats.totalPaye)
+  }), React.createElement(KPI, {
+    icon: "🏗️",
+    label: "Chantiers facturés",
+    value: (chantiers || []).filter(c => {
+      const f = c.facture;
+      return c.statut === "termine" && f && ["facture", "paye"].includes(f.statut);
+    }).length,
+    color: "#3B82F6",
+    sub: "sur " + (chantiers || []).filter(c => c.statut === "termine").length + " terminés"
+  }), React.createElement(KPI, {
+    icon: "💰",
+    label: "Chantiers payés",
+    value: (chantiers || []).filter(c => {
+      const f = c.facture;
+      return c.statut === "termine" && (f === null || f === void 0 ? void 0 : f.statut) === "paye";
+    }).length,
+    color: "#A855F7",
+    sub: "intégralement réglés"
+  })))),
+  // ── COMMERCIAUX ──
+  section === "commerciaux" && React.createElement(React.Fragment, null, viewMode !== "mois" && React.createElement("div", {
     style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
+      ...CARD,
       marginBottom: 14
     }
-  }, /*#__PURE__*/React.createElement("h3", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "📅 Comparatif commerciaux — CA mensuel"), (() => {
+    const allComms = [...new Set((ventes || []).map(v => v.par || "—"))].sort();
+    return React.createElement(CompareTable, {
+      rows: allComms.map(nom => ({
+        label: nom,
+        getValue: s => {
+          var _s$comms$find;
+          return ((_s$comms$find = s.comms.find(c => c.nom === nom)) === null || _s$comms$find === void 0 ? void 0 : _s$comms$find.ca) || 0;
+        },
+        format: v => fmt(v)
+      }))
+    });
+  })()), React.createElement("div", {
     style: {
-      margin: 0,
-      fontSize: 14,
-      fontWeight: 800
+      ...CARD,
+      marginBottom: 14
     }
-  }, "\uD83D\uDC64 Performance commerciaux"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#3B82F6",
-      fontWeight: 700,
-      background: "#3B82F620",
-      padding: "3px 10px",
-      borderRadius: 20
-    }
-  }, "\uD83D\uDD0D D\xE9tail")), caParComm.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "🏆 Performance individuelle"), (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.length === 0 ? React.createElement("div", {
     style: {
       color: "#CBD5E1",
       fontSize: 12,
       textAlign: "center",
-      padding: "20px 0"
+      padding: "16px 0"
     }
-  }, "Aucune vente") : caParComm.map((v, i) => {
-    const colors = ["#F59E0B", "#94A3B8", "#C07850", "#3B82F6", "#10B981", "#A855F7"];
-    const col = colors[i % colors.length];
-    const wCA = maxComm > 0 ? v.ca / maxComm * 100 : 0;
-    const wMarge = v.ca > 0 ? v.marge / v.ca * wCA : 0;
-    return /*#__PURE__*/React.createElement("div", {
+  }, "Aucune vente") : (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.map((v, i) => {
+    const cols = ["#F59E0B", "#94A3B8", "#C07850", "#3B82F6", "#10B981", "#A855F7"];
+    const col = cols[i % cols.length];
+    const maxC = Math.max(...(viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.map(x => x.ca), 1);
+    return React.createElement("div", {
       key: v.nom,
       style: {
         marginBottom: 14
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
         marginBottom: 5
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
         gap: 8
       }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, React.createElement("span", {
       style: {
         fontSize: 18
       }
-    }, medals[i] || "💼"), /*#__PURE__*/React.createElement("span", {
+    }, medals[i] || "💼"), React.createElement("span", {
       style: {
         fontSize: 13,
-        fontWeight: 800,
-        color: "#1E293B"
+        fontWeight: 800
       }
-    }, v.nom), /*#__PURE__*/React.createElement("span", {
+    }, v.nom), React.createElement("span", {
       style: {
         fontSize: 11,
         color: "#64748B"
       }
-    }, v.nb, " vente(s)")), /*#__PURE__*/React.createElement("div", {
+    }, v.nb, " vente(s)")), React.createElement("div", {
       style: {
         display: "flex",
         gap: 10
       }
-    }, /*#__PURE__*/React.createElement("span", {
+    }, React.createElement("span", {
       style: {
         fontSize: 13,
         fontWeight: 800,
         color: col
       }
-    }, fmt(v.ca)), /*#__PURE__*/React.createElement("span", {
+    }, fmt(v.ca)), React.createElement("span", {
       style: {
         fontSize: 12,
         color: "#10B981"
       }
-    }, pct(v.marge, v.ca), "%"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 18,
-        background: "#E2E8F0",
-        borderRadius: 9,
-        overflow: "hidden",
-        position: "relative"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        height: "100%",
-        width: wCA + "%",
-        background: col + "35",
-        borderRadius: 9
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        height: "100%",
-        width: Math.max(0, wMarge) + "%",
-        background: col,
-        borderRadius: 9
-      }
-    })));
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 12,
-      fontSize: 11,
-      color: "#64748B",
-      marginTop: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-block",
-      width: 8,
-      height: 8,
-      background: "#F59E0B35",
-      borderRadius: 1,
-      marginRight: 4
-    }
-  }), "CA"), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "inline-block",
-      width: 8,
-      height: 8,
-      background: "#F59E0B",
-      borderRadius: 1,
-      marginRight: 4
-    }
-  }), "Marge"))), (() => {
-    const mM_now = mM,
-      mY_now = mY,
-      mKey = `${mY_now}-${mM_now}`;
-    const vendeurs = [...new Set(ventes.map(v => v.par || "Inconnu"))].sort();
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        ...CARD
-      }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, pct(v.marge, v.ca), "%"))), React.createElement(Bar, {
+      w: v.ca / maxC * 100,
+      color: col,
+      h: 14
+    }));
+  })),
+  // Objectifs
+  (() => {
+    const mM_now = String(now.getMonth() + 1).padStart(2, "0"),
+      mY_now = String(now.getFullYear());
+    const mKey = `${mY_now}-${mM_now}`;
+    const vendeurs = [...new Set((ventes || []).map(v => v.par || "Inconnu"))].sort();
+    return React.createElement("div", {
+      style: CARD
+    }, React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between",
@@ -10067,47 +10191,808 @@ function StatsTab({
         flexWrap: "wrap",
         gap: 8
       }
-    }, /*#__PURE__*/React.createElement("h3", {
-      style: {
-        margin: 0,
-        fontSize: 14,
-        fontWeight: 800
-      }
-    }, "\uD83C\uDFAF Objectifs \u2014 ", new Date().toLocaleDateString("fr-FR", {
+    }, React.createElement("h3", {
+      style: SEC_TITLE
+    }, "🎯 Objectifs — " + new Date().toLocaleDateString("fr-FR", {
       month: "long",
       year: "numeric"
-    })), canEdit && /*#__PURE__*/React.createElement("span", {
+    })), canEdit && React.createElement("span", {
       style: {
         fontSize: 11,
         color: "#CBD5E1"
       }
-    }, "\u270F\uFE0F pour modifier")), vendeurs.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    }, "✏️ pour modifier")), vendeurs.length === 0 ? React.createElement("div", {
       style: {
         textAlign: "center",
         padding: "20px 0",
         color: "#CBD5E1",
         fontSize: 12
       }
-    }, "Aucun commercial \u2014 enregistrez des ventes d'abord") : /*#__PURE__*/React.createElement("div", {
+    }, "Aucun commercial") : React.createElement("div", {
       style: {
         display: "flex",
         flexDirection: "column",
         gap: 10
       }
-    }, vendeurs.map(nom => /*#__PURE__*/React.createElement(VendeurRow, {
+    }, vendeurs.map(nom => React.createElement(VendeurRow, {
       key: nom,
-      nom: nom,
-      mKey: mKey,
-      mM_now: mM_now,
-      mY_now: mY_now,
-      ventes: ventes,
-      objectifs: objectifs,
-      setObjectifs: setObjectifs,
-      canEdit: canEdit,
-      isMobile: isMobile,
-      fmt: fmt
+      nom,
+      mKey,
+      mM_now,
+      mY_now,
+      ventes,
+      objectifs,
+      setObjectifs,
+      canEdit,
+      isMobile,
+      fmt
     }))));
-  })()));
+  })()),
+  // ── PIPELINE LEADS ──
+  section === "pipeline" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, React.createElement(KPI, {
+    icon: "📋",
+    label: "Leads entrants",
+    value: viewMode === "mois" ? currentStats.nbLeads : periodStats.nbLeads,
+    color: "#3B82F6",
+    curVal: currentStats.nbLeads,
+    prevVal: prevStats.nbLeads,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "🎯",
+    label: "Taux conversion",
+    value: (viewMode === "mois" ? currentStats.txConv : periodStats.txConv) + "%",
+    color: "#10B981",
+    curVal: currentStats.txConv,
+    prevVal: prevStats.txConv,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "📅",
+    label: "Taux prise RDV",
+    value: (viewMode === "mois" ? currentStats.txRdv : Math.round((leads || []).filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length / Math.max((leads || []).length, 1) * 100)) + "%",
+    color: "#8B5CF6",
+    curVal: currentStats.txRdv,
+    prevVal: prevStats.txRdv,
+    evo: viewMode === "mois" ? true : null
+  }), React.createElement(KPI, {
+    icon: "❌",
+    label: "Leads perdus",
+    value: viewMode === "mois" ? currentStats.perdus : periodStats.perdus,
+    color: "#EF4444",
+    curVal: currentStats.perdus,
+    prevVal: prevStats.perdus,
+    evo: viewMode === "mois" ? true : null,
+    sub: "ce mois / période"
+  })), viewMode !== "mois" && React.createElement("div", {
+    style: {
+      ...CARD,
+      marginBottom: 14
+    }
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "📅 Comparatif mensuel — Leads"), React.createElement(CompareTable, {
+    rows: [{
+      label: "Leads entrants",
+      getValue: s => s.nbLeads
+    }, {
+      label: "RDV fixés",
+      getValue: s => s.rdvFixe
+    }, {
+      label: "Convertis",
+      getValue: s => s.convertis
+    }, {
+      label: "Taux conversion",
+      getValue: s => s.txConv,
+      format: v => v + "%"
+    }, {
+      label: "Perdus",
+      getValue: s => s.perdus
+    }, {
+      label: "Appels moy/lead",
+      getValue: s => s.avgAppels
+    }]
+  })), React.createElement("div", {
+    style: GRID2
+  },
+  // Canal
+  React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "📡 Canaux d'acquisition"), (() => {
+    const canaux = {};
+    (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).forEach(l => {
+      const c = l.canal || "Inconnu";
+      canaux[c] = (canaux[c] || 0) + 1;
+    });
+    const total = Object.values(canaux).reduce((a, b) => a + b, 0) || 1;
+    const colors = ["#3B82F6", "#10B981", "#A855F7", "#F59E0B", "#EF4444", "#06B6D4"];
+    return Object.entries(canaux).sort((a, b) => b[1] - a[1]).map(([c, n], i) => React.createElement("div", {
+      key: c,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, c), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors[i % colors.length]
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: colors[i % colors.length],
+      h: 6
+    })));
+  })()),
+  // Logement
+  React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "🏠 Type de logement"), (() => {
+    const logements = {};
+    (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).forEach(l => {
+      if (l.logement) {
+        logements[l.logement] = (logements[l.logement] || 0) + 1;
+      }
+    });
+    logements["Non renseigné"] = (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).filter(l => !l.logement).length;
+    const total = Object.values(logements).reduce((a, b) => a + b, 0) || 1;
+    const colors = {
+      "Maison individuelle": "#10B981",
+      "Copropriété": "#3B82F6",
+      "Non renseigné": "#CBD5E1"
+    };
+    return Object.entries(logements).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([c, n]) => React.createElement("div", {
+      key: c,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, c), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors[c] || "#94A3B8"
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: colors[c] || "#94A3B8",
+      h: 6
+    })));
+  })())), React.createElement("div", {
+    style: GRID2
+  },
+  // Perdu raisons
+  React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "❌ Raisons de perte"), (() => {
+    const OFFRE_PERDU_KEYS = ["Prix trop élevé", "Concurrent choisi", "Projet abandonné", "Projet reporté", "Pas de réponse / injoignable", "Contraintes techniques"];
+    const counts = {};
+    OFFRE_PERDU_KEYS.forEach(k => {
+      counts[k] = 0;
+    });
+    const perdus = (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).filter(l => l.statut === "perdu");
+    perdus.forEach(l => {
+      OFFRE_PERDU_KEYS.forEach(k => {
+        if ((l.notes || "").includes(k)) counts[k]++;
+      });
+    });
+    const total = perdus.length || 1;
+    return Object.entries(counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([r, n], i) => React.createElement("div", {
+      key: r,
+      style: {
+        marginBottom: 7
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 2
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 500,
+        color: "#475569"
+      }
+    }, r), React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: "#EF4444"
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: "#EF444460",
+      h: 5
+    }))).concat(Object.values(counts).every(n => n === 0) ? [React.createElement("div", {
+      key: "none",
+      style: {
+        color: "#CBD5E1",
+        fontSize: 12,
+        textAlign: "center",
+        paddingTop: 8
+      }
+    }, "Aucun lead perdu")] : []);
+  })()),
+  // Particulier / Entreprise
+  React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "👥 Particulier vs Entreprise"), (() => {
+    const ll = viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || []);
+    const part = ll.filter(l => l.client_type === "Particulier").length;
+    const entr = ll.filter(l => l.client_type === "Entreprise").length;
+    const nr = ll.filter(l => !l.client_type).length;
+    const total = ll.length || 1;
+    return [["Particulier", part, "#3B82F6"], ["Entreprise", entr, "#A855F7"], ["Non renseigné", nr, "#CBD5E1"]].filter(([, n]) => n > 0).map(([lbl, n, col]) => React.createElement("div", {
+      key: lbl,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, lbl), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: col
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: col,
+      h: 6
+    })));
+  })()))),
+  // ── REONIC ──
+  section === "reonic" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, (() => {
+    const allLeads = leads || [];
+    const reonicLeads = allLeads.filter(l => l.reonic_id);
+    const signedLeads = reonicLeads.filter(l => l.reonic_status === "Signed");
+    const txSign = reonicLeads.length > 0 ? Math.round(signedLeads.length / reonicLeads.length * 100) : 0;
+    const pipelineVal = reonicLeads.filter(l => l.statut === "devis_ligne").reduce((s, l) => s + Number(l.prix_reonic || 0), 0);
+    const avgReonic = reonicLeads.filter(l => Number(l.prix_reonic || 0) > 0).length > 0 ? pipelineVal / reonicLeads.filter(l => Number(l.prix_reonic || 0) > 0).length : 0;
+    const txConvReonic = reonicLeads.length > 0 ? Math.round(reonicLeads.filter(l => l.statut === "converti").length / reonicLeads.length * 100) : 0;
+    return React.createElement(React.Fragment, null, React.createElement(KPI, {
+      icon: "🔌",
+      label: "Leads Reonic total",
+      value: reonicLeads.length,
+      color: "#3B82F6",
+      sub: `${txConvReonic}% convertis`
+    }), React.createElement(KPI, {
+      icon: "✍️",
+      label: "Taux de signature",
+      value: txSign + "%",
+      color: txSign >= 30 ? "#10B981" : "#F59E0B",
+      sub: `${signedLeads.length} signés`
+    }), React.createElement(KPI, {
+      icon: "💰",
+      label: "Pipeline actif",
+      value: fmt(pipelineVal),
+      color: "#A855F7",
+      sub: "offres en cours"
+    }), React.createElement(KPI, {
+      icon: "📊",
+      label: "Panier moyen Reonic",
+      value: fmt(avgReonic),
+      color: "#06B6D4",
+      sub: "par devis"
+    }));
+  })()), React.createElement("div", {
+    style: {
+      ...CARD,
+      marginBottom: 14
+    }
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "❌ Raisons de perte des offres"), (() => {
+    const KEYS = ["Prix trop élevé", "Concurrent choisi", "Projet abandonné", "Projet reporté", "Pas de réponse / injoignable", "Contraintes techniques"];
+    const perdus = (leads || []).filter(l => l.statut === "perdu" && l.reonic_id);
+    const total = perdus.length || 1;
+    const counts = Object.fromEntries(KEYS.map(k => [k, 0]));
+    perdus.forEach(l => KEYS.forEach(k => {
+      if ((l.notes || "").includes(k)) counts[k]++;
+    }));
+    return React.createElement("div", null, Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([r, n]) => React.createElement("div", {
+      key: r,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 500
+      }
+    }, r), React.createElement("div", null, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: "#EF4444"
+      }
+    }, n), React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#94A3B8",
+        marginLeft: 4
+      }
+    }, "(", Math.round(n / total * 100), "%)"))), React.createElement(Bar, {
+      w: n / total * 100,
+      color: "#EF444455",
+      h: 6
+    }))), perdus.length === 0 && React.createElement("div", {
+      style: {
+        color: "#CBD5E1",
+        fontSize: 12,
+        textAlign: "center",
+        padding: "12px 0"
+      }
+    }, "Aucune offre perdue enregistrée"));
+  })()), viewMode !== "mois" && React.createElement("div", {
+    style: {
+      ...CARD,
+      marginBottom: 14
+    }
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "📅 Leads Reonic par mois"), React.createElement(CompareTable, {
+    rows: [{
+      label: "Leads Reonic",
+      getValue: s => s.nbReonic
+    }, {
+      label: "Convertis Reonic",
+      getValue: s => s.nbReonicConv
+    }, {
+      label: "Taux conversion",
+      getValue: s => s.nbReonic > 0 ? Math.round(s.nbReonicConv / s.nbReonic * 100) : 0,
+      format: v => v + "%"
+    }]
+  }))),
+  // ── CHANTIERS ──
+  section === "chantiers" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, (() => {
+    const ch = chantiers || [];
+    const planifie = ch.filter(c => c.statut === "planifie").length;
+    const termine = ch.filter(c => c.statut === "termine").length;
+    const facture = ch.filter(c => {
+      const f = c.facture;
+      return c.statut === "termine" && f && ["facture", "paye"].includes(f.statut);
+    }).length;
+    const paye = ch.filter(c => {
+      const f = c.facture;
+      return c.statut === "termine" && (f === null || f === void 0 ? void 0 : f.statut) === "paye";
+    }).length;
+    return React.createElement(React.Fragment, null, React.createElement(KPI, {
+      icon: "📅",
+      label: "Planifiés",
+      value: planifie,
+      color: "#A855F7",
+      sub: "en attente de pose"
+    }), React.createElement(KPI, {
+      icon: "✅",
+      label: "Terminés",
+      value: termine,
+      color: "#10B981",
+      sub: "installations réalisées"
+    }), React.createElement(KPI, {
+      icon: "🧾",
+      label: "Facturés",
+      value: facture,
+      color: "#3B82F6",
+      sub: `${termine > 0 ? Math.round(facture / termine * 100) : 0}% du total`
+    }), React.createElement(KPI, {
+      icon: "💰",
+      label: "Payés",
+      value: paye,
+      color: "#06B6D4",
+      sub: "intégralement réglés"
+    }));
+  })()),
+  // Puissance installée
+  React.createElement("div", {
+    style: GRID2
+  }, React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "⚡ Puissance installée"), (() => {
+    const puissances = {};
+    (viewMode === "mois" ? ventesByMonth[selectedMonth] || [] : monthKeys.flatMap(k => ventesByMonth[k] || [])).forEach(v => {
+      const k = v.puissance_install || "Non renseigné";
+      puissances[k] = (puissances[k] || 0) + 1;
+    });
+    const total = Object.values(puissances).reduce((a, b) => a + b, 0) || 1;
+    const colors = ["#3B82F6", "#10B981", "#A855F7", "#F59E0B", "#94A3B8"];
+    return Object.entries(puissances).sort((a, b) => b[1] - a[1]).map(([k, n], i) => React.createElement("div", {
+      key: k,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, k), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors[i % colors.length]
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: colors[i % colors.length],
+      h: 6
+    }))).concat(Object.keys(puissances).length === 0 ? [React.createElement("div", {
+      key: "none",
+      style: {
+        color: "#CBD5E1",
+        fontSize: 12,
+        textAlign: "center",
+        paddingTop: 8
+      }
+    }, "Renseignez la puissance dans vos ventes")] : []);
+  })()), React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "🔌 Type de tableau électrique"), (() => {
+    const ll = viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || []);
+    const rapports = ll.filter(l => l.rapport_rdv && l.rapport_rdv.tableau);
+    const counts = {};
+    rapports.forEach(l => {
+      const t = l.rapport_rdv.tableau;
+      counts[t] = (counts[t] || 0) + 1;
+    });
+    const total = rapports.length || 1;
+    const colors = {
+      "Monophasé": "#3B82F6",
+      "Triphasé": "#A855F7",
+      "Non renseigné": "#CBD5E1"
+    };
+    return Object.entries(counts).length === 0 ? React.createElement("div", {
+      style: {
+        color: "#CBD5E1",
+        fontSize: 12,
+        textAlign: "center",
+        paddingTop: 8
+      }
+    }, "Données issues des rapports RDV") : Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => React.createElement("div", {
+      key: c,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 600
+      }
+    }, c), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: colors[c] || "#94A3B8"
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: colors[c] || "#94A3B8",
+      h: 6
+    })));
+  })())), viewMode !== "mois" && React.createElement("div", {
+    style: {
+      ...CARD,
+      marginBottom: 14
+    }
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "📅 Comparatif mensuel — Ventes & chantiers"), React.createElement(CompareTable, {
+    rows: [{
+      label: "Ventes",
+      getValue: s => s.nb
+    }, {
+      label: "CA (€)",
+      getValue: s => s.ca,
+      format: v => fmt(v)
+    }, {
+      label: "Marge (€)",
+      getValue: s => s.marge,
+      format: v => fmt(v)
+    }, {
+      label: "Taux marge",
+      getValue: s => s.txMarge,
+      format: v => v + "%"
+    }]
+  }))),
+  // ── SAV ──
+  section === "sav" && React.createElement(React.Fragment, null, React.createElement("div", {
+    style: GRID4
+  }, (() => {
+    const allTickets = savTickets || [];
+    const actifs = allTickets.filter(t => ["ouvert", "marque_contactee"].includes(t.statut)).length;
+    const resolus = allTickets.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
+    const changes = allTickets.filter(t => t.statut === "borne_changee").length;
+    const coutTotal = allTickets.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
+    const nbVentes = (ventes || []).length;
+    const txSAV = nbVentes > 0 ? Math.round(allTickets.length / nbVentes * 100) : 0;
+    return React.createElement(React.Fragment, null, React.createElement(KPI, {
+      icon: "🛠️",
+      label: "Tickets actifs",
+      value: actifs,
+      color: "#F59E0B",
+      sub: "en attente de résolution"
+    }), React.createElement(KPI, {
+      icon: "✅",
+      label: "Tickets résolus",
+      value: resolus,
+      color: "#10B981",
+      sub: `${allTickets.length} total`
+    }), React.createElement(KPI, {
+      icon: "🔄",
+      label: "Bornes remplacées",
+      value: changes,
+      color: "#EF4444",
+      sub: "remplacement complet"
+    }), React.createElement(KPI, {
+      icon: "💸",
+      label: "CA récupéré marque",
+      value: fmt(coutTotal),
+      color: "#3B82F6",
+      sub: "facturé en garantie"
+    }));
+  })()),
+  // SAV par marque
+  React.createElement("div", {
+    style: {
+      ...CARD,
+      marginBottom: 14
+    }
+  }, React.createElement("h3", {
+    style: SEC_TITLE
+  }, "⚡ SAV par marque de borne"), (() => {
+    const byMarque = {};
+    (savTickets || []).forEach(t => {
+      const vente = (ventes || []).find(v => v.id === t.vente_id || String(v.id) === String(t.vente_id));
+      const marque = (vente === null || vente === void 0 ? void 0 : vente.marque_borne) || "Inconnue";
+      if (!byMarque[marque]) byMarque[marque] = {
+        nb: 0,
+        resolus: 0,
+        cout: 0,
+        changes: 0
+      };
+      byMarque[marque].nb++;
+      if (["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)) byMarque[marque].resolus++;
+      byMarque[marque].cout += Number(t.montant_facture_marque || 0);
+      if (t.statut === "borne_changee") byMarque[marque].changes++;
+    });
+    const entries = Object.entries(byMarque).sort((a, b) => b[1].nb - a[1].nb);
+    if (entries.length === 0) return React.createElement("div", {
+      style: {
+        color: "#CBD5E1",
+        fontSize: 12,
+        textAlign: "center",
+        padding: "16px 0"
+      }
+    }, "Aucun ticket SAV");
+    const maxNb = Math.max(...entries.map(([, v]) => v.nb), 1);
+    const BRAND_COLORS = {
+      "Easee": "#1A73E8",
+      "Ohme": "#00897B",
+      "Zaptec": "#7B1FA2",
+      "V2C": "#E53935",
+      "Tesla": "#E31937",
+      "Smappee": "#FF6B35"
+    };
+    return entries.map(([marque, d]) => React.createElement("div", {
+      key: marque,
+      style: {
+        marginBottom: 10
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 800
+      }
+    }, marque), React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#64748B"
+      }
+    }, d.nb, " ticket(s)"), d.changes > 0 && React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#EF4444",
+        fontWeight: 700
+      }
+    }, d.changes, " rempls."), d.cout > 0 && React.createElement("span", {
+      style: {
+        fontSize: 11,
+        color: "#3B82F6",
+        fontWeight: 700
+      }
+    }, fmt(d.cout)))), React.createElement("div", {
+      style: {
+        height: 8,
+        background: "#F1F5F9",
+        borderRadius: 4,
+        overflow: "hidden"
+      }
+    }, React.createElement("div", {
+      style: {
+        height: "100%",
+        width: d.nb / maxNb * 100 + "%",
+        background: (BRAND_COLORS[marque] || "#94A3B8") + "80",
+        borderRadius: 4
+      }
+    }))));
+  })()),
+  // Résolution nous vs marque
+  React.createElement("div", {
+    style: GRID2
+  }, React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "⚖️ Résolution : nous vs marque"), (() => {
+    const tt = savTickets || [];
+    const nous = tt.filter(t => t.statut === "regle_nous").length;
+    const marque = tt.filter(t => t.statut === "regle_marque").length;
+    const change = tt.filter(t => t.statut === "borne_changee").length;
+    const total = nous + marque + change || 1;
+    return [["Réglé par nous", nous, "#F59E0B"], ["Réglé par marque", marque, "#3B82F6"], ["Borne remplacée", change, "#EF4444"]].map(([lbl, n, col]) => React.createElement("div", {
+      key: lbl,
+      style: {
+        marginBottom: 8
+      }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 3
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 500
+      }
+    }, lbl), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: col
+      }
+    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
+      w: n / total * 100,
+      color: col,
+      h: 6
+    })));
+  })()), React.createElement("div", {
+    style: CARD_SM
+  }, React.createElement("h3", {
+    style: {
+      ...SEC_TITLE,
+      marginBottom: 10
+    }
+  }, "📊 Taux SAV / installations"), (() => {
+    const nbVentes = (ventes || []).length;
+    const nbTickets = (savTickets || []).length;
+    const txSAV = nbVentes > 0 ? Math.round(nbTickets / nbVentes * 100) : 0;
+    return React.createElement("div", null, React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "baseline",
+        gap: 8,
+        marginBottom: 8
+      }
+    }, React.createElement("span", {
+      style: {
+        fontSize: 32,
+        fontWeight: 800,
+        color: txSAV < 10 ? "#10B981" : txSAV < 20 ? "#F59E0B" : "#EF4444"
+      }
+    }, txSAV, "%"), React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: "#94A3B8"
+      }
+    }, "des installations ont généré un ticket")), React.createElement(Bar, {
+      w: txSAV,
+      color: txSAV < 10 ? "#10B981" : txSAV < 20 ? "#F59E0B" : "#EF4444",
+      h: 10
+    }), React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#64748B",
+        marginTop: 8
+      }
+    }, nbTickets, " ticket(s) pour ", nbVentes, " installation(s)"));
+  })()))));
 }
 
 // ══════════════════════════════════════
@@ -35303,6 +36188,7 @@ function App() {
   })(), view === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
     isMobile: isMobile,
     ventes: ventes,
+    leads: leads,
     chantiers: chantiersPipeline,
     stock: stock,
     orders: orders,
