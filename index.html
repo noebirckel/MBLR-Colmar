@@ -22292,11 +22292,6 @@ function LeadsTab({
       ...patch
     }));
   };
-  const marquerContacte = lead => {
-    const patch = { statut: "contacte" };
-    updateLead(lead.id, patch);
-    if (detailModal) setDetailModal(p => ({ ...p, ...patch }));
-  };
   const saveLead = async () => {
     if (!newForm.nom.trim()) return;
     const leadId = Date.now();
@@ -24931,20 +24926,7 @@ function LeadsTab({
       padding: "1px 8px",
       fontSize: 10
     }
-  }, detailModal.nb_appels || 0, "/4")), ["a_appeler", "relance"].includes(detailModal.statut) && /*#__PURE__*/React.createElement("button", {
-    onClick: () => marquerContacte(detailModal),
-    style: {
-      ...BTN("#EFF6FF", {
-        fontSize: 12,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        color: "#3B82F6",
-        border: "1px solid #BFDBFE"
-      })
-    }
-  }, "\u2709\uFE0F Contact\xE9 \u2014 en attente de RDV"), /*#__PURE__*/React.createElement("div", {
+  }, detailModal.nb_appels || 0, "/4")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
