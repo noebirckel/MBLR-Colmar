@@ -437,6 +437,16 @@ const _REONIC_SYSTEM_PATTERNS = [
 const _isReonicSystemMsg = txt =>
   _REONIC_SYSTEM_PATTERNS.some(p => (txt || "").toLowerCase().includes(p));
 
+// Normalise un numéro de téléphone pour la déduplication :
+// supprime tout sauf les chiffres, convertit +33XXXXXXXXX → 0XXXXXXXXX
+const normalizePhone = p => {
+  if (!p) return "";
+  const digits = (p + "").replace(/\D/g, "");
+  if (digits.startsWith("33") && digits.length === 11) return "0" + digits.slice(2);
+  if (digits.startsWith("0033") && digits.length === 13) return "0" + digits.slice(4);
+  return digits;
+};
+
 const extractReonicMessage = raw => {
   if (!raw) return "";
   if (Array.isArray(raw)) {
@@ -1513,16 +1523,16 @@ function OffresTab({
 
       // Dédup
       const existingReonicIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
-      const existingPhones = new Set((leads || []).map(l => (l.telephone || "").replace(/\s/g, "")).filter(Boolean));
+      const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
       const enriched = results.map(offer => {
         var _offer$customer;
         const c = contactsMap[(_offer$customer = offer.customer) === null || _offer$customer === void 0 ? void 0 : _offer$customer.id] || null;
-        const phone = ((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "").replace(/\s/g, "");
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
         const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
         // Chercher un lead existant lié
         const existingByReonicId = (leads || []).find(l => l.reonic_id === offer.id);
-        const existingByPhone = phone ? (leads || []).find(l => (l.telephone || "").replace(/\s/g, "") === phone) : null;
+        const existingByPhone = phone ? (leads || []).find(l => normalizePhone(l.telephone) === phone) : null;
         const existingByEmail = email ? (leads || []).find(l => (l.email || "").toLowerCase() === email) : null;
         const existing = existingByReonicId || existingByPhone || existingByEmail || null;
         const existingStatut = (existing === null || existing === void 0 ? void 0 : existing.statut) || null;
@@ -21894,15 +21904,17 @@ function LeadsTab({
       // 6. Construire les leads à insérer
       const base = Date.now();
       const now = new Date().toLocaleDateString("fr-FR");
-      const existingPhones = new Set((leads || []).map(l => (l.telephone || "").replace(/\s/g, "")).filter(Boolean));
+      const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
+      // leads créés depuis MBLR et envoyés à Reonic — ne jamais les réimporter
+      const sentToReonic = new Set((leads || []).filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
       const toInsert = newOffers.filter(o => {
         var _o$customer;
         const c = contactsMap[(_o$customer = o.customer) === null || _o$customer === void 0 ? void 0 : _o$customer.id] || null;
-        const phone = ((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "").replace(/\s/g, "");
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
         const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
-        if (phone && existingPhones.has(phone)) return false;
-        if (email && existingEmails.has(email)) return false;
+        if (phone && (existingPhones.has(phone) || sentToReonic.has(phone))) return false;
+        if (email && (existingEmails.has(email) || sentToReonic.has(email))) return false;
         return true;
       }).map((offer, idx) => {
         var _offer$customer2, _offer$options6, _offer$options6$, _offer$options6$$wall, _offer$options7, _offer$options7$, _offer$options7$$sola, _offer$currentSignatu6;
@@ -22040,7 +22052,7 @@ function LeadsTab({
 
       // Déduplication multi-critères
       const existingReonicIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
-      const existingPhones = new Set((leads || []).map(l => (l.telephone || "").replace(/\s/g, "")).filter(Boolean));
+      const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
 
       // 2. Charger tous les contacts
@@ -22069,7 +22081,7 @@ function LeadsTab({
       const enriched = results.map(offer => {
         var _offer$customer3;
         const contact = contactsMap[(_offer$customer3 = offer.customer) === null || _offer$customer3 === void 0 ? void 0 : _offer$customer3.id] || null;
-        const phone = ((contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "").replace(/\s/g, "");
+        const phone = normalizePhone((contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone));
         const email = ((contact === null || contact === void 0 ? void 0 : contact.email) || "").toLowerCase();
         const isReonicDuplicate = existingReonicIds.has(offer.id);
         const isPhoneDuplicate = phone && existingPhones.has(phone);
@@ -22344,14 +22356,20 @@ function LeadsTab({
         const data = await res.json();
         if (data.ok) {
           var _data$data5, _data$data6;
-          // create_request retourne un body vide — la demande est créée dans Reonic
           const reonicId = ((_data$data5 = data.data) === null || _data$data5 === void 0 ? void 0 : _data$data5.id) || ((_data$data6 = data.data) === null || _data$data6 === void 0 ? void 0 : _data$data6.requestId) || null;
-          if (reonicId) {
-            setLeads(p => p.map(l => l.id === leadId ? {
-              ...l,
-              reonic_id: reonicId
-            } : l));
-          }
+          // Toujours marquer reonic_sent pour bloquer le sync circulaire
+          setLeads(p => p.map(l => l.id === leadId ? {
+            ...l,
+            reonic_sent: true,
+            ...(reonicId ? { reonic_id: reonicId } : {})
+          } : l));
+          // Persister reonic_sent en base
+          sb.from("leads").update({
+            reonic_sent: true,
+            ...(reonicId ? { reonic_id: reonicId } : {})
+          }).eq("id", leadId).then(({ error }) => {
+            if (error) console.warn("[Reonic] update reonic_sent:", error.message);
+          });
           console.log("[Reonic] ✅ Demande créée avec succès", reonicId ? `ID: ${reonicId}` : "(pas d'ID retourné)");
         } else {
           console.warn("[Reonic] Création échouée — réponse complète:", JSON.stringify(data));
