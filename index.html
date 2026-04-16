@@ -14676,7 +14676,42 @@ function RapportsTab({
         transition: "transform 0.2s"
       },
       alt: ""
-    }))))))));
+    })))))), detail.photo_pv && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#FFFFFF",
+        borderRadius: 14,
+        border: "1px solid #E2E8F0",
+        padding: "18px"
+      }
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        margin: "0 0 12px",
+        fontWeight: 800,
+        fontSize: 14,
+        color: "#0F172A"
+      }
+    }, "\uD83D\uDCCE PV de r\xE9ception"), /*#__PURE__*/React.createElement("a", {
+      href: detail.photo_pv,
+      target: "_blank",
+      rel: "noopener",
+      style: {
+        display: "block",
+        borderRadius: 10,
+        overflow: "hidden",
+        cursor: "zoom-in",
+        border: "1px solid #E2E8F0"
+      }
+    }, /*#__PURE__*/React.createElement("img", {
+      src: detail.photo_pv,
+      style: {
+        width: "100%",
+        display: "block",
+        objectFit: "contain",
+        maxHeight: 420,
+        background: "#F8FAFC"
+      },
+      alt: "PV de r\xE9ception"
+    })))));
   }
 
   // ── LISTE ───────────────────────────────────────────────
