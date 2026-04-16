@@ -19622,6 +19622,11 @@ const LEAD_STATUTS = {
     color: "#F59E0B",
     icon: "📞"
   },
+  contacte: {
+    label: "Contacté",
+    color: "#3B82F6",
+    icon: "✉️"
+  },
   rdv_fixe: {
     label: "RDV fixé",
     color: "#A855F7",
@@ -22231,11 +22236,12 @@ function LeadsTab({
         var _O$a$statut, _O$b$statut, _O$a$statut2, _O$b$statut2;
         const O = {
           a_appeler: 0,
-          rdv_fixe: 1,
-          relance: 2,
-          rdv_fait: 3,
-          converti: 4,
-          perdu: 5
+          contacte: 1,
+          rdv_fixe: 2,
+          relance: 3,
+          rdv_fait: 4,
+          converti: 5,
+          perdu: 6
         };
         if (((_O$a$statut = O[a.statut]) !== null && _O$a$statut !== void 0 ? _O$a$statut : 9) !== ((_O$b$statut = O[b.statut]) !== null && _O$b$statut !== void 0 ? _O$b$statut : 9)) return ((_O$a$statut2 = O[a.statut]) !== null && _O$a$statut2 !== void 0 ? _O$a$statut2 : 9) - ((_O$b$statut2 = O[b.statut]) !== null && _O$b$statut2 !== void 0 ? _O$b$statut2 : 9);
         if (a.statut === "a_appeler") return (a.nb_appels || 0) - (b.nb_appels || 0);
@@ -22247,7 +22253,7 @@ function LeadsTab({
   const enVeilleleads = useMemo(() => leads.filter(l => l.statut === "en_veille").sort((a, b) => parseD(a.date_relance || "99/99/9999") - parseD(b.date_relance || "99/99/9999")), [leads]);
   const OFFRE_PERDU_KEYS_L = ["Prix trop élevé", "Concurrent choisi", "Projet abandonné", "Projet reporté", "Pas de réponse / injoignable", "Contraintes techniques"];
   const perdusLeads = useMemo(() => leads.filter(l => l.statut === "perdu" && !OFFRE_PERDU_KEYS_L.some(r => (l.notes || "").includes(r))).sort((a, b) => parseD(b.date_creation) - parseD(a.date_creation)), [leads]);
-  const nouveauxLeads = useMemo(() => leads.filter(l => l.statut === "a_appeler" && !(l.nb_appels > 0)).sort((a, b) => parseD(b.date_creation) - parseD(a.date_creation)), [leads]);
+  const nouveauxLeads = useMemo(() => leads.filter(l => l.statut === "a_appeler" && !(l.nb_appels > 0) && l.statut !== "contacte").sort((a, b) => parseD(b.date_creation) - parseD(a.date_creation)), [leads]);
   const relancesUrgentes = useMemo(() => leads.filter(l => {
     if (!l.date_relance || ["converti", "perdu", "sans_reponse"].includes(l.statut)) return false;
     return parseD(l.date_relance) <= Date.now();
@@ -22285,6 +22291,11 @@ function LeadsTab({
       ...p,
       ...patch
     }));
+  };
+  const marquerContacte = lead => {
+    const patch = { statut: "contacte" };
+    updateLead(lead.id, patch);
+    if (detailModal) setDetailModal(p => ({ ...p, ...patch }));
   };
   const saveLead = async () => {
     if (!newForm.nom.trim()) return;
@@ -22576,6 +22587,21 @@ function LeadsTab({
         fontFamily: '"Outfit",sans-serif'
       }
     }, "\uD83D\uDCC5"), ["a_appeler", "relance"].includes(lead.statut) && /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        marquerContacte(lead);
+      },
+      style: {
+        background: "#EFF6FF",
+        border: "none",
+        borderRadius: 8,
+        color: "#3B82F6",
+        padding: "5px 8px",
+        cursor: "pointer",
+        fontSize: 13,
+        fontFamily: '"Outfit",sans-serif'
+      }
+    }, "\u2709\uFE0F"), ["a_appeler", "relance"].includes(lead.statut) && /*#__PURE__*/React.createElement("button", {
       onClick: e => {
         e.stopPropagation();
         pasDeReponse(lead);
@@ -24920,13 +24946,26 @@ function LeadsTab({
       padding: "1px 8px",
       fontSize: 10
     }
-  }, detailModal.nb_appels || 0, "/4")), /*#__PURE__*/React.createElement("div", {
+  }, detailModal.nb_appels || 0, "/4")), ["a_appeler", "relance"].includes(detailModal.statut) && /*#__PURE__*/React.createElement("button", {
+    onClick: () => marquerContacte(detailModal),
+    style: {
+      ...BTN("#EFF6FF", {
+        fontSize: 12,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        color: "#3B82F6",
+        border: "1px solid #BFDBFE"
+      })
+    }
+  }, "\u2709\uFE0F Contact\xE9 \u2014 en attente de RDV"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
       flexWrap: "wrap"
     }
-  }, detailModal.statut === "a_appeler" && /*#__PURE__*/React.createElement("button", {
+  }, ["a_appeler", "contacte"].includes(detailModal.statut) && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setRdvModal(detailModal);
       setDetailModal(null);
@@ -25297,6 +25336,10 @@ function LeadsTab({
     key: "a_appeler",
     label: "À appeler",
     color: "#F59E0B"
+  }, {
+    key: "contacte",
+    label: "Contacté",
+    color: "#3B82F6"
   }, {
     key: "rdv_fixe",
     label: "RDV fixé",
