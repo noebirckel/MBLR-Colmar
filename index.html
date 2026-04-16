@@ -30900,8 +30900,18 @@ function ChantierTab({
         photo_pv: rapport.photo_pv || null,
         created_at: new Date().toISOString()
       };
+      if (setRapports) setRapports(p => {
+        const exists = p.find(r => r.chantier_id === ch.id);
+        return exists ? p.map(r => r.chantier_id === ch.id ? {
+          ...r,
+          ...entry,
+          id: r.id
+        } : r) : [entry, ...p];
+      });
+      setRapportModal(null);
+    },
+    onSaveAndFinish: rapport => {
       const ch = rapportModal.ch;
-      // Déduire stock (hors articles sans gestion)
       const ns = stock.map(s => {
         if (s.sans_gestion) return s;
         const u = (ch.materiels || []).find(m => Number(m.id) === s.id);
