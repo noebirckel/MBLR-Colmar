@@ -30889,7 +30889,10 @@ function ChantierTab({
         });
       } else {
         // Replanification : si la nouvelle date est dans le futur, repasser en planifie
-        const newDate = new Date(planifModal.dateStr + "T00:00:00");
+        const parts = planifModal.dateStr.split("/");
+        const newDate = parts.length === 3
+          ? new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))
+          : new Date(planifModal.dateStr);
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const isFuture = newDate > todayStart;
@@ -30898,6 +30901,10 @@ function ChantierTab({
           patch.statut = "planifie";
         }
         updateChantier(planifModal.ch.id, patch);
+        // Persistance directe Supabase (sans attendre saveDB)
+        sb.from("chantiers").update(patch).eq("id", planifModal.ch.id).then(({ error }) => {
+          if (error) console.error("[Replanif] update chantier:", error.message);
+        });
       }
       setPlanifModal(null);
     },
