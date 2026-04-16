@@ -1611,7 +1611,7 @@ function OffresTab({
           reonic_id: offer.id,
           prix_reonic: offer.totalPlannedPrice || 0,
           reonic_status: ((_offer$currentSignatu2 = offer.currentSignature) === null || _offer$currentSignatu2 === void 0 ? void 0 : _offer$currentSignatu2.state) || offer.status || "",
-          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || offer._existingLead.message || ""),
+          message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || offer._existingLead.message || "")),
           vente_id: null
         });
       } else if (!offer._duplicate) {
@@ -1630,7 +1630,7 @@ function OffresTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
+          message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || "")),
           canal: "Site web",
           statut: "devis_ligne",
           date_creation: now,
@@ -21836,6 +21836,7 @@ function LeadsTab({
         const newMessage = extractReonicMessage(offer.customerMessage)
           || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
           || extractReonicMessage(offer.description)
+          || extractReonicMessage(offer.notes)
           || "";
         // Ne pas écraser un statut avancé manuellement
         const canChangeStatut = !PROTECTED_STATUTS.includes(lead.statut);
@@ -21918,7 +21919,7 @@ function LeadsTab({
           email: (c === null || c === void 0 ? void 0 : c.email) || "",
           telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
           adresse,
-          message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
+          message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || "")),
           canal: "Site web",
           statut: ti.statut,
           date_creation: now,
@@ -22119,7 +22120,7 @@ function LeadsTab({
         email: (contact === null || contact === void 0 ? void 0 : contact.email) || "",
         telephone: (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "",
         adresse,
-        message: ( extractReonicMessage(offer.customerMessage || (offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || offer.description) || produits || ""),
+        message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || "")),
         canal: "Site web",
         statut: ti.statut,
         date_creation: now,
