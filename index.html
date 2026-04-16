@@ -14686,14 +14686,49 @@ function RapportsTab({
         border: "1px solid #E2E8F0",
         padding: "18px"
       }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12
+      }
     }, /*#__PURE__*/React.createElement("h3", {
       style: {
-        margin: "0 0 12px",
+        margin: 0,
         fontWeight: 800,
         fontSize: 14,
         color: "#0F172A"
       }
-    }, "\uD83D\uDCCE PV de r\xE9ception"), /*#__PURE__*/React.createElement("a", {
+    }, "\uD83D\uDCCE PV de r\xE9ception"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        const id = "__pv_print_frame__";
+        let fr = document.getElementById(id);
+        if (fr) fr.remove();
+        fr = document.createElement("iframe");
+        fr.id = id;
+        fr.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
+        document.body.appendChild(fr);
+        const doc = fr.contentDocument || fr.contentWindow.document;
+        doc.open();
+        doc.write(`<!DOCTYPE html><html><head><title>PV de r\xE9ception \u2014 ${detail.chantier_nom || ""}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{display:flex;flex-direction:column;align-items:center;padding:20px;font-family:sans-serif;background:#fff;}h2{margin-bottom:8px;font-size:16px;color:#0F172A;}p{margin-bottom:16px;font-size:12px;color:#64748B;}img{max-width:100%;object-fit:contain;}@media print{body{padding:10px;}}</style></head><body><h2>PV de r\xE9ception</h2><p>${detail.chantier_nom || ""} \u2014 ${detail.date || ""} \u2014 ${detail.technicien || ""}</p><img src="${photoPv}" onload="window.focus();window.print();" /></body></html>`);
+        doc.close();
+      },
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        background: "#F1F5F9",
+        border: "1px solid #E2E8F0",
+        borderRadius: 8,
+        color: "#475569",
+        padding: "7px 13px",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 700,
+        fontFamily: '"Outfit",sans-serif'
+      }
+    }, "\uD83D\uDDA8\uFE0F Imprimer")), /*#__PURE__*/React.createElement("a", {
       href: photoPv,
       target: "_blank",
       rel: "noopener",
