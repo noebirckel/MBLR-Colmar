@@ -29093,7 +29093,7 @@ function RapportModal({
   const [uploading, setUploading] = useState(false);
   const [uploadingPV, setUploadingPV] = useState(false);
   const [lightbox, setLightbox] = useState(null);
-  const [editMode, setEditMode] = useState(!ch.rapport);
+  const [editMode, setEditMode] = useState(ch.statut !== "termine" || !ch.rapport);
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasSig, setHasSig] = useState(!!rapport.signature);
@@ -29367,7 +29367,7 @@ function RapportModal({
       gap: 8,
       alignItems: "center"
     }
-  }, ch.statut === "termine" && ch.rapport && /*#__PURE__*/React.createElement("button", {
+  }, ch.rapport && /*#__PURE__*/React.createElement("button", {
     onClick: () => setEditMode(p => !p),
     style: {
       background: editMode ? "rgba(245,158,11,0.1)" : "rgba(59,130,246,0.08)",
