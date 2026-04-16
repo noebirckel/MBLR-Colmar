@@ -14311,6 +14311,9 @@ function RapportsTab({
     var _detail$type_travaux, _detail$materiels_pos, _detail$photos;
     const S = ETAT[detail.etat_final] || ETAT.ok;
     const duree = heuresTotal(detail.heure_debut, detail.heure_fin);
+    // Fallback photo_pv : anciens rapports ont photo_pv sur ch.rapport mais pas dans la table rapports
+    const linkedCh = (chantiers || []).find(c => c.id === detail.chantier_id || String(c.id) === String(detail.chantier_id));
+    const photoPv = detail.photo_pv || linkedCh?.rapport?.photo_pv || null;
     return /*#__PURE__*/React.createElement("div", null, delConf && /*#__PURE__*/React.createElement("div", {
       style: OVL,
       onClick: () => setDelConf(null)
@@ -14676,7 +14679,7 @@ function RapportsTab({
         transition: "transform 0.2s"
       },
       alt: ""
-    })))))), detail.photo_pv && /*#__PURE__*/React.createElement("div", {
+    })))))), photoPv && /*#__PURE__*/React.createElement("div", {
       style: {
         background: "#FFFFFF",
         borderRadius: 14,
@@ -14691,7 +14694,7 @@ function RapportsTab({
         color: "#0F172A"
       }
     }, "\uD83D\uDCCE PV de r\xE9ception"), /*#__PURE__*/React.createElement("a", {
-      href: detail.photo_pv,
+      href: photoPv,
       target: "_blank",
       rel: "noopener",
       style: {
@@ -14702,7 +14705,7 @@ function RapportsTab({
         border: "1px solid #E2E8F0"
       }
     }, /*#__PURE__*/React.createElement("img", {
-      src: detail.photo_pv,
+      src: photoPv,
       style: {
         width: "100%",
         display: "block",
@@ -30894,19 +30897,9 @@ function ChantierTab({
         materiels_poses: [],
         etat_final: "ok",
         photos: rapport.photos_chantier || [],
+        photo_pv: rapport.photo_pv || null,
         created_at: new Date().toISOString()
       };
-      if (setRapports) setRapports(p => {
-        const exists = p.find(r => r.chantier_id === ch.id);
-        return exists ? p.map(r => r.chantier_id === ch.id ? {
-          ...r,
-          ...entry,
-          id: r.id
-        } : r) : [entry, ...p];
-      });
-      setRapportModal(null);
-    },
-    onSaveAndFinish: rapport => {
       const ch = rapportModal.ch;
       // Déduire stock (hors articles sans gestion)
       const ns = stock.map(s => {
@@ -30962,6 +30955,7 @@ function ChantierTab({
         materiels_poses: [],
         etat_final: "ok",
         photos: rapport.photos_chantier || [],
+        photo_pv: rapport.photo_pv || null,
         created_at: new Date().toISOString()
       };
       if (setRapports) setRapports(p => {
