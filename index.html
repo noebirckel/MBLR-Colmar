@@ -30888,10 +30888,16 @@ function ChantierTab({
           date_installation: planifModal.dateStr
         });
       } else {
-        // Juste mettre à jour la date
-        updateChantier(planifModal.ch.id, {
-          date_installation: planifModal.dateStr
-        });
+        // Replanification : si la nouvelle date est dans le futur, repasser en planifie
+        const newDate = new Date(planifModal.dateStr + "T00:00:00");
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const isFuture = newDate > todayStart;
+        const patch = { date_installation: planifModal.dateStr };
+        if (isFuture && planifModal.ch.statut === "en_cours") {
+          patch.statut = "planifie";
+        }
+        updateChantier(planifModal.ch.id, patch);
       }
       setPlanifModal(null);
     },
