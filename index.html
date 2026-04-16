@@ -26834,6 +26834,7 @@ function VentesTab({
   marqueConfigs,
   reonicMapping,
   onVenteSaved,
+  onVenteUpdated,
   onDeleteVente
 }) {
   const CABLES = stock.filter(s => s.unite === "ml");
@@ -27179,6 +27180,7 @@ function VentesTab({
     };
     if (editId) {
       setVentes(p => p.map(v => v.id === editId ? entry : v)); // setVentes = SV → persiste
+      if (onVenteUpdated) onVenteUpdated(entry); // sync chantier associé
     } else {
       setVentes(p => [entry, ...p]); // setVentes = SV → persiste
       if (onVenteSaved) onVenteSaved(entry);
@@ -35334,6 +35336,26 @@ function App() {
     installConfigs: installConfigs,
     marqueConfigs: marqueConfigs,
     reonicMapping: reonicMapping,
+    onVenteUpdated: v => {
+      // Synchronise les composants du chantier associé quand une vente est modifiée
+      SC2(prev => {
+        const updated = prev.map(ch => {
+          if (String(ch.vente_id) !== String(v.id)) return ch;
+          const patch = {
+            materiels: v.materiels || [],
+            cables: v.cables || [],
+            client: v.client,
+            adresse: v.adresse || ch.adresse,
+            duree_chantier: v.duree_chantier || ch.duree_chantier
+          };
+          sb.from("chantiers").update(patch).eq("id", ch.id).then(({ error }) => {
+            if (error) console.error("[VenteUpdate] sync chantier:", error.message);
+          });
+          return { ...ch, ...patch };
+        });
+        return updated;
+      });
+    },
     onVenteSaved: v => {
       SC2(p => [{
         id: Date.now(),
