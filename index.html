@@ -20453,24 +20453,24 @@ function RdvTab({
   }, "Tableau \xE9lectrique"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "repeat(3,1fr)",
+      gridTemplateColumns: "repeat(2,1fr)",
       gap: 7,
       marginBottom: 14
     }
-  }, ["Mono 16A", "Mono 32A", "Tri 20A", "Tri 32A", "Tri 63A", "Non accessible"].map(t => /*#__PURE__*/React.createElement("button", {
+  }, ["Monophasé", "Triphasé"].map(t => /*#__PURE__*/React.createElement("button", {
     key: t,
     onClick: () => setRapportForm(p => ({
       ...p,
       tableau: t
     })),
     style: {
-      padding: "8px 4px",
+      padding: "12px 4px",
       borderRadius: 9,
       border: `2px solid ${rapportForm.tableau === t ? "#06B6D4" : "#E2E8F0"}`,
       background: rapportForm.tableau === t ? "#06B6D415" : "#F8FAFC",
       cursor: "pointer",
       fontFamily: '"Outfit",sans-serif',
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: rapportForm.tableau === t ? 700 : 400,
       color: rapportForm.tableau === t ? "#06B6D4" : "#64748B",
       textAlign: "center"
