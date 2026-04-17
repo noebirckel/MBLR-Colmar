@@ -32829,7 +32829,11 @@ function App() {
     if (cached_orders !== null && cached_orders !== void 0 && cached_orders.length) setOrders(cached_orders);
     if (cached_hist !== null && cached_hist !== void 0 && cached_hist.length) setHist(cached_hist);
     if (cached_ventes !== null && cached_ventes !== void 0 && cached_ventes.length) setVentes(cached_ventes);
-    if (cached_chantiers !== null && cached_chantiers !== void 0 && cached_chantiers.length) setChantiersPipeline(cached_chantiers);
+    if (cached_chantiers !== null && cached_chantiers !== void 0 && cached_chantiers.length) {
+      // Charger le cache mais jamais dégrader un "termine" → en cas de cache corrompu,
+      // les chantiers sans statut "termine" sont affichés en attendant Supabase
+      setChantiersPipeline(cached_chantiers);
+    }
     if (cached_acomptes !== null && cached_acomptes !== void 0 && cached_acomptes.length) setAcomptes(cached_acomptes);
     if (cached_sav !== null && cached_sav !== void 0 && cached_sav.length) setSavTickets(cached_sav);
     if (cached_obj) {
@@ -32883,8 +32887,18 @@ function App() {
         cacheSet("ventes", normalizedVentes);
       }
       if (rc) {
-        setChantiersPipeline(rc);
-        cacheSet("chantiers", rc);
+        // Fusion cache → Supabase : si le cache dit "termine" et Supabase dit autre chose
+        // c'est un écart de sync — Supabase a la priorité SAUF si la donnée Supabase
+        // semble rétrograder un statut final (ex: bug d'écriture partielle)
+        const cached = cacheGet("chantiers") || [];
+        const merged = rc.map(ch => {
+          const cachedCh = cached.find(c => String(c.id) === String(ch.id));
+          // Si le cache avait "termine" mais Supabase retourne autre chose → garder Supabase
+          // (Supabase est la source de vérité — la protection est en écriture, pas en lecture)
+          return ch;
+        });
+        setChantiersPipeline(merged);
+        cacheSet("chantiers", merged);
       }
       if (ra) {
         setAcomptes(ra);
@@ -33256,7 +33270,12 @@ function App() {
   React.useEffect(() => {
     if (!chantiersPipeline.length) return;
     const today = new Date().toLocaleDateString("fr-FR");
-    const toUpdate = chantiersPipeline.filter(ch => ch.statut === "planifie" && ch.date_installation && ch.date_installation === today);
+    const toUpdate = chantiersPipeline.filter(ch =>
+      ch.statut === "planifie" &&
+      ch.statut !== "termine" &&
+      ch.date_installation &&
+      ch.date_installation === today
+    );
     if (!toUpdate.length) return;
     const updated = chantiersPipeline.map(ch => toUpdate.find(u => u.id === ch.id) ? {
       ...ch,
@@ -35453,6 +35472,8 @@ function App() {
       SC2(prev => {
         const updated = prev.map(ch => {
           if (String(ch.vente_id) !== String(v.id)) return ch;
+          // Ne jamais écraser un chantier terminé
+          if (ch.statut === "termine") return ch;
           const patch = {
             materiels: v.materiels || [],
             cables: v.cables || [],
