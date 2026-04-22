@@ -29357,6 +29357,10 @@ function RapportModal({
     set("photos_chantier", (rapport.photos_chantier || []).filter(p => p !== url));
   };
   const handleSave = (andFinish = false) => {
+    if (uploading || uploadingPV) {
+      alert("⏳ Veuillez attendre la fin de l'envoi des photos avant de valider.");
+      return;
+    }
     const finalRapport = {
       ...rapport
     };
@@ -29909,49 +29913,52 @@ function RapportModal({
     }
   }, "Annuler"), ch.statut !== "termine" && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSave(false),
+    disabled: uploading || uploadingPV,
     style: {
       flex: 1,
-      background: "#F1F5F9",
+      background: uploading || uploadingPV ? "#E2E8F0" : "#F1F5F9",
       border: "1px solid #E2E8F0",
       borderRadius: 10,
-      color: "#94A3B8",
+      color: uploading || uploadingPV ? "#94A3B8" : "#64748B",
       padding: "12px",
-      cursor: "pointer",
+      cursor: uploading || uploadingPV ? "not-allowed" : "pointer",
       fontWeight: 700,
       fontSize: 13,
       fontFamily: '"Outfit",sans-serif',
       minWidth: 100
     }
-  }, "\uD83D\uDCBE Sauvegarder"), ch.statut === "termine" ? /*#__PURE__*/React.createElement("button", {
+  }, uploading || uploadingPV ? "⏳ Envoi…" : "\uD83D\uDCBE Sauvegarder"), ch.statut === "termine" ? /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSave(false),
+    disabled: uploading || uploadingPV,
     style: {
       flex: 2,
-      background: "linear-gradient(135deg,#3B82F6,#1D4ED8)",
+      background: uploading || uploadingPV ? "#94A3B8" : "linear-gradient(135deg,#3B82F6,#1D4ED8)",
       border: "none",
       borderRadius: 10,
       color: "#FFF",
       padding: "12px",
-      cursor: "pointer",
+      cursor: uploading || uploadingPV ? "not-allowed" : "pointer",
       fontWeight: 700,
       fontSize: 14,
       fontFamily: '"Outfit",sans-serif',
-      boxShadow: "0 4px 16px rgba(59,130,246,0.3)",
+      boxShadow: uploading || uploadingPV ? "none" : "0 4px 16px rgba(59,130,246,0.3)",
       minWidth: 160
     }
-  }, "\uD83D\uDCBE Enregistrer les modifications") : /*#__PURE__*/React.createElement("button", {
+  }, uploading || uploadingPV ? "⏳ Envoi en cours…" : "\uD83D\uDCBE Enregistrer les modifications") : /*#__PURE__*/React.createElement("button", {
     onClick: () => handleSave(true),
+    disabled: uploading || uploadingPV,
     style: {
       flex: 2,
-      background: "linear-gradient(135deg,#10B981,#059669)",
+      background: uploading || uploadingPV ? "#94A3B8" : "linear-gradient(135deg,#10B981,#059669)",
       border: "none",
       borderRadius: 10,
       color: "#FFF",
       padding: "12px",
-      cursor: "pointer",
+      cursor: uploading || uploadingPV ? "not-allowed" : "pointer",
       fontWeight: 700,
       fontSize: 14,
       fontFamily: '"Outfit",sans-serif',
-      boxShadow: "0 4px 16px rgba(16,185,129,0.3)",
+      boxShadow: uploading || uploadingPV ? "none" : "0 4px 16px rgba(16,185,129,0.3)",
       minWidth: 160
     }
   }, "\u2705 Valider & Terminer le chantier"))))));
