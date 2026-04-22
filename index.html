@@ -13700,7 +13700,14 @@ function RapportsTab({
       if (error) console.error("create chantier from rapport:", error.message);
     });
   };
-  const filtered = rapports.filter(r => !search || (r.chantier_nom || "").toLowerCase().includes(search.toLowerCase()) || (r.technicien || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = rapports.filter(r => !search || (r.chantier_nom || "").toLowerCase().includes(search.toLowerCase()) || (r.technicien || "").toLowerCase().includes(search.toLowerCase())).sort((a, b) => {
+    const parseRapportDate = d => {
+      if (!d) return 0;
+      if (d.includes("/")) { const [dd, mm, yy] = d.split("/"); return new Date(yy, mm - 1, dd).getTime(); }
+      return new Date(d).getTime();
+    };
+    return parseRapportDate(b.date) - parseRapportDate(a.date);
+  });
   const detail = rapports.find(r => r.id === detailId);
   const OVL = {
     position: "fixed",
