@@ -14786,7 +14786,54 @@ function RapportsTab({
       fontSize: 12,
       color: "#64748B"
     }
-  }, rapports.length, " rapport(s) enregistr\xE9(s)")), /*#__PURE__*/React.createElement("button", {
+  }, rapports.length, " rapport(s) enregistr\xE9(s)")), /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", gap: 8, flexWrap: "wrap" }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: async () => {
+      // Trouver les chantiers terminés qui ont un rapport dans ch.rapport mais pas en table rapports
+      const chantiersTermines = (chantiers || []).filter(ch =>
+        ch.statut === "termine" && ch.rapport &&
+        !rapports.find(r => String(r.chantier_id) === String(ch.id))
+      );
+      if (chantiersTermines.length === 0) {
+        alert("✅ Tous les rapports sont déjà importés.");
+        return;
+      }
+      const toImport = chantiersTermines.map(ch => ({
+        id: Date.now() + Math.floor(Math.random() * 9999),
+        chantier_id: ch.id,
+        chantier_nom: ch.client,
+        adresse: ch.adresse || "",
+        technicien: ch.rapport.rapport_par || ch.technicien || "",
+        date: ch.rapport.rapport_date || ch.date_fin || new Date().toLocaleDateString("fr-FR"),
+        heure_debut: ch.rapport.heures_debut || "",
+        heure_fin: ch.rapport.heures_fin || "",
+        observations: ch.rapport.observations || "",
+        type_travaux: [],
+        materiels_poses: [],
+        etat_final: "ok",
+        photos: ch.rapport.photos_chantier || [],
+        photo_pv: ch.rapport.photo_pv || null,
+        created_at: new Date().toISOString()
+      }));
+      // Upsert en base
+      const { error } = await sb.from("rapports").upsert(toImport);
+      if (error) {
+        console.error("[Import rapports]", error.message);
+        alert("Erreur lors de l'import : " + error.message);
+        return;
+      }
+      setRapports(p => {
+        const filtered = p.filter(r => !toImport.find(ti => String(ti.chantier_id) === String(r.chantier_id)));
+        return [...toImport, ...filtered];
+      });
+      alert(`✅ ${toImport.length} rapport(s) importé(s) avec succès.`);
+    },
+    style: BTN("#F59E0B", {
+      padding: "10px 16px",
+      fontSize: 12
+    })
+  }, "\uD83D\uDD04 Importer rapports manquants"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setForm(emptyForm());
       setView("form");
@@ -14795,7 +14842,7 @@ function RapportsTab({
       padding: "10px 18px",
       boxShadow: "0 4px 16px rgba(59,130,246,0.3)"
     })
-  }, "\u2795 Nouveau rapport")), /*#__PURE__*/React.createElement("div", {
+  }, "\u2795 Nouveau rapport"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
@@ -30981,6 +31028,10 @@ function ChantierTab({
           id: r.id
         } : r) : [entry, ...p];
       });
+      // Persistance directe Supabase
+      sb.from("rapports").upsert(entry).then(({ error }) => {
+        if (error) console.error("[Rapport] upsert onSave:", error.message);
+      });
       setRapportModal(null);
     },
     onSaveAndFinish: rapport => {
@@ -31048,6 +31099,10 @@ function ChantierTab({
           ...entry,
           id: r.id
         } : r) : [entry, ...p];
+      });
+      // Persistance directe Supabase
+      sb.from("rapports").upsert(entry).then(({ error }) => {
+        if (error) console.error("[Rapport] upsert onSaveAndFinish:", error.message);
       });
       if (window._appState) window._appState.finishChantier(ns, newHist, updated);
       setRapportModal(null);
