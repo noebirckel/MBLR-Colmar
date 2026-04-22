@@ -33004,6 +33004,7 @@ function App() {
   React.useEffect(() => {
     if (!profile) return;
     const LABELS = {
+      leads: "📋 Leads",
       ventes: "💰 Ventes",
       chantiers: "🔧 Chantiers",
       acomptes: "📋 Acomptes",
@@ -33021,7 +33022,11 @@ function App() {
       const t = payload.table;
       const ev = payload.eventType;
       const rec = payload.new || payload.old || {};
-      if (t === "ventes") {
+      if (t === "leads") {
+        if (ev === "INSERT") setLeads(p => p.find(x => String(x.id) === String(payload.new.id)) ? p : [payload.new, ...p]);
+        else if (ev === "UPDATE") setLeads(p => p.map(x => String(x.id) === String(payload.new.id) ? { ...x, ...payload.new } : x));
+        else if (ev === "DELETE") setLeads(p => p.filter(x => String(x.id) !== String(payload.old.id)));
+      } else if (t === "ventes") {
         if (ev === "INSERT") setVentes(p => [payload.new, ...p.filter(x => x.id !== payload.new.id)]);else if (ev === "UPDATE") setVentes(p => p.map(x => x.id === payload.new.id ? payload.new : x));else if (ev === "DELETE") setVentes(p => p.filter(x => x.id !== payload.old.id));
       } else if (t === "chantiers") {
         if (ev === "INSERT") setChantiersPipeline(p => [payload.new, ...p.filter(x => x.id !== payload.new.id)]);else if (ev === "UPDATE") setChantiersPipeline(p => p.map(x => x.id === payload.new.id ? payload.new : x));else if (ev === "DELETE") setChantiersPipeline(p => p.filter(x => x.id !== payload.old.id));
@@ -33040,6 +33045,7 @@ function App() {
         if (ev === "INSERT") setRapports(p => [payload.new, ...p.filter(x => x.id !== payload.new.id)]);else if (ev === "UPDATE") setRapports(p => p.map(x => x.id === payload.new.id ? payload.new : x));else if (ev === "DELETE") setRapports(p => p.filter(x => x.id !== payload.old.id));
       }
       const TAB_MAP = {
+        leads: "leads",
         ventes: "ventes",
         chantiers: "chantier",
         acomptes: "administratif",
@@ -33086,6 +33092,10 @@ function App() {
     const ch = sb.channel("app-realtime").on("postgres_changes", {
       event: "*",
       schema: "public",
+      table: "leads"
+    }, handle).on("postgres_changes", {
+      event: "*",
+      schema: "public",
       table: "ventes"
     }, handle).on("postgres_changes", {
       event: "*",
@@ -33112,7 +33122,7 @@ function App() {
       schema: "public",
       table: "rapports"
     }, handle).subscribe(status => {
-      if (status === "SUBSCRIBED") console.log("✅ Realtime connecté");else if (status === "CHANNEL_ERROR") console.warn("⚠️ Realtime erreur");
+      if (status === "SUBSCRIBED") console.log("✅ Realtime connecté (leads inclus)");else if (status === "CHANNEL_ERROR") console.warn("⚠️ Realtime erreur");
     });
     return () => {
       sb.removeChannel(ch);
