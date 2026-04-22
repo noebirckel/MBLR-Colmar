@@ -30994,7 +30994,12 @@ function ChantierTab({
   }, "Annuler")))), rapportModal && /*#__PURE__*/React.createElement(RapportModal, {
     isMobile: isMobile,
     data: rapportModal,
-    onClose: () => setRapportModal(null),
+    onClose: () => {
+      if ((rapport.photos_chantier || []).length > 0 || rapport.photo_pv) {
+        if (!window.confirm("⚠️ Des photos ont été ajoutées mais pas encore sauvegardées.\nFermer quand même sans enregistrer ?")) return;
+      }
+      setRapportModal(null);
+    },
     onSave: rapport => {
       const ch = rapportModal.ch;
       const updated = chantiers.map(c2 => c2.id === ch.id ? {
