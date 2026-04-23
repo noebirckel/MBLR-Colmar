@@ -22278,32 +22278,6 @@ function LeadsTab({
       delete window._openNewRdv;
     };
   }, []);
-
-  // Auto-promotion rdv_fixe → rdv_fait quand la date RDV est passée
-  React.useEffect(() => {
-    if (!leads.length) return;
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const parseRdvDate = d => {
-      if (!d) return 0;
-      if (d.includes("/")) { const [j, m, a] = d.split("/"); return new Date(Number(a), Number(m) - 1, Number(j)).getTime(); }
-      return new Date(d).getTime();
-    };
-    const toPromote = leads.filter(l =>
-      l.statut === "rdv_fixe" &&
-      l.date_rdv &&
-      parseRdvDate(l.date_rdv) < todayStart.getTime()
-    );
-    if (!toPromote.length) return;
-    const patch = { statut: "rdv_fait" };
-    SLeads(prev => prev.map(l =>
-      toPromote.find(p => p.id === l.id) ? { ...l, ...patch } : l
-    ));
-    toPromote.forEach(l => {
-      sb.from("leads").update(patch).eq("id", l.id).then(({ error }) => {
-        if (error) console.error("[AutoRDVFait]", error.message);
-      });
-    });
-  }, [leads.length]);
   const parseD = d => {
     if (!d) return 0;
     const [j, m, a] = (d || "").split("/");
@@ -22384,6 +22358,31 @@ function LeadsTab({
       ...patch
     }));
   };
+
+  // Auto-promotion rdv_fixe → rdv_fait quand la date RDV est passée
+  React.useEffect(() => {
+    if (!leads.length) return;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const parseRdvDate = d => {
+      if (!d) return 0;
+      if (d.includes("/")) { const [j, m, a] = d.split("/"); return new Date(Number(a), Number(m) - 1, Number(j)).getTime(); }
+      return new Date(d).getTime();
+    };
+    const toPromote = leads.filter(l =>
+      l.statut === "rdv_fixe" &&
+      l.date_rdv &&
+      parseRdvDate(l.date_rdv) < todayStart.getTime()
+    );
+    if (!toPromote.length) return;
+    const patch = { statut: "rdv_fait" };
+    toPromote.forEach(l => {
+      updateLead(l.id, patch);
+      sb.from("leads").update(patch).eq("id", l.id).then(({ error }) => {
+        if (error) console.error("[AutoRDVFait]", error.message);
+      });
+    });
+  }, [leads.length]);
+
   const saveLead = async () => {
     if (!newForm.nom.trim()) return;
     const leadId = Date.now();
