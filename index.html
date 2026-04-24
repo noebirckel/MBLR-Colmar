@@ -22408,6 +22408,10 @@ function LeadsTab({
       message: "",
       canal: ""
     });
+    // Insertion directe (pas via saveDB/SLeads pour éviter le doublon Realtime)
+    sb.from("leads").insert([{ ...entry }]).then(({ error }) => {
+      if (error) console.error("[saveLead] insert:", error.message);
+    });
 
     // ── Envoi automatique vers Reonic si configuré ──
     if (reonicApiKey && reonicClientId && EDGE_URL) {
@@ -22436,18 +22440,20 @@ function LeadsTab({
         if (data.ok) {
           var _data$data5, _data$data6;
           const reonicId = ((_data$data5 = data.data) === null || _data$data5 === void 0 ? void 0 : _data$data5.id) || ((_data$data6 = data.data) === null || _data$data6 === void 0 ? void 0 : _data$data6.requestId) || null;
-          // Toujours marquer reonic_sent pour bloquer le sync circulaire
+          // Marquer reonic_sent en mémoire pour bloquer le sync circulaire
           setLeads(p => p.map(l => l.id === leadId ? {
             ...l,
             reonic_sent: true,
             ...(reonicId ? { reonic_id: reonicId } : {})
           } : l));
-          // Persister reonic_sent en base
-          sb.from("leads").update({
-            reonic_sent: true,
-            ...(reonicId ? { reonic_id: reonicId } : {})
-          }).eq("id", leadId).then(({ error }) => {
-            if (error) console.warn("[Reonic] update reonic_sent:", error.message);
+          // Persister en base uniquement si la colonne existe (sinon silencieux)
+          const reonicPatch = { ...(reonicId ? { reonic_id: reonicId } : {}) };
+          // Tenter d'abord sans reonic_sent, puis avec si la colonne existe
+          sb.from("leads").update({ reonic_sent: true, ...reonicPatch }).eq("id", leadId).then(({ error }) => {
+            if (error) {
+              // Colonne absente → fallback sans reonic_sent
+              if (reonicId) sb.from("leads").update(reonicPatch).eq("id", leadId);
+            }
           });
           console.log("[Reonic] ✅ Demande créée avec succès", reonicId ? `ID: ${reonicId}` : "(pas d'ID retourné)");
         } else {
@@ -33122,7 +33128,7 @@ function App() {
       const ev = payload.eventType;
       const rec = payload.new || payload.old || {};
       if (t === "leads") {
-        if (ev === "INSERT") setLeads(p => p.find(x => String(x.id) === String(payload.new.id)) ? p : [payload.new, ...p]);
+        if (ev === "INSERT") setLeads(p => [payload.new, ...p.filter(x => String(x.id) !== String(payload.new.id))]);
         else if (ev === "UPDATE") setLeads(p => p.map(x => String(x.id) === String(payload.new.id) ? { ...x, ...payload.new } : x));
         else if (ev === "DELETE") setLeads(p => p.filter(x => String(x.id) !== String(payload.old.id)));
       } else if (t === "ventes") {
@@ -33237,9 +33243,17 @@ function App() {
     try {
       const run = async (table, data) => {
         if (!data) return;
+        // Retirer les colonnes qui n'existent pas encore en base selon la table
+        let payload = data;
+        if (table === "leads" && Array.isArray(data)) {
+          payload = data.map(({ reonic_sent, ...rest }) => rest);
+        } else if (table === "leads" && data && typeof data === "object") {
+          const { reonic_sent, ...rest } = data;
+          payload = rest;
+        }
         const {
           error
-        } = await sb.from(table).upsert(data);
+        } = await sb.from(table).upsert(payload);
         if (error) {
           console.error(table + ":", error.message, error.details, error.hint);
           setSync("error");
