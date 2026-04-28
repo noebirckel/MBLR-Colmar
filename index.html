@@ -33387,10 +33387,11 @@ function App() {
   const SLeads = React.useCallback(v => {
     setLeads(prev => {
       const n = typeof v === "function" ? v(prev) : v;
-      saveDB(null, null, null, null, null, null, null, null, null, n);
+      // saveDB retiré pour les leads : toutes les persistances sont faites
+      // via des appels directs sb.from("leads") pour éviter les régressions de statut
       return n;
     });
-  }, [saveDB]);
+  }, []);
 
   // ── AUTO-PASSAGE PLANIFIÉ → EN COURS quand c'est le jour de l'installation ──
   const autoPassageRef = React.useRef(false);
