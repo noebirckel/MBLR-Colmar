@@ -22329,10 +22329,14 @@ function LeadsTab({
     const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
     return rdv === todayISO;
   }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || "")), [leads]);
-  const updateLead = (id, patch) => setLeads(p => p.map(l => l.id === id ? {
-    ...l,
-    ...patch
-  } : l));
+  const updateLead = (id, patch) => {
+    setLeads(p => p.map(l => l.id === id ? { ...l, ...patch } : l));
+    // Persistance directe — évite le upsert global de saveDB qui cause des régressions
+    const { reonic_sent, ...safePatch } = patch;
+    sb.from("leads").update(safePatch).eq("id", id).then(({ error }) => {
+      if (error) console.error("[updateLead]", error.message);
+    });
+  };
   const pasDeReponse = lead => {
     const nb = (lead.nb_appels || 0) + 1;
     const now = new Date();
