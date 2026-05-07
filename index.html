@@ -1627,8 +1627,11 @@ function OffresTab({
       } else if (!offer._duplicate) {
         var _offer$currentSignatu3;
         // Créer un nouveau lead
-        const prenom = (c === null || c === void 0 ? void 0 : c.firstName) || "";
-        const nom = (c === null || c === void 0 ? void 0 : c.lastName) || "";
+        const _prenom2 = (c === null || c === void 0 ? void 0 : c.firstName) || (c === null || c === void 0 ? void 0 : c.firstname) || (c === null || c === void 0 ? void 0 : c.first_name) || "";
+        const _nom2 = (c === null || c === void 0 ? void 0 : c.lastName) || (c === null || c === void 0 ? void 0 : c.lastname) || (c === null || c === void 0 ? void 0 : c.last_name) || (c === null || c === void 0 ? void 0 : c.name) || "";
+        const _fullName2 = (c === null || c === void 0 ? void 0 : c.fullName) || (c === null || c === void 0 ? void 0 : c.full_name) || (c === null || c === void 0 ? void 0 : c.contactName) || "";
+        const prenom = _prenom2 || (_fullName2 ? _fullName2.split(" ")[0] : "");
+        const nom = _nom2 || (_fullName2 && !_prenom2 ? _fullName2.split(" ").slice(1).join(" ") : _nom2);
         const adresse = [c === null || c === void 0 ? void 0 : c.street, c === null || c === void 0 ? void 0 : c.number, c === null || c === void 0 ? void 0 : c.postcode, c === null || c === void 0 ? void 0 : c.city].filter(Boolean).join(" ");
         console.log("[Import] Creating new lead:", prenom, nom);
         toCreate.push({
@@ -21955,14 +21958,61 @@ function LeadsTab({
         } catch (e) {}
       }
 
-      // 6. Construire les leads à insérer
+      // 5b. Avant de créer de nouveaux leads, chercher des leads existants sans reonic_id
+      // qui correspondent par téléphone ou email → les lier à l'offre Reonic
+      const toLink = []; // leads existants à enrichir avec reonic_id + prix
+      const reallyNew = newOffers.filter(offer => {
+        var _offer$customer3;
+        const c = contactsMap[(_offer$customer3 = offer.customer) === null || _offer$customer3 === void 0 ? void 0 : _offer$customer3.id] || null;
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
+        const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
+        const existingLead = (leads || []).find(l =>
+          !l.reonic_id &&
+          ((phone && normalizePhone(l.telephone) === phone) ||
+           (email && (l.email || "").toLowerCase() === email))
+        );
+        if (existingLead) {
+          const prix = offer.totalPlannedPrice || 0;
+          const newStatus = offer.currentSignature?.state || offer.status || "";
+          const msg = extractReonicMessage(offer.customerMessage)
+            || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
+            || extractReonicMessage(offer.description)
+            || extractReonicMessage(offer.notes) || "";
+          toLink.push({
+            id: existingLead.id,
+            reonic_id: offer.id,
+            prix_reonic: prix,
+            reonic_status: newStatus,
+            ...(msg && !existingLead.message ? { message: msg } : {})
+          });
+          return false; // ne pas créer en doublon
+        }
+        return true;
+      });
+
+      // Appliquer les liens (enrichissement sans doublon)
+      if (toLink.length > 0) {
+        setLeads(prev => prev.map(l => {
+          const link = toLink.find(t => t.id === l.id);
+          return link ? { ...l, ...link } : l;
+        }));
+        toLink.forEach(link => {
+          const { id, ...patch } = link;
+          sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
+            if (error) console.error("[Reonic Link]", error.message);
+            else addSyncedIds([patch.reonic_id]);
+          });
+        });
+        console.log(`[Reonic] ${toLink.length} lead(s) lié(s) à Reonic sans doublon`);
+      }
+
+      // Insérer uniquement les vraiment nouveaux
       const base = Date.now();
       const now = new Date().toLocaleDateString("fr-FR");
       const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
-      // leads créés depuis MBLR et envoyés à Reonic — ne jamais les réimporter
       const sentToReonic = new Set((leads || []).filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
-      const toInsert = newOffers.filter(o => {
+      const toInsert = reallyNew.filter(o => {
         var _o$customer;
         const c = contactsMap[(_o$customer = o.customer) === null || _o$customer === void 0 ? void 0 : _o$customer.id] || null;
         const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
@@ -21973,8 +22023,11 @@ function LeadsTab({
       }).map((offer, idx) => {
         var _offer$customer2, _offer$options6, _offer$options6$, _offer$options6$$wall, _offer$options7, _offer$options7$, _offer$options7$$sola, _offer$currentSignatu6;
         const c = contactsMap[(_offer$customer2 = offer.customer) === null || _offer$customer2 === void 0 ? void 0 : _offer$customer2.id] || null;
-        const prenom = (c === null || c === void 0 ? void 0 : c.firstName) || "";
-        const nom = (c === null || c === void 0 ? void 0 : c.lastName) || "";
+        const _prenom = (c === null || c === void 0 ? void 0 : c.firstName) || (c === null || c === void 0 ? void 0 : c.firstname) || (c === null || c === void 0 ? void 0 : c.first_name) || "";
+        const _nom = (c === null || c === void 0 ? void 0 : c.lastName) || (c === null || c === void 0 ? void 0 : c.lastname) || (c === null || c === void 0 ? void 0 : c.last_name) || (c === null || c === void 0 ? void 0 : c.name) || "";
+        const _fullName = (c === null || c === void 0 ? void 0 : c.fullName) || (c === null || c === void 0 ? void 0 : c.full_name) || (c === null || c === void 0 ? void 0 : c.contactName) || "";
+        const prenom = _prenom || (_fullName ? _fullName.split(" ")[0] : "");
+        const nom = _nom || (_fullName && !_prenom ? _fullName.split(" ").slice(1).join(" ") : _nom);
         const adresse = [c === null || c === void 0 ? void 0 : c.street, c === null || c === void 0 ? void 0 : c.number, c === null || c === void 0 ? void 0 : c.postcode, c === null || c === void 0 ? void 0 : c.city].filter(Boolean).join(" ");
         const wallbox = (((_offer$options6 = offer.options) === null || _offer$options6 === void 0 ? void 0 : (_offer$options6$ = _offer$options6[0]) === null || _offer$options6$ === void 0 ? void 0 : (_offer$options6$$wall = _offer$options6$.wallboxPlanned) === null || _offer$options6$$wall === void 0 ? void 0 : _offer$options6$$wall.components) || []).map(x => x.name).join(", ");
         const solar = (((_offer$options7 = offer.options) === null || _offer$options7 === void 0 ? void 0 : (_offer$options7$ = _offer$options7[0]) === null || _offer$options7$ === void 0 ? void 0 : (_offer$options7$$sola = _offer$options7$.solarPlanned) === null || _offer$options7$$sola === void 0 ? void 0 : _offer$options7$$sola.components) || []).map(x => x.name).join(", ");
