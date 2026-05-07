@@ -24737,12 +24737,13 @@ function LeadsTab({
   }, /*#__PURE__*/React.createElement("a", {
     href: `tel:${detailModal.telephone}`,
     style: {
-      fontSize: 13,
-      fontWeight: 700,
+      fontSize: 18,
+      fontWeight: 800,
       color: "#3B82F6",
-      textDecoration: "none"
+      textDecoration: "none",
+      letterSpacing: 1
     }
-  }, detailModal.telephone), /*#__PURE__*/React.createElement("a", {
+  }, (detailModal.telephone || "").replace(/\s/g, "").replace(/(\d{2})(?=\d)/g, "$1 ").trim()), /*#__PURE__*/React.createElement("a", {
     href: `tel:${detailModal.telephone}`,
     style: {
       background: "linear-gradient(135deg,#3B82F6,#1D4ED8)",
