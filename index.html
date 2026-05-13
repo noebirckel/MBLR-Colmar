@@ -27100,6 +27100,7 @@ function VentesTab({
     coords: null,
     photos_vente: [],
     duree_chantier: "1j",
+    marge_forfait: false,
     marque_borne: "",
     modele_borne: "",
     puissance_install: "",
@@ -27536,8 +27537,8 @@ function VentesTab({
 
   // ══ VUE FORMULAIRE ══
   if (viewMode === "form") {
-    const cout = totalMat(form) + totalCab(form);
     const prixHT = Number(form.prix_ht) || 0;
+    const cout = form.marge_forfait ? prixHT * 0.5 : totalMat(form) + totalCab(form);
     const marge = prixHT - cout;
     const pctM = prixHT > 0 ? Math.round(marge / prixHT * 100) : null;
     const isborne = s => s.sous_cat === "borne" || s.sous_cat === "" && (s.article + " " + (s.cat || "")).toLowerCase().match(/borne|wallbox|chargeur|station|charge up|charge core|charge max/);
@@ -27740,8 +27741,36 @@ function VentesTab({
       n: 2,
       title: "Mat\xE9riels",
       icon: "\uD83D\uDCE6",
-      done: form.materiels.length > 0
-    }, form.materiels.length === 0 && /*#__PURE__*/React.createElement("div", {
+      done: form.materiels.length > 0 || form.marge_forfait
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => setForm(p => ({ ...p, marge_forfait: !p.marge_forfait, materiels: p.marge_forfait ? p.materiels : [], cables: p.marge_forfait ? p.cables : [] })),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: `2px solid ${form.marge_forfait ? "#F59E0B" : "#E2E8F0"}`,
+        background: form.marge_forfait ? "#FFFBEB" : "#F8FAFC",
+        color: form.marge_forfait ? "#B45309" : "#64748B",
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        fontFamily: '"Outfit",sans-serif',
+        marginBottom: 12,
+        width: "100%"
+      }
+    }, form.marge_forfait ? "⚠️ Mode forfait 50% actif — cliquer pour saisir les composants" : "⚡ Chantier complexe / sous-traitance — forfait 50% de marge"), form.marge_forfait ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#FFFBEB",
+        border: "1px solid #FDE68A",
+        borderRadius: 10,
+        padding: "10px 14px",
+        fontSize: 12,
+        color: "#92400E",
+        marginBottom: 10
+      }
+    }, "\uD83D\uDCA1 Aucun composant requis. La marge sera calculée à 50% du prix HT. Le coût estimé sera de ", /*#__PURE__*/React.createElement("strong", null, fmt(Number(form.prix_ht || 0) * 0.5)), ".") : form.materiels.length === 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         color: "#94A3B8",
