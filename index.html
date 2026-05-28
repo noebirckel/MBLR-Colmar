@@ -36984,20 +36984,20 @@ function App() {
     }, _caEvol !== null ? (_caEvol >= 0 ? "\u2191 " : "\u2193 ") + Math.abs(_caEvol) + "%" : "")),
     /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", gap: 12, marginBottom: 8, marginTop: 6 }
-    },
-      [["#3B82F6", "CA"], ["#10B981", "Marge"]].map(([col, lbl]) =>
-        /*#__PURE__*/React.createElement("span", { key: lbl, style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748B" } },
-          /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 2, background: col, display: "inline-block" } }),
-          lbl
-        )
+    }, [["#3B82F6", "CA"], ["#10B981", "Marge"]].map(([col, lbl]) =>
+      /*#__PURE__*/React.createElement("span", {
+        key: lbl,
+        style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748B" }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 2, background: col, display: "inline-block" } }),
+        lbl
       )
-    ),
-    /*#__PURE__*/React.createElement("div", {
-      style: { position: "relative", height: 120 }
-    }, /*#__PURE__*/React.createElement("canvas", {
+    )),
+    /*#__PURE__*/React.createElement("canvas", {
       id: "accueil-area-chart",
       role: "img",
       "aria-label": "Graphique CA et marge 6 derniers mois",
+      style: { display: "block", width: "100%", height: "120px" },
       ref: el => {
         if (!el || el._chartInit) return;
         el._chartInit = true;
@@ -37006,19 +37006,12 @@ function App() {
           if (el._chartInstance) { el._chartInstance.destroy(); }
           el._chartInstance = new window.Chart(el, {
             type: "line",
-            data: {
-              labels: _hist6.map(h => h.label),
-              datasets: [
-                { label: "CA", data: _hist6.map(h => h.ca), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.12)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#3B82F6", fill: true, tension: 0.4 },
-                { label: "Marge", data: _hist6.map(h => h.marge), borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.15)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#10B981", fill: true, tension: 0.4 }
-              ]
-            },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: { mode: "index", intersect: false, callbacks: { label: ctx => " " + ctx.dataset.label + " : " + Math.round(ctx.parsed.y).toLocaleString("fr-FR") + " \u20AC" } }
-              },
+            data: { labels: _hist6.map(h => h.label), datasets: [
+              { label: "CA", data: _hist6.map(h => h.ca), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.12)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#3B82F6", fill: true, tension: 0.4 },
+              { label: "Marge", data: _hist6.map(h => h.marge), borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.15)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#10B981", fill: true, tension: 0.4 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false, callbacks: { label: ctx => " " + ctx.dataset.label + " : " + Math.round(ctx.parsed.y).toLocaleString("fr-FR") + " \u20AC" } } },
               scales: {
                 x: { grid: { display: false }, ticks: { color: "#94A3B8", font: { size: 10 }, maxRotation: 0 } },
                 y: { grid: { color: "rgba(148,163,184,0.1)" }, ticks: { color: "#94A3B8", font: { size: 10 }, callback: v => v >= 1000 ? Math.round(v/1000)+"k" : v } }
@@ -37028,7 +37021,8 @@ function App() {
         };
         tryInit();
       }
-    })),
+    }),
+    ), _actions.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         background: "#FFFFFF",
         borderRadius: 12,
