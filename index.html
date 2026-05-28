@@ -36982,46 +36982,57 @@ function App() {
         fontWeight: 700
       }
     }, _caEvol !== null ? (_caEvol >= 0 ? "\u2191 " : "\u2193 ") + Math.abs(_caEvol) + "%" : "")),
-    /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", gap: 12, marginBottom: 8, marginTop: 6 }
-    }, [["#3B82F6", "CA"], ["#10B981", "Marge"]].map(([col, lbl]) =>
-      /*#__PURE__*/React.createElement("span", {
-        key: lbl,
-        style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748B" }
+    (() => {
+      if (!_hist6 || !_hist6.length) return null;
+      const W = 520, H = 110, padL = 36, padB = 20, padT = 10, padR = 8;
+      const innerW = W - padL - padR, innerH = H - padT - padB;
+      const maxV = Math.max(..._hist6.map(h => Math.max(h.ca, 0)), 1);
+      const n = _hist6.length;
+      const xOf = i => padL + (i / (n - 1)) * innerW;
+      const yOf = v => padT + innerH - Math.max(0, v) / maxV * innerH;
+      const pts = arr => _hist6.map((h, i) => xOf(i) + "," + yOf(h[arr])).join(" ");
+      const area = (arr, base) => {
+        const p = _hist6.map((h, i) => xOf(i) + "," + yOf(h[arr])).join(" ");
+        return `M${xOf(0)},${base} L${_hist6.map((h,i) => xOf(i)+","+yOf(h[arr])).join(" L")} L${xOf(n-1)},${base} Z`;
+      };
+      const fmtK = v => v >= 1000 ? Math.round(v/1000) + "k" : v;
+      const gridVals = [0, maxV * 0.5, maxV];
+      return /*#__PURE__*/React.createElement("svg", {
+        viewBox: `0 0 ${W} ${H}`,
+        style: { width: "100%", height: "auto", display: "block", overflow: "visible" }
       },
-        /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 2, background: col, display: "inline-block" } }),
-        lbl
-      )
-    )),
-    /*#__PURE__*/React.createElement("canvas", {
-      id: "accueil-area-chart",
-      role: "img",
-      "aria-label": "Graphique CA et marge 6 derniers mois",
-      style: { display: "block", width: "100%", height: "120px" },
-      ref: el => {
-        if (!el || el._chartInit) return;
-        el._chartInit = true;
-        const tryInit = () => {
-          if (!window.Chart) { setTimeout(tryInit, 100); return; }
-          if (el._chartInstance) { el._chartInstance.destroy(); }
-          el._chartInstance = new window.Chart(el, {
-            type: "line",
-            data: { labels: _hist6.map(h => h.label), datasets: [
-              { label: "CA", data: _hist6.map(h => h.ca), borderColor: "#3B82F6", backgroundColor: "rgba(59,130,246,0.12)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#3B82F6", fill: true, tension: 0.4 },
-              { label: "Marge", data: _hist6.map(h => h.marge), borderColor: "#10B981", backgroundColor: "rgba(16,185,129,0.15)", borderWidth: 2.5, pointRadius: _hist6.map(h => h.isCur ? 5 : 3), pointBackgroundColor: "#10B981", fill: true, tension: 0.4 }
-            ]},
-            options: { responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false, callbacks: { label: ctx => " " + ctx.dataset.label + " : " + Math.round(ctx.parsed.y).toLocaleString("fr-FR") + " \u20AC" } } },
-              scales: {
-                x: { grid: { display: false }, ticks: { color: "#94A3B8", font: { size: 10 }, maxRotation: 0 } },
-                y: { grid: { color: "rgba(148,163,184,0.1)" }, ticks: { color: "#94A3B8", font: { size: 10 }, callback: v => v >= 1000 ? Math.round(v/1000)+"k" : v } }
-              }
-            }
-          });
-        };
-        tryInit();
-      }
-    }),
+        /*#__PURE__*/React.createElement("defs", null,
+          /*#__PURE__*/React.createElement("linearGradient", { id: "areaCA", x1: "0", y1: "0", x2: "0", y2: "1" },
+            /*#__PURE__*/React.createElement("stop", { offset: "0%", stopColor: "#3B82F6", stopOpacity: "0.18" }),
+            /*#__PURE__*/React.createElement("stop", { offset: "100%", stopColor: "#3B82F6", stopOpacity: "0.02" })
+          ),
+          /*#__PURE__*/React.createElement("linearGradient", { id: "areaMarge", x1: "0", y1: "0", x2: "0", y2: "1" },
+            /*#__PURE__*/React.createElement("stop", { offset: "0%", stopColor: "#10B981", stopOpacity: "0.22" }),
+            /*#__PURE__*/React.createElement("stop", { offset: "100%", stopColor: "#10B981", stopOpacity: "0.02" })
+          )
+        ),
+        gridVals.map((v, i) => /*#__PURE__*/React.createElement("g", { key: i },
+          /*#__PURE__*/React.createElement("line", { x1: padL, x2: W - padR, y1: yOf(v), y2: yOf(v), stroke: "#E2E8F0", strokeWidth: "0.5", strokeDasharray: v === 0 ? "0" : "3,3" }),
+          /*#__PURE__*/React.createElement("text", { x: padL - 4, y: yOf(v) + 3, textAnchor: "end", fontSize: "8", fill: "#94A3B8", fontFamily: "system-ui" }, fmtK(v))
+        )),
+        /*#__PURE__*/React.createElement("path", { d: area("ca", padT + innerH), fill: "url(#areaCA)" }),
+        /*#__PURE__*/React.createElement("path", { d: area("marge", padT + innerH), fill: "url(#areaMarge)" }),
+        /*#__PURE__*/React.createElement("polyline", { points: pts("ca"), fill: "none", stroke: "#3B82F6", strokeWidth: "2", strokeLinejoin: "round", strokeLinecap: "round" }),
+        /*#__PURE__*/React.createElement("polyline", { points: pts("marge"), fill: "none", stroke: "#10B981", strokeWidth: "2", strokeLinejoin: "round", strokeLinecap: "round" }),
+        _hist6.map((h, i) => /*#__PURE__*/React.createElement("g", { key: i },
+          /*#__PURE__*/React.createElement("circle", { cx: xOf(i), cy: yOf(h.ca), r: h.isCur ? 4 : 2.5, fill: "#3B82F6", stroke: "#fff", strokeWidth: h.isCur ? "1.5" : "1" }),
+          /*#__PURE__*/React.createElement("circle", { cx: xOf(i), cy: yOf(h.marge), r: h.isCur ? 4 : 2.5, fill: "#10B981", stroke: "#fff", strokeWidth: h.isCur ? "1.5" : "1" }),
+          h.isCur && h.ca > 0 && /*#__PURE__*/React.createElement("text", { x: xOf(i), y: yOf(h.ca) - 7, textAnchor: "middle", fontSize: "8", fontWeight: "700", fill: "#3B82F6", fontFamily: "system-ui" }, fmtK(h.ca)),
+          /*#__PURE__*/React.createElement("text", { x: xOf(i), y: H - 2, textAnchor: "middle", fontSize: "8", fill: h.isCur ? "#2563EB" : "#94A3B8", fontWeight: h.isCur ? 700 : 400, fontFamily: "system-ui" }, h.label)
+        )),
+        /*#__PURE__*/React.createElement("g", null,
+          /*#__PURE__*/React.createElement("circle", { cx: padL + 4, cy: padT - 2, r: "3", fill: "#3B82F6" }),
+          /*#__PURE__*/React.createElement("text", { x: padL + 10, y: padT + 2, fontSize: "8", fill: "#64748B", fontFamily: "system-ui" }, "CA"),
+          /*#__PURE__*/React.createElement("circle", { cx: padL + 30, cy: padT - 2, r: "3", fill: "#10B981" }),
+          /*#__PURE__*/React.createElement("text", { x: padL + 36, y: padT + 2, fontSize: "8", fill: "#64748B", fontFamily: "system-ui" }, "Marge")
+        )
+      );
+    })()),
     ), _actions.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         background: "#FFFFFF",
@@ -37082,7 +37093,7 @@ function App() {
         fontWeight: 800,
         color: a.c
       }
-    }, a.n)))))));
+    }, a.n))))));
   })(), role === "administrateur" && (() => {
     const todayISO = new Date().toISOString().split("T")[0];
     const today = new Date().toLocaleDateString("fr-FR");
