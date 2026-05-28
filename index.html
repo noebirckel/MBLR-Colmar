@@ -5219,7 +5219,7 @@ function MesObjectifsTab({
     const fromVentes = [...new Set(ventes.map(v => v.par).filter(Boolean))];
     return [...new Set([...fromProfiles, ...fromVentes])].filter(Boolean).sort();
   }, [allProfiles, ventes]);
-  const coutVente = v => (v.materiels || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0);
+  const coutVente = v => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5 : (v.materiels || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0);
 
   // Données par commercial pour N mois
   const getCommData = (commNom, nbMois = 6) => Array.from({
@@ -9106,7 +9106,7 @@ function StatsTab({
 
   /* ── HELPERS ── */
   const now = new Date();
-  const coutVente = v => (v.materiels || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0);
+  const coutVente = v => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5 : (v.materiels || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0);
   const txColor = t => t >= 40 ? "#10B981" : t >= 20 ? "#3B82F6" : t >= 0 ? "#F59E0B" : "#EF4444";
   const pct = (m, ca) => ca > 0 ? Math.round(m / ca * 100) : 0;
   const medals = ["🥇", "🥈", "🥉"];
@@ -36663,7 +36663,7 @@ function App() {
     const _caPrevMonth = ventes.filter(v => v.date && v.date.split("/")[1] === prevM && v.date.split("/")[2] === prevY).reduce((s, v) => s + (Number(v.prix_ht) || 0), 0);
     const _caEvol = _caPrevMonth > 0 ? Math.round((_caMonth - _caPrevMonth) / _caPrevMonth * 100) : null;
     // Marge brute mois
-    const coutVenteAcc = v => (v.materiels || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0);
+    const coutVenteAcc = v => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5 : (v.materiels || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0);
     const _ventesMonth = ventes.filter(v => v.date && v.date.split("/")[1] === _mM && v.date.split("/")[2] === _mY);
     const _margeMonth = _ventesMonth.reduce((s, v) => s + (Number(v.prix_ht || 0) - coutVenteAcc(v)), 0);
     const _txMarge = _caMonth > 0 ? Math.round(_margeMonth / _caMonth * 100) : 0;
