@@ -27311,9 +27311,14 @@ function VentesTab({
 
     // Matcher chaque ligne du mapping contre les composants de l'offre
     const matsFromMapping = mapping.filter(m => m.stock_id && m.reonic_name).filter(m => {
-      const reonicNameLower = (m.reonic_name || "").toLowerCase();
-      // Vérifier si le nom Reonic est présent dans le message
-      return componentNames.some(comp => comp.toLowerCase().includes(reonicNameLower) || reonicNameLower.includes(comp.toLowerCase())) || msgLower.includes(reonicNameLower);
+      const reonicNameLower = (m.reonic_name || "").toLowerCase().trim();
+      if (!reonicNameLower || reonicNameLower.length < 3) return false;
+      // Correspondance stricte sur les composants séparés (· ou ,)
+      // Suppression du fallback msgLower.includes() trop permissif (matchait "wallbox" partout)
+      return componentNames.some(comp => {
+        const compLower = comp.toLowerCase().replace(/\s*x\d+$/i, "").trim();
+        return compLower.includes(reonicNameLower) || reonicNameLower.includes(compLower);
+      });
     }).map(m => {
       const stockItem = stock.find(s => s.id === Number(m.stock_id));
       if (!stockItem) return null;
