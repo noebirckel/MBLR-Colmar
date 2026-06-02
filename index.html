@@ -21861,14 +21861,75 @@ function LeadsTab({
       const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = new Set([...persistedIds, ...liveIds]);
 
-      // 3. Nouvelles offres : tout ce qui n'est pas encore importé et pas perdu
-      const newOffers = results.filter(o => !allKnownIds.has(o.id) && getReonicTypeStatic(o) !== "perdu");
+      // 3. Nouvelles offres : tout ce qui n'est pas encore connu
+      const newOffers = results.filter(o => !allKnownIds.has(o.id));
 
-      // 4. Mises à jour : leads existants dont le statut/prix a changé dans Reonic
+      // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
       const reonicMap = new Map(results.map(o => [o.id, o]));
       const toUpdate = [];
-      // Statuts avancés manuellement — Reonic ne doit pas les écraser
       const PROTECTED_STATUTS = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille", "devis_ligne"];
+
+      // v3 : contacts embarqués dans chaque projet
+      const contactsMap = {};
+
+      // 5b. Liens : leads existants sans reonic_id qui matchent par téléphone/email
+      // AVANT le retour anticipé pour enrichir les leads même si rien d'autre n'a changé
+      const toLink = [];
+      const reallyNew = newOffers.filter(offer => {
+        const c = offer.customerContact || null;
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
+        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
+        const existingLead = (leads || []).find(l =>
+          !l.reonic_id &&
+          ((phone && normalizePhone(l.telephone) === phone) ||
+           (email && (l.email || "").toLowerCase() === email))
+        );
+        if (existingLead) {
+          const prix = offer.totalPlannedPrice || 0;
+          const newStatus = offer.signatureStatus || (offer.deal && offer.deal.state) || "";
+          const msg = offer.customerMessage || "";
+          const c2 = offer.customerContact || null;
+          const newNom = (c2 && c2.lastName) || "";
+          const newPrenom = (c2 && c2.firstName) || "";
+          const newFullName = (c2 && c2.fullName) || `${newPrenom} ${newNom}`.trim();
+          const newTel = (c2 && (c2.mobile || c2.phone)) || "";
+          const newEmail2 = (c2 && c2.primaryEmail) || "";
+          const addr = offer.address || {};
+          const newAdresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
+          const patch = {
+            id: existingLead.id,
+            reonic_id: offer.id,
+            prix_reonic: prix,
+            reonic_status: newStatus,
+            ...(msg && !existingLead.message ? { message: msg } : {}),
+            ...((!existingLead.nom || existingLead.client === "Client Reonic") && newNom ? { nom: newNom } : {}),
+            ...((!existingLead.prenom || existingLead.client === "Client Reonic") && newPrenom ? { prenom: newPrenom } : {}),
+            ...((!existingLead.client || existingLead.client === "Client Reonic") && newFullName ? { client: newFullName } : {}),
+            ...(!existingLead.telephone && newTel ? { telephone: newTel } : {}),
+            ...(!existingLead.email && newEmail2 ? { email: newEmail2 } : {}),
+            ...(!existingLead.adresse && newAdresse ? { adresse: newAdresse } : {}),
+          };
+          toLink.push(patch);
+          return false;
+        }
+        return true;
+      });
+
+      // Appliquer les liens immédiatement
+      if (toLink.length > 0) {
+        setLeads(prev => prev.map(l => {
+          const link = toLink.find(t => t.id === l.id);
+          return link ? { ...l, ...link } : l;
+        }));
+        toLink.forEach(link => {
+          const { id, ...patch } = link;
+          sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
+            if (error) console.error("[Reonic Link]", error.message);
+            else addSyncedIds([patch.reonic_id]);
+          });
+        });
+        console.log(`[Reonic] ${toLink.length} lead(s) lié(s) et enrichis`);
+      }
       for (const lead of (leads || []).filter(l => l.reonic_id)) {
         var _offer$currentSignatu5;
         const offer = reonicMap.get(lead.reonic_id);
@@ -21923,62 +21984,15 @@ function LeadsTab({
           toUpdate.push(patch);
         }
       }
-      console.log("[Reonic Sync] Reonic:", results.length, "| Nouveaux:", newOffers.length, "| MàJ:", toUpdate.length);
-      if (newOffers.length === 0 && toUpdate.length === 0) {
+      console.log(`[Reonic Sync] Reonic: ${results.length} | Nouveaux: ${newOffers.length} | MàJ: ${toUpdate.length} | Liens: ${toLink.length}`);
+
+      if (newOffers.length === 0 && toUpdate.length === 0 && toLink.length === 0) {
         setAutoSyncStatus(null);
         autoSyncRef.current = false;
         return;
       }
 
-      // v3 : contacts embarqués dans chaque projet — contactsMap non nécessaire
-      const contactsMap = {};
-
-      // 5b. Avant de créer de nouveaux leads, chercher des leads existants sans reonic_id
-      // qui correspondent par téléphone ou email → les lier à l'offre Reonic
-      const toLink = []; // leads existants à enrichir avec reonic_id + prix
-      const reallyNew = newOffers.filter(offer => {
-        // v3 : contact embarqué directement
-        const c = offer.customerContact || null;
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
-        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
-        const existingLead = (leads || []).find(l =>
-          !l.reonic_id &&
-          ((phone && normalizePhone(l.telephone) === phone) ||
-           (email && (l.email || "").toLowerCase() === email))
-        );
-        if (existingLead) {
-          const prix = offer.totalPlannedPrice || 0;
-          const newStatus = offer.signatureStatus || (offer.deal && offer.deal.state) || "";
-          const msg = offer.customerMessage || "";
-          toLink.push({
-            id: existingLead.id,
-            reonic_id: offer.id,
-            prix_reonic: prix,
-            reonic_status: newStatus,
-            ...(msg && !existingLead.message ? { message: msg } : {})
-          });
-          return false; // ne pas créer en doublon
-        }
-        return true;
-      });
-
-      // Appliquer les liens (enrichissement sans doublon)
-      if (toLink.length > 0) {
-        setLeads(prev => prev.map(l => {
-          const link = toLink.find(t => t.id === l.id);
-          return link ? { ...l, ...link } : l;
-        }));
-        toLink.forEach(link => {
-          const { id, ...patch } = link;
-          sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
-            if (error) console.error("[Reonic Link]", error.message);
-            else addSyncedIds([patch.reonic_id]);
-          });
-        });
-        console.log(`[Reonic] ${toLink.length} lead(s) lié(s) à Reonic sans doublon`);
-      }
-
-      // Insérer uniquement les vraiment nouveaux
+      // 8. Insérer les nouveaux
       const base = Date.now();
       const now = new Date().toLocaleDateString("fr-FR");
       const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
