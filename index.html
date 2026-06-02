@@ -21886,14 +21886,37 @@ function LeadsTab({
         const prixChanged_v3 = newPrix !== Number(lead.prix_reonic || 0);
         const statusChanged_v3 = newStatus !== (lead.reonic_status || "");
         const messageChanged_v3 = !lead.message && !!newMessage;
-        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3) {
-          toUpdate.push({
+        // Enrichissement contact : mettre à jour nom/prénom/téléphone si manquants
+        const c = offer.customerContact || null;
+        const newNom = (c && c.lastName) || "";
+        const newPrenom = (c && c.firstName) || "";
+        const newFullName = (c && c.fullName) || `${newPrenom} ${newNom}`.trim();
+        const newTel = (c && (c.mobile || c.phone)) || "";
+        const newEmail = (c && c.primaryEmail) || "";
+        const newAddrParts = offer.address ? [offer.address.street, offer.address.houseNumber, offer.address.postcode, offer.address.city].filter(Boolean) : [];
+        const newAdresse = newAddrParts.join(" ");
+        const contactMissing = !lead.nom && !lead.prenom && !lead.client;
+        const contactChanged = contactMissing && !!(newNom || newPrenom || newFullName);
+        const telMissing = !lead.telephone && !!newTel;
+        const emailMissing = !lead.email && !!newEmail;
+        const adresseMissing = !lead.adresse && !!newAdresse;
+        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {
+          const patch = {
             id: lead.id,
             statut: statutChanged ? newMblrStatut : lead.statut,
             prix_reonic: newPrix,
             reonic_status: newStatus,
             message: newMessage || lead.message || ""
-          });
+          };
+          if (contactChanged) {
+            patch.nom = newNom;
+            patch.prenom = newPrenom;
+            patch.client = newFullName || lead.client || "";
+          }
+          if (telMissing) patch.telephone = newTel;
+          if (emailMissing) patch.email = newEmail;
+          if (adresseMissing) patch.adresse = newAdresse;
+          toUpdate.push(patch);
         }
       }
       console.log("[Reonic Sync] Reonic:", results.length, "| Nouveaux:", newOffers.length, "| MàJ:", toUpdate.length);
@@ -22023,7 +22046,13 @@ function LeadsTab({
           statut: u.statut,
           prix_reonic: u.prix_reonic,
           reonic_status: u.reonic_status,
-          ...(u.message ? { message: u.message } : {})
+          ...(u.message ? { message: u.message } : {}),
+          ...(u.nom !== undefined ? { nom: u.nom } : {}),
+          ...(u.prenom !== undefined ? { prenom: u.prenom } : {}),
+          ...(u.client !== undefined ? { client: u.client } : {}),
+          ...(u.telephone !== undefined ? { telephone: u.telephone } : {}),
+          ...(u.email !== undefined ? { email: u.email } : {}),
+          ...(u.adresse !== undefined ? { adresse: u.adresse } : {})
         }).eq("id", u.id).then(({
           error
         }) => {
