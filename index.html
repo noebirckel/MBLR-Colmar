@@ -21940,8 +21940,11 @@ function LeadsTab({
         const newMessage = offer.customerMessage || "";
         // Mapping statut v3
         const newMblrStatut = offer.mblrStatut || "devis_ligne";
-        const PROTECTED_STATUTS_v3 = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille", "devis_ligne"];
-        const canChangeStatut = !PROTECTED_STATUTS_v3.includes(lead.statut);
+        const PROTECTED_STATUTS_v3 = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille"];
+        // devis_ligne est normalement protégé, SAUF si Reonic dit que c'est une demande (request)
+        // dans ce cas on corrige le mauvais statut initial
+        const isWrongDevisLigne = lead.statut === "devis_ligne" && newMblrStatut === "a_appeler";
+        const canChangeStatut = !PROTECTED_STATUTS_v3.includes(lead.statut) || isWrongDevisLigne;
         const statutChanged = canChangeStatut && newMblrStatut !== lead.statut;
 
         const prixChanged_v3 = newPrix !== Number(lead.prix_reonic || 0);
