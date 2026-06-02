@@ -21910,10 +21910,10 @@ function LeadsTab({
       // qui correspondent par téléphone ou email → les lier à l'offre Reonic
       const toLink = []; // leads existants à enrichir avec reonic_id + prix
       const reallyNew = newOffers.filter(offer => {
-        var _offer$customer3;
-        const c = contactsMap[(_offer$customer3 = offer.customer) === null || _offer$customer3 === void 0 ? void 0 : _offer$customer3.id] || null;
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
-        const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
+        // v3 : contact embarqué directement
+        const c = offer.customerContact || null;
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
+        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
         const existingLead = (leads || []).find(l =>
           !l.reonic_id &&
           ((phone && normalizePhone(l.telephone) === phone) ||
@@ -21921,11 +21921,8 @@ function LeadsTab({
         );
         if (existingLead) {
           const prix = offer.totalPlannedPrice || 0;
-          const newStatus = offer.currentSignature?.state || offer.status || "";
-          const msg = extractReonicMessage(offer.customerMessage)
-            || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
-            || extractReonicMessage(offer.description)
-            || extractReonicMessage(offer.notes) || "";
+          const newStatus = offer.signatureStatus || (offer.deal && offer.deal.state) || "";
+          const msg = offer.customerMessage || "";
           toLink.push({
             id: existingLead.id,
             reonic_id: offer.id,
@@ -21961,8 +21958,8 @@ function LeadsTab({
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
       const sentToReonic = new Set((leads || []).filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
       const toInsert = reallyNew.filter(o => {
-        var _o$customer;
-        const c = contactsMap[(_o$customer = o.customer) === null || _o$customer === void 0 ? void 0 : _o$customer.id] || null;
+        // v3 : contact embarqué directement dans offer.customerContact
+        const c = o.customerContact || null;
         // v3 : mobile/phone/primaryEmail
         const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
         const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
@@ -21970,14 +21967,17 @@ function LeadsTab({
         if (email && (existingEmails.has(email) || sentToReonic.has(email))) return false;
         return true;
       }).map((offer, idx) => {
-        var _offer$customer2, _offer$options6, _offer$options6$, _offer$options6$$wall, _offer$options7, _offer$options7$, _offer$options7$$sola, _offer$currentSignatu6;
-        const c = contactsMap[(_offer$customer2 = offer.customer) === null || _offer$customer2 === void 0 ? void 0 : _offer$customer2.id] || null;
-        const _prenom = (c === null || c === void 0 ? void 0 : c.firstName) || (c === null || c === void 0 ? void 0 : c.firstname) || (c === null || c === void 0 ? void 0 : c.first_name) || "";
-        const _nom = (c === null || c === void 0 ? void 0 : c.lastName) || (c === null || c === void 0 ? void 0 : c.lastname) || (c === null || c === void 0 ? void 0 : c.last_name) || (c === null || c === void 0 ? void 0 : c.name) || "";
-        const _fullName = (c === null || c === void 0 ? void 0 : c.fullName) || (c === null || c === void 0 ? void 0 : c.full_name) || (c === null || c === void 0 ? void 0 : c.contactName) || "";
+        var _offer$options6, _offer$options6$, _offer$options6$$wall, _offer$options7, _offer$options7$, _offer$options7$$sola, _offer$currentSignatu6;
+        // v3 : contact embarqué directement
+        const c = offer.customerContact || null;
+        const _prenom = (c === null || c === void 0 ? void 0 : c.firstName) || "";
+        const _nom = (c === null || c === void 0 ? void 0 : c.lastName) || "";
+        const _fullName = (c === null || c === void 0 ? void 0 : c.fullName) || "";
         const prenom = _prenom || (_fullName ? _fullName.split(" ")[0] : "");
         const nom = _nom || (_fullName && !_prenom ? _fullName.split(" ").slice(1).join(" ") : _nom);
-        const adresse = [c === null || c === void 0 ? void 0 : c.street, c === null || c === void 0 ? void 0 : c.number, c === null || c === void 0 ? void 0 : c.postcode, c === null || c === void 0 ? void 0 : c.city].filter(Boolean).join(" ");
+        // v3 : adresse géocodée depuis offer.address
+        const addr = offer.address || {};
+        const adresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
         const wallbox = (((_offer$options6 = offer.options) === null || _offer$options6 === void 0 ? void 0 : (_offer$options6$ = _offer$options6[0]) === null || _offer$options6$ === void 0 ? void 0 : (_offer$options6$$wall = _offer$options6$.wallboxPlanned) === null || _offer$options6$$wall === void 0 ? void 0 : _offer$options6$$wall.components) || []).map(x => x.name).join(", ");
         const solar = (((_offer$options7 = offer.options) === null || _offer$options7 === void 0 ? void 0 : (_offer$options7$ = _offer$options7[0]) === null || _offer$options7$ === void 0 ? void 0 : (_offer$options7$$sola = _offer$options7$.solarPlanned) === null || _offer$options7$$sola === void 0 ? void 0 : _offer$options7$$sola.components) || []).map(x => x.name).join(", ");
         const produits = [wallbox, solar].filter(Boolean).join(" · ");
@@ -21988,16 +21988,16 @@ function LeadsTab({
           reonic_id: offer.id,
           prenom,
           nom,
-          client: `${prenom} ${nom}`.trim() || (c === null || c === void 0 ? void 0 : c.email) || "Client Reonic",
-          email: (c === null || c === void 0 ? void 0 : c.email) || "",
-          telephone: (c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone) || "",
+          client: `${prenom} ${nom}`.trim() || (c === null || c === void 0 ? void 0 : c.primaryEmail) || "Client Reonic",
+          email: (c === null || c === void 0 ? void 0 : c.primaryEmail) || "",
+          telephone: (c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone) || "",
           adresse,
-          message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || "")),
+          message: offer.customerMessage || "",
           canal: "Site web",
-          statut: ti.statut,
+          statut: "devis_ligne",
           date_creation: now,
           prix_reonic: offer.totalPlannedPrice || 0,
-          reonic_status: ((_offer$currentSignatu6 = offer.currentSignature) === null || _offer$currentSignatu6 === void 0 ? void 0 : _offer$currentSignatu6.state) || offer.status || "",
+          reonic_status: offer.signatureStatus || (offer.deal && offer.deal.state) || "",
           nb_appels: 0,
           historique_appels: [],
           date_rdv: "",
@@ -22172,12 +22172,12 @@ function LeadsTab({
         email: (contact === null || contact === void 0 ? void 0 : contact.email) || "",
         telephone: (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "",
         adresse,
-        message: ( (extractReonicMessage(offer.customerMessage) || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage)) || extractReonicMessage(offer.description) || extractReonicMessage(offer.notes) || produits || "")),
+        message: offer.customerMessage || "",
         canal: "Site web",
-        statut: ti.statut,
+        statut: "devis_ligne",
         date_creation: now,
         prix_reonic: offer.totalPlannedPrice || 0,
-        reonic_status: ((_offer$currentSignatu7 = offer.currentSignature) === null || _offer$currentSignatu7 === void 0 ? void 0 : _offer$currentSignatu7.state) || offer.status || "",
+        reonic_status: offer.signatureStatus || (offer.deal && offer.deal.state) || "",
         nb_appels: 0,
         historique_appels: [],
         date_rdv: "",
