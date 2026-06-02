@@ -1484,12 +1484,9 @@ function OffresTab({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action: "get_offers",
+          action: "get_projects",
           apiKey: reonicApiKey,
-          clientId: reonicClientId,
-          payload: {
-            page: 0
-          }
+          payload: {}
         })
       });
       const data = await res.json();
@@ -1498,29 +1495,9 @@ function OffresTab({
         setImportLoading(false);
         return;
       }
-      const results = ((_data$data = data.data) === null || _data$data === void 0 ? void 0 : _data$data.results) || [];
-
-      // Contacts
-      let contactsMap = {};
-      try {
-        const cr = await fetch(EDGE_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            action: "get_contacts",
-            apiKey: reonicApiKey,
-            clientId: reonicClientId
-          })
-        });
-        const cd = await cr.json();
-        if (cd.ok && Array.isArray(cd.data)) {
-          cd.data.forEach(c => {
-            contactsMap[c.id] = c;
-          });
-        }
-      } catch (e) {}
+      const results = (data.data) || [];
+      // v3 : contacts embarqués dans chaque projet — plus besoin d'appel séparé
+      const contactsMap = {};
 
       // Dédup
       const existingReonicIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
@@ -1528,9 +1505,10 @@ function OffresTab({
       const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
       const enriched = results.map(offer => {
         var _offer$customer;
-        const c = contactsMap[(_offer$customer = offer.customer) === null || _offer$customer === void 0 ? void 0 : _offer$customer.id] || null;
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
-        const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
+        // v3 : contact embarqué directement dans le projet
+        const c = offer.customerContact || null;
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
+        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
         // Chercher un lead existant lié
         const existingByReonicId = (leads || []).find(l => l.reonic_id === offer.id);
         const existingByPhone = phone ? (leads || []).find(l => normalizePhone(l.telephone) === phone) : null;
@@ -1730,12 +1708,9 @@ function OffresTab({
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            action: "get_offers",
+            action: "get_projects",
             apiKey: reonicApiKey,
-            clientId: reonicClientId,
-            payload: {
-              page: 0
-            }
+            payload: {}
           })
         });
         const data = await res.json();
@@ -1743,7 +1718,7 @@ function OffresTab({
           setSyncBadge(null);
           return;
         }
-        const results = ((_data$data2 = data.data) === null || _data$data2 === void 0 ? void 0 : _data$data2.results) || [];
+        const results = (data.data) || [];
         const knownIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
         const newCount = results.filter(o => {
           var _o$currentSignature;
@@ -21857,7 +21832,7 @@ function LeadsTab({
     }
   }, [leads.length]);
   const silentSync = React.useCallback(async () => {
-    if (!reonicApiKey || !reonicClientId || !EDGE_URL) return;
+    if (!reonicApiKey || !EDGE_URL) return;
     if (autoSyncRef.current) return;
     autoSyncRef.current = true;
     setAutoSyncStatus("syncing");
@@ -21870,12 +21845,9 @@ function LeadsTab({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action: "get_offers",
+          action: "get_projects",
           apiKey: reonicApiKey,
-          clientId: reonicClientId,
-          payload: {
-            page: 0
-          }
+          payload: {}
         })
       });
       const data = await res.json();
@@ -21884,7 +21856,7 @@ function LeadsTab({
         autoSyncRef.current = false;
         return;
       }
-      const results = ((_data$data3 = data.data) === null || _data$data3 === void 0 ? void 0 : _data$data3.results) || [];
+      const results = (data.data) || [];
       const persistedIds = getSyncedIds();
       const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = new Set([...persistedIds, ...liveIds]);
@@ -21901,27 +21873,23 @@ function LeadsTab({
         var _offer$currentSignatu5;
         const offer = reonicMap.get(lead.reonic_id);
         if (!offer) continue;
-        const newType = getReonicTypeStatic(offer);
-        const newTi = RTYPE_INFO[newType] || RTYPE_INFO.lead;
+        // v3 : champs directs — plus besoin de parsing complexe
         const newPrix = offer.totalPlannedPrice || 0;
-        const newStatus = ((_offer$currentSignatu5 = offer.currentSignature) === null || _offer$currentSignatu5 === void 0 ? void 0 : _offer$currentSignatu5.state) || offer.status || "";
-        // Extraction du message client Reonic (parsé et filtré via extractReonicMessage)
-        const newMessage = extractReonicMessage(offer.customerMessage)
-          || extractReonicMessage(offer.request && (offer.request.description || offer.request.message || offer.request.customerMessage))
-          || extractReonicMessage(offer.description)
-          || extractReonicMessage(offer.notes)
-          || "";
-        // Ne pas écraser un statut avancé manuellement
-        const canChangeStatut = !PROTECTED_STATUTS.includes(lead.statut);
-        const statutChanged = canChangeStatut && newTi.statut !== lead.statut;
-        const prixChanged = newPrix !== Number(lead.prix_reonic || 0);
-        const statusChanged = newStatus !== (lead.reonic_status || "");
-        // Mettre à jour le message seulement si le lead n'en a pas encore et que Reonic en fournit un
-        const messageChanged = !lead.message && !!newMessage;
-        if (statutChanged || prixChanged || statusChanged || messageChanged) {
+        const newStatus = offer.signatureStatus || offer.deal?.state || "";
+        const newMessage = offer.customerMessage || "";
+        // Mapping statut v3
+        const newMblrStatut = offer.mblrStatut || "devis_ligne";
+        const PROTECTED_STATUTS_v3 = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille", "devis_ligne"];
+        const canChangeStatut = !PROTECTED_STATUTS_v3.includes(lead.statut);
+        const statutChanged = canChangeStatut && newMblrStatut !== lead.statut;
+
+        const prixChanged_v3 = newPrix !== Number(lead.prix_reonic || 0);
+        const statusChanged_v3 = newStatus !== (lead.reonic_status || "");
+        const messageChanged_v3 = !lead.message && !!newMessage;
+        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3) {
           toUpdate.push({
             id: lead.id,
-            statut: statutChanged ? newTi.statut : lead.statut,
+            statut: statutChanged ? newMblrStatut : lead.statut,
             prix_reonic: newPrix,
             reonic_status: newStatus,
             message: newMessage || lead.message || ""
@@ -21935,29 +21903,8 @@ function LeadsTab({
         return;
       }
 
-      // 5. Charger les contacts pour les nouvelles offres
-      let contactsMap = {};
-      if (newOffers.length > 0) {
-        try {
-          const cr = await fetch(EDGE_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              action: "get_contacts",
-              apiKey: reonicApiKey,
-              clientId: reonicClientId
-            })
-          });
-          const cd = await cr.json();
-          if (cd.ok && Array.isArray(cd.data)) {
-            cd.data.forEach(c => {
-              contactsMap[c.id] = c;
-            });
-          }
-        } catch (e) {}
-      }
+      // v3 : contacts embarqués dans chaque projet — contactsMap non nécessaire
+      const contactsMap = {};
 
       // 5b. Avant de créer de nouveaux leads, chercher des leads existants sans reonic_id
       // qui correspondent par téléphone ou email → les lier à l'offre Reonic
@@ -22016,8 +21963,9 @@ function LeadsTab({
       const toInsert = reallyNew.filter(o => {
         var _o$customer;
         const c = contactsMap[(_o$customer = o.customer) === null || _o$customer === void 0 ? void 0 : _o$customer.id] || null;
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.telephone) || (c === null || c === void 0 ? void 0 : c.mobilePhone));
-        const email = ((c === null || c === void 0 ? void 0 : c.email) || "").toLowerCase();
+        // v3 : mobile/phone/primaryEmail
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
+        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
         if (phone && (existingPhones.has(phone) || sentToReonic.has(phone))) return false;
         if (email && (existingEmails.has(email) || sentToReonic.has(email))) return false;
         return true;
@@ -22142,12 +22090,9 @@ function LeadsTab({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action: "get_offers",
+          action: "get_projects",
           apiKey: reonicApiKey,
-          clientId: reonicClientId,
-          payload: {
-            page: 0
-          }
+          payload: {}
         })
       });
       const data = await res.json();
@@ -22165,25 +22110,7 @@ function LeadsTab({
 
       // 2. Charger tous les contacts
       let contactsMap = {};
-      try {
-        const cr = await fetch(EDGE_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            action: "get_contacts",
-            apiKey: reonicApiKey,
-            clientId: reonicClientId
-          })
-        });
-        const cd = await cr.json();
-        if (cd.ok && Array.isArray(cd.data)) {
-          cd.data.forEach(c => {
-            contactsMap[c.id] = c;
-          });
-        }
-      } catch (e) {}
+// v3 : contacts embarques dans les projets
 
       // 3. Enrichir + détecter doublons
       const enriched = results.map(offer => {
@@ -22480,9 +22407,8 @@ function LeadsTab({
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            action: "create_request",
+            action: "create_project",
             apiKey: reonicApiKey,
-            clientId: reonicClientId,
             payload: {
               prenom: newForm.prenom || "",
               nom: newForm.nom || "",
@@ -35641,13 +35567,10 @@ function App() {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              action: "archive_offer",
+              action: "archive_project",
               apiKey: reonicApiKey,
-              clientId,
               payload: {
-                offerId: (lead === null || lead === void 0 ? void 0 : lead.reonic_id) || null,
-                email: (lead === null || lead === void 0 ? void 0 : lead.email) || "",
-                telephone: (lead === null || lead === void 0 ? void 0 : lead.telephone) || "",
+                projectId: (lead === null || lead === void 0 ? void 0 : lead.reonic_id) || null,
                 reason: `Supprimé par ${(profile === null || profile === void 0 ? void 0 : profile.nom) || "un utilisateur"} depuis Ma Borne LR`
               }
             })
