@@ -1398,7 +1398,7 @@ function OffresTab({
     fontFamily: '"Outfit",sans-serif',
     ...e
   });
-  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy` : "";
+  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
   const offres = useMemo(() => leads.filter(l => l.statut === "devis_ligne").sort((a, b) => {
     const da = a.date_creation ? a.date_creation.split("/").reverse().join("-") : "";
     const db = b.date_creation ? b.date_creation.split("/").reverse().join("-") : "";
@@ -21804,7 +21804,7 @@ function LeadsTab({
   const [reonicImportDone, setReonicImportDone] = useState(null);
   const [reonicFilter, setReonicFilter] = useState("tous"); // tous | lead | devis | signe
   const [showPerdus, setShowPerdus] = useState(false);
-  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy` : "";
+  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
 
   // ── AUTO-SYNC REONIC (polling) ──
   const getSyncedIds = () => {
@@ -26753,7 +26753,7 @@ function ReonicConfig({
   supabaseUrl,
   supabaseKey
 }) {
-  const EDGE_URL = `${supabaseUrl}/functions/v1/reonic-proxy`;
+  const EDGE_URL = `${supabaseUrl}/functions/v1/reonic-proxy-v3`;
   const [testStatus, setTestStatus] = useState(null);
   const [keyDraft, setKeyDraft] = useState(reonicApiKey || "");
   const [clientIdDraft, setClientIdDraft] = useState(() => {
@@ -26765,7 +26765,7 @@ function ReonicConfig({
   });
   const [showKey, setShowKey] = useState(false);
   const testConnection = async () => {
-    if (!keyDraft.trim() || !clientIdDraft.trim()) {
+    if (!keyDraft.trim()) {
       setTestStatus("error");
       return;
     }
@@ -26778,8 +26778,7 @@ function ReonicConfig({
         },
         body: JSON.stringify({
           action: "test",
-          apiKey: keyDraft.trim(),
-          clientId: clientIdDraft.trim()
+          apiKey: keyDraft.trim()
         })
       });
       const data = await res.json();
@@ -26955,7 +26954,7 @@ function ReonicConfig({
     }
   }, showKey ? "🙈" : "👁️"))), /*#__PURE__*/React.createElement("button", {
     onClick: testConnection,
-    disabled: !keyDraft.trim() || !clientIdDraft.trim() || testStatus === "loading",
+    disabled: !keyDraft.trim() || testStatus === "loading",
     style: {
       width: "100%",
       background: testStatus === "ok" ? "linear-gradient(135deg,#10B981,#059669)" : testStatus && testStatus !== "loading" ? "#FEF2F2" : "linear-gradient(135deg,#3B82F6,#2563EB)",
@@ -26967,7 +26966,7 @@ function ReonicConfig({
       fontWeight: 700,
       fontSize: 13,
       fontFamily: '"Outfit",sans-serif',
-      opacity: !keyDraft.trim() || !clientIdDraft.trim() ? 0.5 : 1,
+      opacity: !keyDraft.trim() ? 0.5 : 1,
       marginBottom: 8
     }
   }, testStatus === "loading" ? "⏳ Test en cours…" : testStatus === "ok" ? "✅ Connexion réussie" : testStatus && testStatus !== "loading" ? "❌ Erreur — réessayer" : "🔗 Tester la connexion"), testStatus && testStatus !== "ok" && testStatus !== "loading" && /*#__PURE__*/React.createElement("div", {
