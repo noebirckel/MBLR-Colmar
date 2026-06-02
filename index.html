@@ -21838,7 +21838,12 @@ function LeadsTab({
     setAutoSyncStatus("syncing");
     try {
       var _data$data3;
-      // 1. Récupérer toutes les offres Reonic (demandes + offres avec devis)
+      // Sync incrémentale : ne récupérer que les projets modifiés depuis la dernière sync
+      const LAST_SYNC_KEY = "reonic_last_sync";
+      const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+      const syncStart = new Date().toISOString();
+      const payload = lastSync ? { updatedAfter: lastSync } : {};
+      // 1. Récupérer les projets Reonic (incrémental ou complet si première sync)
       const res = await fetch(EDGE_URL, {
         method: "POST",
         headers: {
@@ -21847,7 +21852,7 @@ function LeadsTab({
         body: JSON.stringify({
           action: "get_projects",
           apiKey: reonicApiKey,
-          payload: {}
+          payload
         })
       });
       const data = await res.json();
@@ -21968,10 +21973,6 @@ function LeadsTab({
         // DEBUG : log si contact manquant pour diagnostiquer
         if (nameMissing && !contactChanged) {
           console.warn("[Reonic] Lead sans nom sans données contact:", lead.id, "customerContact:", JSON.stringify(offer.customerContact));
-        }
-        // DEBUG temporaire
-        if (lead.statut === "devis_ligne") {
-          console.log("[DEBUG devis_ligne]", { leadId: lead.id, reonicId: lead.reonic_id, offerFound: !!offer, mblrStatut: offer ? offer.mblrStatut : "N/A", stage: offer ? offer.stage : "N/A", statutChanged, canChangeStatut });
         }
         if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {          const patch = {
             id: lead.id,
@@ -22103,6 +22104,8 @@ function LeadsTab({
         nb: toInsert.length,
         updated: toUpdate.length
       });
+      // Sauvegarder le timestamp de la dernière sync réussie
+      try { localStorage.setItem(LAST_SYNC_KEY, syncStart); } catch(e) {}
       setTimeout(() => setAutoSyncStatus(null), 8000);
     } catch (e) {
       console.error("[Reonic Sync] Erreur:", e.message);
@@ -22113,7 +22116,10 @@ function LeadsTab({
 
   // Lancer le sync automatique au montage + exposer pour le bouton manuel
   React.useEffect(() => {
-    window._triggerReonicSync = () => {
+    window._triggerReonicSync = (full = false) => {
+      if (full) {
+        try { localStorage.removeItem("reonic_last_sync"); } catch(e) {}
+      }
       autoSyncRef.current = false;
       silentSync();
     };
