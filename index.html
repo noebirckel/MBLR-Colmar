@@ -21895,13 +21895,17 @@ function LeadsTab({
         const newEmail = (c && c.primaryEmail) || "";
         const newAddrParts = offer.address ? [offer.address.street, offer.address.houseNumber, offer.address.postcode, offer.address.city].filter(Boolean) : [];
         const newAdresse = newAddrParts.join(" ");
-        const contactMissing = !lead.nom && !lead.prenom && !lead.client;
-        const contactChanged = contactMissing && !!(newNom || newPrenom || newFullName);
+        // Déclencher si nom/prenom vides OU si client est un placeholder, ET que Reonic a des données
+        const nameMissing = (!lead.nom && !lead.prenom) || lead.client === "Client Reonic" || !lead.client;
+        const contactChanged = nameMissing && !!(newNom || newPrenom || newFullName);
         const telMissing = !lead.telephone && !!newTel;
         const emailMissing = !lead.email && !!newEmail;
         const adresseMissing = !lead.adresse && !!newAdresse;
-        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {
-          const patch = {
+        // DEBUG : log si contact manquant pour diagnostiquer
+        if (nameMissing && !contactChanged) {
+          console.warn("[Reonic] Lead sans nom sans données contact:", lead.id, "customerContact:", JSON.stringify(offer.customerContact));
+        }
+        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {          const patch = {
             id: lead.id,
             statut: statutChanged ? newMblrStatut : lead.statut,
             prix_reonic: newPrix,
