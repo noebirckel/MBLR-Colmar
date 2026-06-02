@@ -21969,6 +21969,10 @@ function LeadsTab({
         if (nameMissing && !contactChanged) {
           console.warn("[Reonic] Lead sans nom sans données contact:", lead.id, "customerContact:", JSON.stringify(offer.customerContact));
         }
+        // DEBUG temporaire
+        if (lead.statut === "devis_ligne") {
+          console.log("[DEBUG devis_ligne]", { leadId: lead.id, reonicId: lead.reonic_id, offerFound: !!offer, mblrStatut: offer ? offer.mblrStatut : "N/A", stage: offer ? offer.stage : "N/A", statutChanged, canChangeStatut });
+        }
         if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {          const patch = {
             id: lead.id,
             statut: statutChanged ? newMblrStatut : lead.statut,
