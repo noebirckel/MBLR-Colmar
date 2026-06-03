@@ -22377,6 +22377,29 @@ function LeadsTab({
     sb.from("leads").update(safePatch).eq("id", id).then(({ error }) => {
       if (error) console.error("[updateLead]", error.message);
     });
+    // Sync statut → Reonic si le lead a un reonic_id et que le statut change vers un état final
+    if (patch.statut && ["converti", "perdu"].includes(patch.statut) && reonicApiKey && EDGE_URL) {
+      const lead = (leadsRef.current || leads).find(l => l.id === id);
+      const reonicId = (lead && lead.reonic_id) || null;
+      if (reonicId) {
+        fetch(EDGE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "update_deal_state",
+            apiKey: reonicApiKey,
+            payload: {
+              projectId: reonicId,
+              mblrStatut: patch.statut,
+              notes: patch.notes || null
+            }
+          })
+        }).then(r => r.json()).then(d => {
+          if (!d.ok) console.warn("[Reonic] update_deal_state:", d.error);
+          else console.log("[Reonic] ✅ Statut synced:", patch.statut, "→", reonicId);
+        }).catch(e => console.warn("[Reonic] update_deal_state error:", e.message));
+      }
+    }
   };
   const pasDeReponse = lead => {
     const nb = (lead.nb_appels || 0) + 1;
