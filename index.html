@@ -21801,6 +21801,9 @@ function LeadsTab({
     window._autoSyncStatus = autoSyncStatus;
   }, [autoSyncStatus]);
   const autoSyncRef = React.useRef(false);
+  // Ref locale pour avoir toujours les leads à jour dans silentSync (évite la closure stale)
+  const localLeadsRef = React.useRef(leads);
+  React.useEffect(() => { localLeadsRef.current = leads; }, [leads]);
 
   // Nettoyer les doublons Reonic + syncer localStorage au montage
   React.useEffect(() => {
@@ -21862,7 +21865,7 @@ function LeadsTab({
         return;
       }
       const results = (data.data) || [];
-      const currentLeads = leadsRef.current || leads;
+      const currentLeads = localLeadsRef.current || leads;
       // Déduplication basée uniquement sur les leads réels en base
       const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
