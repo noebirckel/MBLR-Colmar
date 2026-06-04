@@ -21812,13 +21812,9 @@ function LeadsTab({
     let hasDups = false;
     leads.forEach(l => {
       if (l.reonic_id) {
-        if (seen.has(l.reonic_id)) {
-          hasDups = true;
-          console.log("[Dedup DEBUG] doublon détecté reonic_id:", l.reonic_id, "| id1:", seen.get(l.reonic_id), "| id2:", l.id);
-        } else seen.set(l.reonic_id, l.id);
+        if (seen.has(l.reonic_id)) hasDups = true; else seen.set(l.reonic_id, l.id);
       }
     });
-    console.log("[Dedup DEBUG] leads total:", leads.length, "| avec reonic_id:", leads.filter(l=>l.reonic_id).length, "| hasDups:", hasDups);
     if (hasDups) {
       console.log("[Reonic] Nettoyage doublons...");
       const toKeep = new Set(seen.values());
@@ -21869,10 +21865,8 @@ function LeadsTab({
       // Déduplication basée uniquement sur les leads réels en base
       const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
-      console.log("[Sync DEBUG] results:", results.length, "| liveIds:", liveIds.size);
 
       const newOffers = results.filter(o => !allKnownIds.has(o.id));
-      console.log("[Sync DEBUG] newOffers:", newOffers.length);
 
       // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
       const reonicMap = new Map(results.map(o => [o.id, o]));
@@ -21998,7 +21992,6 @@ function LeadsTab({
         }
       }
       console.log(`[Reonic Sync] Reonic: ${results.length} | Nouveaux: ${newOffers.length} | MàJ: ${toUpdate.length} | Liens: ${toLink.length}`);
-      console.log("[Sync DEBUG] reallyNew:", reallyNew ? reallyNew.length : "N/A", "| toInsert computed later");
 
       if (newOffers.length === 0 && toUpdate.length === 0 && toLink.length === 0) {
         setAutoSyncStatus(null);
