@@ -21664,6 +21664,8 @@ function LeadsTab({
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("date_desc");
   const [filterCanal, setFilterCanal] = useState("tous");
+  const [selectedLeads, setSelectedLeads] = useState(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [newModal, setNewModal] = useState(false);
   const [newRdvModal, setNewRdvModal] = useState(false);
   const [newRdvMode, setNewRdvMode] = useState("nouveau");
@@ -25418,7 +25420,15 @@ function LeadsTab({
       padding: "8px 13px",
       fontSize: 13
     })
-  }, "\u2795 Nouveau"), canEdit(role) && reonicApiKey && /*#__PURE__*/React.createElement("button", {
+  }, "\u2795 Nouveau"), role === "administrateur" && /*#__PURE__*/React.createElement("button", {
+    onClick: () => { setSelectMode(p => !p); setSelectedLeads(new Set()); },
+    style: BTN(selectMode ? "#EF4444" : "#F1F5F9", {
+      padding: "8px 13px",
+      fontSize: 13,
+      border: selectMode ? "none" : "1px solid #E2E8F0",
+      color: selectMode ? "#FFF" : "#64748B"
+    })
+  }, selectMode ? "\u274C Annuler" : "\u2611\uFE0F S\xE9lectionner"), canEdit(role) && reonicApiKey && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setReonicModal(true);
       fetchReonicOffers();
@@ -25545,7 +25555,39 @@ function LeadsTab({
       fontSize: 9,
       color: "#64748B"
     }
-  }, "conversion")))), nouveauxLeads.length > 0 && /*#__PURE__*/React.createElement("button", {
+  }, "conversion")))), selectMode && selectedLeads.size > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      background: "#FEF2F2",
+      border: "1px solid #FCA5A5",
+      borderRadius: 10,
+      padding: "10px 16px",
+      marginBottom: 10
+    }
+  },
+    /*#__PURE__*/React.createElement("span", {
+      style: { fontSize: 13, color: "#EF4444", fontWeight: 700, flex: 1 }
+    }, selectedLeads.size, " lead(s) s\xE9lectionn\xE9(s)"),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (!confirm(`Supprimer d\xE9finitivement ${selectedLeads.size} lead(s) ?\n\nCette action est irr\xE9versible.`)) return;
+        const ids = [...selectedLeads];
+        setLeads(p => p.filter(l => !ids.includes(l.id)));
+        ids.forEach(id => sb.from("leads").delete().eq("id", id).then(({ error }) => {
+          if (error) console.error("[BulkDelete]", error.message);
+        }));
+        setSelectedLeads(new Set());
+        setSelectMode(false);
+      },
+      style: BTN("#EF4444", { padding: "7px 16px", fontSize: 13 })
+    }, "\uD83D\uDDD1\uFE0F Supprimer la s\xE9lection"),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: () => setSelectedLeads(new Set()),
+      style: BTN("#F1F5F9", { padding: "7px 12px", fontSize: 12, border: "1px solid #E2E8F0", color: "#64748B" })
+    }, "Tout d\xE9s\xE9lectionner")
+  ), nouveauxLeads.length > 0 && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowNouveaux(p => !p),
     style: {
       width: "100%",
@@ -25625,12 +25667,12 @@ function LeadsTab({
     const isToday = lead.date_creation === new Date().toLocaleDateString("fr-FR");
     return /*#__PURE__*/React.createElement("div", {
       key: lead.id,
-      onClick: () => setDetailModal(lead),
+      onClick: () => selectMode ? setSelectedLeads(p => { const n = new Set(p); n.has(lead.id) ? n.delete(lead.id) : n.add(lead.id); return n; }) : setDetailModal(lead),
       style: {
-        background: "#FFFFFF",
+        background: selectedLeads.has(lead.id) ? "#EFF6FF" : "#FFFFFF",
         borderRadius: 10,
-        border: "0.5px solid #BFDBFE",
-        borderLeft: "3px solid #3B82F6",
+        border: selectedLeads.has(lead.id) ? "1.5px solid #3B82F6" : "0.5px solid #BFDBFE",
+        borderLeft: selectedLeads.has(lead.id) ? "3px solid #3B82F6" : "3px solid #3B82F6",
         padding: "12px 14px",
         marginBottom: 6,
         cursor: "pointer",
@@ -25638,9 +25680,15 @@ function LeadsTab({
         alignItems: "center",
         gap: 12
       },
-      onMouseOver: e => e.currentTarget.style.background = "#F5F9FF",
-      onMouseOut: e => e.currentTarget.style.background = "#FFFFFF"
-    }, /*#__PURE__*/React.createElement("div", {
+      onMouseOver: e => e.currentTarget.style.background = selectedLeads.has(lead.id) ? "#EFF6FF" : "#F5F9FF",
+      onMouseOut: e => e.currentTarget.style.background = selectedLeads.has(lead.id) ? "#EFF6FF" : "#FFFFFF"
+    }, selectMode && /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: selectedLeads.has(lead.id),
+      onChange: () => {},
+      onClick: e => e.stopPropagation(),
+      style: { width: 16, height: 16, cursor: "pointer", accentColor: "#3B82F6", flexShrink: 0 }
+    }), /*#__PURE__*/React.createElement("div", {
       style: {
         width: 38,
         height: 38,
