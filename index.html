@@ -21812,8 +21812,6 @@ function LeadsTab({
         if (seen.has(l.reonic_id)) hasDups = true;else seen.set(l.reonic_id, l.id);
       }
     });
-    // Toujours synchroniser le localStorage
-    addSyncedIds([...seen.keys()]);
     if (hasDups) {
       console.log("[Reonic] Nettoyage doublons...");
       const toKeep = new Set(seen.values());
@@ -21862,11 +21860,11 @@ function LeadsTab({
         return;
       }
       const results = (data.data) || [];
-      const persistedIds = getSyncedIds();
+      // Déduplication basée uniquement sur les leads réels en base
+      // (plus de localStorage qui bloquait les re-imports après suppression)
       const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
-      const allKnownIds = new Set([...persistedIds, ...liveIds]);
+      const allKnownIds = liveIds;
 
-      // 3. Nouvelles offres : tout ce qui n'est pas encore connu
       const newOffers = results.filter(o => !allKnownIds.has(o.id));
 
       // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
@@ -21930,7 +21928,7 @@ function LeadsTab({
           const { id, ...patch } = link;
           sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
             if (error) console.error("[Reonic Link]", error.message);
-            else addSyncedIds([patch.reonic_id]);
+
           });
         });
         console.log(`[Reonic] ${toLink.length} lead(s) lié(s) et enrichis`);
@@ -22089,7 +22087,6 @@ function LeadsTab({
       // 8. Insérer les nouveaux
       if (toInsert.length > 0) {
         setLeads(prev => [...toInsert, ...prev]);
-        addSyncedIds(toInsert.map(l => l.reonic_id).filter(Boolean));
         const toSave = toInsert.map(l => ({
           ...l,
           historique_appels: JSON.stringify(l.historique_appels || [])
@@ -22116,6 +22113,8 @@ function LeadsTab({
 
   // Lancer le sync automatique au montage + exposer pour le bouton manuel
   React.useEffect(() => {
+    // Nettoyer les anciens synced IDs du localStorage (obsolète)
+    try { localStorage.removeItem("reonic_synced_ids"); } catch(e) {}
     window._triggerReonicSync = (full = false) => {
       if (full) {
         try { localStorage.removeItem("reonic_last_sync"); } catch(e) {}
