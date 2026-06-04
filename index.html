@@ -21838,9 +21838,12 @@ function LeadsTab({
       var _data$data3;
       // Sync incrémentale : ne récupérer que les projets modifiés depuis la dernière sync
       const LAST_SYNC_KEY = "reonic_last_sync";
-      const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+      const lastSyncRaw = localStorage.getItem(LAST_SYNC_KEY);
+      const lastSyncAge = lastSyncRaw ? (Date.now() - new Date(lastSyncRaw).getTime()) : Infinity;
+      // Sync complète si : jamais synced, ou dernier sync > 24h, ou forcé manuellement
+      const forceFullSync = !lastSyncRaw || lastSyncAge > 24 * 60 * 60 * 1000;
       const syncStart = new Date().toISOString();
-      const payload = lastSync ? { updatedAfter: lastSync } : {};
+      const payload = forceFullSync ? {} : { updatedAfter: lastSyncRaw };
       // 1. Récupérer les projets Reonic (incrémental ou complet si première sync)
       const res = await fetch(EDGE_URL, {
         method: "POST",
@@ -22102,8 +22105,7 @@ function LeadsTab({
         updated: toUpdate.length
       });
       // Sauvegarder le timestamp de la dernière sync réussie
-      try { localStorage.setItem(LAST_SYNC_KEY, syncStart); } catch(e) {}
-      setTimeout(() => setAutoSyncStatus(null), 8000);
+      try { localStorage.setItem(LAST_SYNC_KEY, syncStart); } catch(e) {}      setTimeout(() => setAutoSyncStatus(null), 8000);
     } catch (e) {
       console.error("[Reonic Sync] Erreur:", e.message);
       setAutoSyncStatus(null);
@@ -22117,7 +22119,10 @@ function LeadsTab({
     try { localStorage.removeItem("reonic_synced_ids"); } catch(e) {}
     window._triggerReonicSync = (full = false) => {
       if (full) {
-        try { localStorage.removeItem("reonic_last_sync"); } catch(e) {}
+        try {
+          localStorage.removeItem("reonic_last_sync");
+          localStorage.removeItem("reonic_synced_ids");
+        } catch(e) {}
       }
       autoSyncRef.current = false;
       silentSync();
