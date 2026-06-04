@@ -21969,11 +21969,20 @@ function LeadsTab({
         const telMissing = !lead.telephone && !!newTel;
         const emailMissing = !lead.email && !!newEmail;
         const adresseMissing = !lead.adresse && !!newAdresse;
+        // Date de création : utiliser la vraie date Reonic si le lead a une date d'import (aujourd'hui)
+        const reonicDate = (() => {
+          const d = offer.requestCreatedAt || offer.projectCreatedAt;
+          if (!d) return null;
+          const dt = new Date(d);
+          return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
+        })();
+        const today = new Date().toLocaleDateString("fr-FR");
+        const dateNeedsUpdate = reonicDate && lead.date_creation === today && reonicDate !== today;
         // DEBUG : log si contact manquant pour diagnostiquer
         if (nameMissing && !contactChanged) {
           console.warn("[Reonic] Lead sans nom sans données contact:", lead.id, "customerContact:", JSON.stringify(offer.customerContact));
         }
-        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing) {          const patch = {
+        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing || dateNeedsUpdate) {          const patch = {
             id: lead.id,
             statut: statutChanged ? newMblrStatut : lead.statut,
             prix_reonic: newPrix,
@@ -21988,6 +21997,7 @@ function LeadsTab({
           if (telMissing) patch.telephone = newTel;
           if (emailMissing) patch.email = newEmail;
           if (adresseMissing) patch.adresse = newAdresse;
+          if (dateNeedsUpdate) patch.date_creation = reonicDate;
           toUpdate.push(patch);
         }
       }
@@ -22077,7 +22087,8 @@ function LeadsTab({
           ...(u.client !== undefined ? { client: u.client } : {}),
           ...(u.telephone !== undefined ? { telephone: u.telephone } : {}),
           ...(u.email !== undefined ? { email: u.email } : {}),
-          ...(u.adresse !== undefined ? { adresse: u.adresse } : {})
+          ...(u.adresse !== undefined ? { adresse: u.adresse } : {}),
+          ...(u.date_creation !== undefined ? { date_creation: u.date_creation } : {})
         }).eq("id", u.id).then(({
           error
         }) => {
