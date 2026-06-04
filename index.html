@@ -21862,8 +21862,9 @@ function LeadsTab({
         return;
       }
       const results = (data.data) || [];
+      const currentLeads = leadsRef.current || leads;
       // Déduplication basée uniquement sur les leads réels en base
-      const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
+      const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
       console.log("[Sync DEBUG] results:", results.length, "| liveIds:", liveIds.size);
 
@@ -21885,7 +21886,7 @@ function LeadsTab({
         const c = offer.customerContact || null;
         const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
         const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
-        const existingLead = (leads || []).find(l =>
+        const existingLead = currentLeads.find(l =>
           !l.reonic_id &&
           ((phone && normalizePhone(l.telephone) === phone) ||
            (email && (l.email || "").toLowerCase() === email))
@@ -21936,7 +21937,7 @@ function LeadsTab({
         });
         console.log(`[Reonic] ${toLink.length} lead(s) lié(s) et enrichis`);
       }
-      for (const lead of (leads || []).filter(l => l.reonic_id)) {
+      for (const lead of currentLeads.filter(l => l.reonic_id)) {
         var _offer$currentSignatu5;
         const offer = reonicMap.get(lead.reonic_id);
         if (!offer) continue;
@@ -22005,9 +22006,9 @@ function LeadsTab({
       // 8. Insérer les nouveaux
       const base = Date.now();
       const now = new Date().toLocaleDateString("fr-FR");
-      const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
-      const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
-      const sentToReonic = new Set((leads || []).filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
+      const existingPhones = new Set(currentLeads.map(l => normalizePhone(l.telephone)).filter(Boolean));
+      const existingEmails = new Set(currentLeads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
+      const sentToReonic = new Set(currentLeads.filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
       const toInsert = reallyNew.filter(o => {
         // v3 : contact embarqué directement dans offer.customerContact
         const c = o.customerContact || null;
@@ -22161,9 +22162,9 @@ function LeadsTab({
       const results = ((_data$data4 = data.data) === null || _data$data4 === void 0 ? void 0 : _data$data4.results) || [];
 
       // Déduplication multi-critères
-      const existingReonicIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
-      const existingPhones = new Set((leads || []).map(l => normalizePhone(l.telephone)).filter(Boolean));
-      const existingEmails = new Set((leads || []).map(l => (l.email || "").toLowerCase()).filter(Boolean));
+      const existingReonicIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
+      const existingPhones = new Set(currentLeads.map(l => normalizePhone(l.telephone)).filter(Boolean));
+      const existingEmails = new Set(currentLeads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
 
       // 2. Charger tous les contacts
       let contactsMap = {};
