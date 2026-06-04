@@ -21867,8 +21867,10 @@ function LeadsTab({
       // (plus de localStorage qui bloquait les re-imports après suppression)
       const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
+      console.log("[Sync DEBUG] results:", results.length, "| liveIds:", liveIds.size, "| forceFullSync:", forceFullSync);
 
       const newOffers = results.filter(o => !allKnownIds.has(o.id));
+      console.log("[Sync DEBUG] newOffers:", newOffers.length, "| sample ids:", newOffers.slice(0,3).map(o => o.id));
 
       // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
       const reonicMap = new Map(results.map(o => [o.id, o]));
@@ -21994,6 +21996,7 @@ function LeadsTab({
         }
       }
       console.log(`[Reonic Sync] Reonic: ${results.length} | Nouveaux: ${newOffers.length} | MàJ: ${toUpdate.length} | Liens: ${toLink.length}`);
+      console.log("[Sync DEBUG] reallyNew:", reallyNew ? reallyNew.length : "N/A", "| toInsert computed later");
 
       if (newOffers.length === 0 && toUpdate.length === 0 && toLink.length === 0) {
         setAutoSyncStatus(null);
