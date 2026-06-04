@@ -21836,14 +21836,9 @@ function LeadsTab({
     setAutoSyncStatus("syncing");
     try {
       var _data$data3;
-      // Sync incrémentale : ne récupérer que les projets modifiés depuis la dernière sync
-      const LAST_SYNC_KEY = "reonic_last_sync";
-      const lastSyncRaw = localStorage.getItem(LAST_SYNC_KEY);
-      const lastSyncAge = lastSyncRaw ? (Date.now() - new Date(lastSyncRaw).getTime()) : Infinity;
-      // Sync complète si : jamais synced, ou dernier sync > 24h, ou forcé manuellement
-      const forceFullSync = !lastSyncRaw || lastSyncAge > 24 * 60 * 60 * 1000;
       const syncStart = new Date().toISOString();
-      const payload = forceFullSync ? {} : { updatedAfter: lastSyncRaw };
+      // Sync complète — 200 projets = 1 requête, bien dans les limites Reonic (30/min)
+      const payload = {};
       // 1. Récupérer les projets Reonic (incrémental ou complet si première sync)
       const res = await fetch(EDGE_URL, {
         method: "POST",
@@ -21864,13 +21859,12 @@ function LeadsTab({
       }
       const results = (data.data) || [];
       // Déduplication basée uniquement sur les leads réels en base
-      // (plus de localStorage qui bloquait les re-imports après suppression)
       const liveIds = new Set((leads || []).map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
-      console.log("[Sync DEBUG] results:", results.length, "| liveIds:", liveIds.size, "| forceFullSync:", forceFullSync);
+      console.log("[Sync DEBUG] results:", results.length, "| liveIds:", liveIds.size);
 
       const newOffers = results.filter(o => !allKnownIds.has(o.id));
-      console.log("[Sync DEBUG] newOffers:", newOffers.length, "| sample ids:", newOffers.slice(0,3).map(o => o.id));
+      console.log("[Sync DEBUG] newOffers:", newOffers.length);
 
       // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
       const reonicMap = new Map(results.map(o => [o.id, o]));
@@ -22106,9 +22100,7 @@ function LeadsTab({
       setAutoSyncStatus({
         nb: toInsert.length,
         updated: toUpdate.length
-      });
-      // Sauvegarder le timestamp de la dernière sync réussie
-      try { localStorage.setItem(LAST_SYNC_KEY, syncStart); } catch(e) {}      setTimeout(() => setAutoSyncStatus(null), 8000);
+      });      setTimeout(() => setAutoSyncStatus(null), 8000);
     } catch (e) {
       console.error("[Reonic Sync] Erreur:", e.message);
       setAutoSyncStatus(null);
@@ -22120,13 +22112,7 @@ function LeadsTab({
   React.useEffect(() => {
     // Nettoyer les anciens synced IDs du localStorage (obsolète)
     try { localStorage.removeItem("reonic_synced_ids"); } catch(e) {}
-    window._triggerReonicSync = (full = false) => {
-      if (full) {
-        try {
-          localStorage.removeItem("reonic_last_sync");
-          localStorage.removeItem("reonic_synced_ids");
-        } catch(e) {}
-      }
+    window._triggerReonicSync = () => {
       autoSyncRef.current = false;
       silentSync();
     };
