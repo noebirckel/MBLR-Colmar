@@ -22171,9 +22171,9 @@ function LeadsTab({
       const results = ((_data$data4 = data.data) === null || _data$data4 === void 0 ? void 0 : _data$data4.results) || [];
 
       // Déduplication multi-critères
-      const existingReonicIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
-      const existingPhones = new Set(currentLeads.map(l => normalizePhone(l.telephone)).filter(Boolean));
-      const existingEmails = new Set(currentLeads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
+      const existingReonicIds = new Set(leads.map(l => l.reonic_id).filter(Boolean));
+      const existingPhones = new Set(leads.map(l => normalizePhone(l.telephone)).filter(Boolean));
+      const existingEmails = new Set(leads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
 
       // 2. Charger tous les contacts
       let contactsMap = {};
