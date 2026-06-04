@@ -21809,9 +21809,13 @@ function LeadsTab({
     let hasDups = false;
     leads.forEach(l => {
       if (l.reonic_id) {
-        if (seen.has(l.reonic_id)) hasDups = true;else seen.set(l.reonic_id, l.id);
+        if (seen.has(l.reonic_id)) {
+          hasDups = true;
+          console.log("[Dedup DEBUG] doublon détecté reonic_id:", l.reonic_id, "| id1:", seen.get(l.reonic_id), "| id2:", l.id);
+        } else seen.set(l.reonic_id, l.id);
       }
     });
+    console.log("[Dedup DEBUG] leads total:", leads.length, "| avec reonic_id:", leads.filter(l=>l.reonic_id).length, "| hasDups:", hasDups);
     if (hasDups) {
       console.log("[Reonic] Nettoyage doublons...");
       const toKeep = new Set(seen.values());
