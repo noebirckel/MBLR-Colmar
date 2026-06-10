@@ -18668,12 +18668,22 @@ function ReonicCatalogConfig({
   const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
-  const [marges, setMarges] = React.useState(() => {
+  const [prixAchats, setPrixAchats] = React.useState(() => {
     const m = {};
-    (catalog || []).forEach(c => { m[c.id] = c.marge != null ? c.marge : 20; });
+    (catalog || []).forEach(c => { m[c.id] = c.prixAchat != null ? c.prixAchat : ""; });
     return m;
   });
   const [search, setSearch] = React.useState("");
+
+  React.useEffect(() => {
+    setPrixAchats(prev => {
+      const m = { ...prev };
+      (catalog || []).forEach(c => {
+        if (m[c.id] == null) m[c.id] = c.prixAchat != null ? c.prixAchat : "";
+      });
+      return m;
+    });
+  }, [catalog]);
 
   const refreshCatalog = async () => {
     if (!reonicApiKey || !EDGE_URL) return;
@@ -18685,29 +18695,32 @@ function ReonicCatalogConfig({
       });
       const data = await res.json();
       if (!data.ok) { setError(data.error || "Erreur"); setLoading(false); return; }
-      const items = (data.data || []).map(c => ({
-        id: c.id,
-        name: c.name,
-        brand: c.brand || "",
-        componentType: c.componentType || "autre",
-        salesPrice: c.salesPrice || 0,
-        purchasePrice: c.purchasePrice || null,
-        quantityUnit: c.quantityUnit || "item",
-        marge: marges[c.id] != null ? marges[c.id] : 20
-      }));
+      const items = (data.data || []).map(c => {
+        const existing = (catalog || []).find(x => x.id === c.id);
+        return {
+          id: c.id, name: c.name, brand: c.brand || "",
+          componentType: c.componentType || "autre",
+          salesPrice: c.salesPrice || 0,
+          quantityUnit: c.quantityUnit || "item",
+          prixAchat: existing && existing.prixAchat != null ? existing.prixAchat : (c.purchasePrice || "")
+        };
+      });
       saveCatalog(items);
-      const newMarges = {};
-      items.forEach(c => { newMarges[c.id] = c.marge; });
-      setMarges(newMarges);
     } catch(e) { setError(e.message); }
     setLoading(false);
   };
 
-  const updateMarge = (id, val) => {
-    const v = Math.max(0, Math.min(200, Number(val) || 0));
-    setMarges(p => ({ ...p, [id]: v }));
-    const updated = (catalog || []).map(c => c.id === id ? { ...c, marge: v } : c);
+  const updatePrixAchat = (id, val) => {
+    const v = val === "" ? "" : Math.max(0, Number(val) || 0);
+    setPrixAchats(p => ({ ...p, [id]: v }));
+    const updated = (catalog || []).map(c => c.id === id ? { ...c, prixAchat: v } : c);
     saveCatalog(updated);
+  };
+
+  const calcMarge = (salesPrice, prixAchat) => {
+    const pa = Number(prixAchat);
+    if (!salesPrice || !pa || pa <= 0) return null;
+    return Math.round((salesPrice - pa) / salesPrice * 100);
   };
 
   const filtered = React.useMemo(() => {
@@ -18724,22 +18737,21 @@ function ReonicCatalogConfig({
     module: "Module", inverter: "Onduleur", microinverter: "Micro-onduleur",
     optimizer: "Optimiseur", virtualBattery: "Batterie virtuelle",
     batteryStorage: "Batterie", evCharger: "Borne de recharge",
-    heatPump: "Pompe à chaleur", hotWaterHeatPump: "Chauffe-eau PAC",
-    heatingRod: "Résistance", heatingStorage: "Ballon",
-    installationFee: "Installation", serviceFee: "Service",
-    other: "Autre"
+    heatPump: "Pompe \u00e0 chaleur", hotWaterHeatPump: "Chauffe-eau PAC",
+    heatingRod: "R\u00e9sistance", heatingStorage: "Ballon",
+    installationFee: "Installation", serviceFee: "Service", other: "Autre"
   };
 
-  const fmt = n => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+  const fmtEur = n => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 
   return React.createElement("div", {
     style: { background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0", padding: 20, marginBottom: 16 }
   },
     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
       React.createElement("div", null,
-        React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: "#1E293B" } }, "📦 Catalogue Reonic"),
+        React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: "#1E293B" } }, "\uD83D\uDCE6 Catalogue Reonic"),
         React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 2 } },
-          (catalog || []).length, " composant(s) — configurez la marge par article"
+          (catalog || []).length, " composant(s) \u2014 saisissez le prix d\u2019achat pour calculer la marge"
         )
       ),
       React.createElement("button", {
@@ -18747,55 +18759,65 @@ function ReonicCatalogConfig({
         style: { background: loading ? "#94A3B8" : "linear-gradient(135deg,#10B981,#059669)", border: "none",
           borderRadius: 8, color: "#FFF", padding: "8px 14px", fontSize: 13, fontWeight: 700,
           cursor: loading ? "not-allowed" : "pointer", fontFamily: '"Outfit",sans-serif' }
-      }, loading ? "⏳ Chargement…" : "🔄 Actualiser le catalogue")
+      }, loading ? "\u23F3 Chargement\u2026" : "\uD83D\uDD04 Actualiser le catalogue")
     ),
     error && React.createElement("div", {
       style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#991B1B", marginBottom: 12 }
-    }, "❌ ", error),
+    }, "\u274C ", error),
+    (catalog || []).length > 0 && React.createElement("div", {
+      style: { display: "flex", gap: 10, padding: "0 10px 6px", fontSize: 11, fontWeight: 700,
+        color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }
+    },
+      React.createElement("div", { style: { flex: 1 } }, "Composant"),
+      React.createElement("div", { style: { width: 100, textAlign: "right" } }, "Prix vente"),
+      React.createElement("div", { style: { width: 120, textAlign: "center" } }, "Prix achat (\u20ac)"),
+      React.createElement("div", { style: { width: 70, textAlign: "center" } }, "Marge")
+    ),
     (catalog || []).length === 0
       ? React.createElement("div", { style: { textAlign: "center", padding: "24px", color: "#94A3B8", fontSize: 13 } },
-          "Cliquez sur \"Actualiser le catalogue\" pour charger les composants Reonic."
+          "Cliquez sur \u00ab Actualiser le catalogue \u00bb pour charger les composants Reonic."
         )
       : React.createElement(React.Fragment, null,
           React.createElement("input", {
-            type: "text", placeholder: "🔍 Rechercher un composant…",
+            type: "text", placeholder: "\uD83D\uDD0D Rechercher\u2026",
             value: search, onChange: e => setSearch(e.target.value),
             style: { width: "100%", boxSizing: "border-box", border: "1px solid #E2E8F0", borderRadius: 8,
-              padding: "8px 12px", fontSize: 13, marginBottom: 12, fontFamily: '"Outfit",sans-serif', outline: "none" }
+              padding: "8px 12px", fontSize: 13, marginBottom: 10, fontFamily: '"Outfit",sans-serif', outline: "none" }
           }),
-          React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 400, overflowY: "auto" } },
+          React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4, maxHeight: 420, overflowY: "auto" } },
             filtered.map(c => {
-              const marge = marges[c.id] != null ? marges[c.id] : 20;
-              const prixVente = c.salesPrice * (1 + marge / 100);
+              const pa = prixAchats[c.id] !== undefined ? prixAchats[c.id] : (c.prixAchat != null ? c.prixAchat : "");
+              const marge = calcMarge(c.salesPrice, pa);
+              const margeColor = marge === null ? "#94A3B8" : marge >= 30 ? "#10B981" : marge >= 15 ? "#F59E0B" : "#EF4444";
               return React.createElement("div", {
                 key: c.id,
-                style: { display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
-                  background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0", flexWrap: "wrap" }
+                style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
+                  background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0" }
               },
-                React.createElement("div", { style: { flex: 1, minWidth: 160 } },
-                  React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#1E293B" } }, c.name),
+                React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                  React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#1E293B",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, c.name),
                   React.createElement("div", { style: { fontSize: 11, color: "#64748B" } },
-                    [c.brand, TYPE_LABELS[c.componentType] || c.componentType].filter(Boolean).join(" · ")
+                    [c.brand, TYPE_LABELS[c.componentType] || c.componentType].filter(Boolean).join(" \u00b7 ")
                   )
                 ),
-                React.createElement("div", { style: { fontSize: 12, color: "#64748B", minWidth: 80, textAlign: "right" } },
-                  "Achat: ", fmt(c.purchasePrice || c.salesPrice)
+                React.createElement("div", { style: { width: 100, textAlign: "right", fontWeight: 700, fontSize: 13, color: "#2563EB", flexShrink: 0 } },
+                  fmtEur(c.salesPrice)
                 ),
-                React.createElement("div", { style: { fontSize: 12, color: "#2563EB", minWidth: 80, textAlign: "right" } },
-                  "Reonic: ", fmt(c.salesPrice)
-                ),
-                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
-                  React.createElement("span", { style: { fontSize: 11, color: "#64748B" } }, "Marge"),
+                React.createElement("div", { style: { width: 120, flexShrink: 0, display: "flex", alignItems: "center", gap: 3, justifyContent: "center" } },
                   React.createElement("input", {
-                    type: "number", min: 0, max: 200, value: marge,
-                    onChange: e => updateMarge(c.id, e.target.value),
-                    style: { width: 52, border: "1px solid #E2E8F0", borderRadius: 6, padding: "3px 6px",
-                      fontSize: 12, textAlign: "center", fontFamily: '"Outfit",sans-serif', outline: "none" }
+                    type: "number", min: 0, step: "0.01",
+                    value: pa, placeholder: "0.00",
+                    onChange: e => updatePrixAchat(c.id, e.target.value),
+                    style: { width: "100%", border: "1px solid #CBD5E1", borderRadius: 6, padding: "4px 7px",
+                      fontSize: 12, textAlign: "right", fontFamily: '"Outfit",sans-serif', outline: "none",
+                      background: pa === "" ? "#FFF" : "#F0FDF4" }
                   }),
-                  React.createElement("span", { style: { fontSize: 11, color: "#64748B" } }, "%")
+                  React.createElement("span", { style: { fontSize: 11, color: "#94A3B8", flexShrink: 0 } }, "\u20AC")
                 ),
-                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#10B981", minWidth: 80, textAlign: "right" } },
-                  "→ ", fmt(prixVente)
+                React.createElement("div", { style: { width: 70, textAlign: "center", fontWeight: 800, fontSize: 14,
+                  color: margeColor, flexShrink: 0 } },
+                  marge !== null ? marge + "\u00a0%" : "\u2014"
                 )
               );
             })
