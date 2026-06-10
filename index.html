@@ -18452,6 +18452,8 @@ function VentesTab({
   installConfigs,
   marqueConfigs,
   reonicMapping,
+  reonicApiKey,
+  supabaseUrl,
   onVenteSaved,
   onVenteUpdated,
   onDeleteVente
@@ -18501,6 +18503,7 @@ function VentesTab({
     } catch (e) {}
     setViewMode(v);
   };
+  const [reonicLoading, setReonicLoading] = useState(false);
   const [form, setForm] = useState(() => {
     try {
       const d = localStorage.getItem("vente_draft");
@@ -18674,70 +18677,105 @@ function VentesTab({
     goToView("form");
   };
 
-  // Pré-remplir la vente depuis un lead Reonic converti
+  // ── Chargement Reonic : projet + packages + composants ──
+  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
+
+  const loadReonicComponents = async (reonicProjectId) => {
+    if (!reonicApiKey || !EDGE_URL || !reonicProjectId) return [];
+    try {
+      // 1. Détail du projet → requestedPackages + téléphone
+      const projRes = await fetch(EDGE_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_project", apiKey: reonicApiKey, payload: { projectId: reonicProjectId } })
+      });
+      const projData = await projRes.json();
+      if (!projData.ok) return [];
+      const project = projData.data;
+
+      // 2. Catalogue de composants (1 seul appel pour tout résoudre)
+      const catRes = await fetch(EDGE_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_components", apiKey: reonicApiKey, payload: {} })
+      });
+      const catData = await catRes.json();
+      const componentMap = new Map((catData.data || []).map(c => [c.id, c]));
+
+      // 3. Packages du projet (solar, evCharger, batteryStorage, heating)
+      const pkgIds = Object.values(project.requestedPackages || {})
+        .filter(Boolean).map(p => p.id).filter(Boolean);
+
+      const allItems = [];
+      for (const pkgId of pkgIds) {
+        const pkgRes = await fetch(EDGE_URL, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get_package", apiKey: reonicApiKey, payload: { packageId: pkgId } })
+        });
+        const pkgData = await pkgRes.json();
+        if (!pkgData.ok || !pkgData.data) continue;
+        for (const item of (pkgData.data.items || [])) {
+          const comp = componentMap.get(item.component.id) || null;
+          if (!comp) continue;
+          allItems.push({
+            reonic_component_id: comp.id,
+            article: comp.name || "Composant Reonic",
+            cat: comp.componentType || "autre",
+            unite: comp.quantityUnit === "meter" ? "ml" : "pce",
+            qty: Number(item.quantity) || 1,
+            prix_unit: Number(item.salesPrice) || 0,
+            brand: comp.brand || ""
+          });
+        }
+      }
+
+      // Téléphone depuis le projet détaillé
+      const c = project.customerContact || {};
+      const tel = c.mobile || c.phone || "";
+
+      return { items: allItems, tel };
+    } catch(e) {
+      console.error("[loadReonicComponents]", e.message);
+      return { items: [], tel: "" };
+    }
+  };
+
+  // Pré-remplir la vente depuis une offre Reonic
   useEffect(() => {
     const lead = window._leadToConvert;
     if (!lead) return;
     window._leadToConvert = null;
     pendingLeadRef.current = lead;
-    const mapping = reonicMapping || [];
 
-    // Composants présents dans l'offre Reonic (stockés dans message)
-    // Format : "Wallbox 11kW ABB · Panneau 440Wc x23 · Batterie 10kWh"
-    const msgLower = (lead.message || "").toLowerCase();
-    const componentNames = (lead.message || "").split(/[·,\n]/).map(s => s.trim()).filter(Boolean);
-
-    // Matcher chaque ligne du mapping contre les composants de l'offre
-    const matsFromMapping = mapping.filter(m => m.stock_id && m.reonic_name).filter(m => {
-      const reonicNameLower = (m.reonic_name || "").toLowerCase().trim();
-      if (!reonicNameLower || reonicNameLower.length < 3) return false;
-      // Correspondance stricte sur les composants séparés (· ou ,)
-      // Suppression du fallback msgLower.includes() trop permissif (matchait "wallbox" partout)
-      return componentNames.some(comp => {
-        const compLower = comp.toLowerCase().replace(/\s*x\d+$/i, "").trim();
-        return compLower.includes(reonicNameLower) || reonicNameLower.includes(compLower);
-      });
-    }).map(m => {
-      const stockItem = stock.find(s => s.id === Number(m.stock_id));
-      if (!stockItem) return null;
-      // Essayer de détecter la quantité depuis le message (ex: "Panneau 440Wc x23")
-      let qty = Number(m.qty || 1);
-      const reonicNameLower = (m.reonic_name || "").toLowerCase();
-      const matchedComp = componentNames.find(c => c.toLowerCase().includes(reonicNameLower) || reonicNameLower.includes(c.toLowerCase().replace(/\s*x\d+$/, "").trim()));
-      if (matchedComp) {
-        const qtyMatch = matchedComp.match(/x(\d+)$/i) || matchedComp.match(/(\d+)\s*(?:pcs?|unités?|u\.?)$/i);
-        if (qtyMatch) qty = Number(qtyMatch[1]);
-      }
-      return {
-        id: stockItem.id,
-        article: stockItem.article,
-        cat: stockItem.cat,
-        unite: stockItem.unite || "pce",
-        qty,
-        prix_unit: stockItem.prix || 0
-      };
-    }).filter(Boolean);
-    console.log("[Mapping Reonic]", "Message:", lead.message, "| Composants trouvés:", componentNames, "| Matériels mappés:", matsFromMapping.length, matsFromMapping.map(m => m.article));
+    // Pré-remplir immédiatement avec les infos disponibles, puis enrichir avec les composants
     setEditId(null);
     setForm({
       ...emptyForm(),
       client: lead.client || "",
       adresse: lead.adresse || "",
       prix_ht: lead.prix_reonic > 0 ? String(lead.prix_reonic) : "",
-      description: lead.message || "",
-      materiels: matsFromMapping,
+      materiels: [],
       lead_id: lead.id || null,
       reonic_id: lead.reonic_id || null
     });
-    setMItem({
-      id: "",
-      qty: ""
-    });
-    setCItem({
-      id: "",
-      qty: ""
-    });
+    setMItem({ id: "", qty: "" });
+    setCItem({ id: "", qty: "" });
     goToView("form");
+
+    // Charger les composants Reonic en arrière-plan
+    if (lead.reonic_id && reonicApiKey) {
+      setReonicLoading(true);
+      loadReonicComponents(lead.reonic_id).then(result => {
+        if (!result) return;
+        const { items, tel } = result;
+        setForm(prev => ({
+          ...prev,
+          materiels: items.length > 0 ? items : prev.materiels,
+          ...(tel && !prev.telephone ? { telephone: tel } : {})
+        }));
+        if (items.length > 0) console.log(`[Reonic] ${items.length} composant(s) chargés:`, items.map(i => i.article));
+        else console.warn("[Reonic] Aucun composant trouvé pour ce projet");
+        setReonicLoading(false);
+      });
+    }
   }, []);
   const openEdit = v => {
     pendingLeadRef.current = null; // édition normale, pas de lead en attente
@@ -19159,7 +19197,7 @@ function VentesTab({
         color: "#94A3B8",
         marginBottom: 10
       }
-    }, "Aucun mat\xE9riel \u2014 ajoute des composants ci-dessous ou configure le mapping Reonic dans Param\xE8tres."), form.materiels.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    }, reonicLoading ? "\u23F3 Chargement des composants Reonic\u2026" : "Aucun mat\xE9riel \u2014 ajoute des composants ci-dessous."), form.materiels.map((m, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
         display: "flex",
@@ -26935,6 +26973,8 @@ function App() {
     installConfigs: installConfigs,
     marqueConfigs: marqueConfigs,
     reonicMapping: reonicMapping,
+    reonicApiKey: reonicApiKey,
+    supabaseUrl: SUPABASE_URL,
     onVenteUpdated: v => {
       SC2(prev => {
         const updated = prev.map(ch => {
