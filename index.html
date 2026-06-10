@@ -21860,350 +21860,300 @@ function LeadsTab({
       }
     }
   }, [leads.length]);
+  // ── MAPPING STATUT MBLR → REONIC deal.state ──
+  // Tous les statuts MBLR sont pushés vers Reonic
+  const MBLR_TO_REONIC_STATE = {
+    converti:     { state: "Won" },
+    perdu:        { state: "Lost" },
+    a_appeler:    { state: "Open" },
+    contacte:     { state: "Open" },
+    rdv_fixe:     { state: "Open" },
+    rdv_fait:     { state: "Open" },
+    relance:      { state: "Open" },
+    devis_ligne:  { state: "Open" },
+    en_veille:    { state: "Open" },
+    sans_reponse: { state: "Open" }
+  };
+
+  // ── HELPER : appel individuel /residentialProjects/{id} pour avoir mobile/phone ──
+  const fetchProjectDetail = async (projectId) => {
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_project", apiKey: reonicApiKey, payload: { projectId } })
+      });
+      const d = await res.json();
+      return d.ok ? d.data : null;
+    } catch(e) { return null; }
+  };
+
+  // ── HELPER : prix affiché (totalPriceOverride si dispo, sinon componentsTotalPrice) ──
+  const getReonicPrix = (offer) => {
+    const v = offer.primaryOfferVariant;
+    if (!v) return 0;
+    return v.totalPriceOverride != null ? Number(v.totalPriceOverride) : Number(v.componentsTotalPrice || 0);
+  };
+
+  // ── HELPER : convertir date ISO → dd/mm/yyyy ──
+  const isoToFr = (iso) => {
+    if (!iso) return "";
+    const dt = new Date(iso);
+    if (isNaN(dt)) return "";
+    return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
+  };
+
+  // ── HELPER : statut MBLR depuis un projet Reonic v3 ──
+  const reonicToMblrStatut = (offer) => {
+    if (offer.archivedAt) return "perdu";
+    if (offer.deal && offer.deal.state === "Won") return "converti";
+    if (offer.deal && offer.deal.state === "Lost") return "perdu";
+    if (offer.stage === "request") return "a_appeler";
+    return "devis_ligne";
+  };
+
+  // ── SYNC SILENCIEUSE ──
+  // - Pagination complète (200/page)
+  // - Filtre : uniquement projets créés dans les 4 derniers jours pour les nouveaux
+  // - Appel individuel pour les nouveaux (téléphone/mobile)
+  // - Enrichissement des leads existants sans téléphone
+  // - Sync statuts bidirectionnelle
   const silentSync = React.useCallback(async () => {
     if (!reonicApiKey || !EDGE_URL) return;
     if (autoSyncRef.current) return;
     autoSyncRef.current = true;
     setAutoSyncStatus("syncing");
     try {
-      var _data$data3;
-      const syncStart = new Date().toISOString();
-      // Sync complète — 200 projets = 1 requête, bien dans les limites Reonic (30/min)
-      const payload = {};
-      // 1. Récupérer les projets Reonic (incrémental ou complet si première sync)
-      const res = await fetch(EDGE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          action: "get_projects",
-          apiKey: reonicApiKey,
-          payload
-        })
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setAutoSyncStatus(null);
-        autoSyncRef.current = false;
-        return;
+      // 1. Récupérer TOUS les projets avec pagination
+      const allResults = [];
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const res = await fetch(EDGE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "get_projects",
+            apiKey: reonicApiKey,
+            payload: { page, itemsPerPage: 200, sort: "-projectCreatedAt" }
+          })
+        });
+        const data = await res.json();
+        if (!data.ok) { hasMore = false; break; }
+        const pageResults = data.data || [];
+        allResults.push(...pageResults);
+        const pagination = data.pagination || {};
+        hasMore = page < (pagination.totalPages || 1);
+        page++;
+        if (page > 20) break; // sécurité max 4000 projets
       }
-      const results = (data.data) || [];
-      const currentLeads = localLeadsRef.current || leads;
-      // Déduplication basée uniquement sur les leads réels en base
-      const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
-      const allKnownIds = liveIds;
 
-      const newOffers = results.filter(o => {
-        if (allKnownIds.has(o.id)) return false;
-        // Ne pas importer les projets déjà terminés/archivés comme nouveaux leads
+      const currentLeads = localLeadsRef.current || leads;
+      const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
+      const reonicMap = new Map(allResults.map(o => [o.id, o]));
+
+      // 2. Nouveaux projets = pas dans liveIds + pas ignorés + créés dans les 4 derniers jours
+      const cutoff4days = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+      const newOffers = allResults.filter(o => {
+        if (liveIds.has(o.id)) return false;
+        if (ignoredReonicIdsRef.current.has(o.id)) return false;
         if (o.archivedAt) return false;
         if (o.deal && (o.deal.state === "Won" || o.deal.state === "Lost")) return false;
-        // Ne pas réimporter les leads supprimés manuellement
-        if (ignoredReonicIdsRef.current.has(o.id)) return false;
-        return true;
+        // Filtre 4 jours
+        const created = o.requestCreatedAt || o.projectCreatedAt;
+        if (!created) return false;
+        return new Date(created) >= cutoff4days;
       });
 
-      // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
-      const reonicMap = new Map(results.map(o => [o.id, o]));
+      // 3. Déduplication par téléphone/email sur les nouveaux (list endpoint — pas de mobile/phone)
+      const existingPhones = new Set(currentLeads.map(l => normalizePhone(l.telephone)).filter(Boolean));
+      const existingEmails = new Set(currentLeads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
+
+      // 4. Enrichissement leads existants avec reonic_id mais sans téléphone
+      const toEnrich = currentLeads.filter(l =>
+        l.reonic_id && !l.telephone && reonicMap.has(l.reonic_id)
+      );
+
+      // 5. toUpdate : leads existants dont statut/prix a changé
+      const PROTECTED = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille"];
       const toUpdate = [];
-      const PROTECTED_STATUTS = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille", "devis_ligne"];
-
-      // v3 : contacts embarqués dans chaque projet
-      const contactsMap = {};
-
-      // 5b. Liens : leads existants sans reonic_id qui matchent par téléphone/email
-      // AVANT le retour anticipé pour enrichir les leads même si rien d'autre n'a changé
-      const toLink = [];
-      const reallyNew = newOffers.filter(offer => {
-        const c = offer.customerContact || null;
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
-        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
-        const existingLead = currentLeads.find(l =>
-          !l.reonic_id &&
-          ((phone && normalizePhone(l.telephone) === phone) ||
-           (email && (l.email || "").toLowerCase() === email))
-        );
-        if (existingLead) {
-          const prix = offer.totalPlannedPrice || 0;
-          const newStatus = offer.signatureStatus || (offer.deal && offer.deal.state) || "";
-          const msg = offer.customerMessage || "";
-          const c2 = offer.customerContact || null;
-          const newNom = (c2 && c2.lastName) || "";
-          const newPrenom = (c2 && c2.firstName) || "";
-          const newFullName = (c2 && c2.fullName) || `${newPrenom} ${newNom}`.trim();
-          const newTel = (c2 && (c2.mobile || c2.phone)) || "";
-          const newEmail2 = (c2 && c2.primaryEmail) || "";
-          const addr = offer.address || {};
-          const newAdresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
-          const patch = {
-            id: existingLead.id,
-            reonic_id: offer.id,
-            prix_reonic: prix,
-            reonic_status: newStatus,
-            ...(msg && !existingLead.message ? { message: msg } : {}),
-            ...((!existingLead.nom || existingLead.client === "Client Reonic") && newNom ? { nom: newNom } : {}),
-            ...((!existingLead.prenom || existingLead.client === "Client Reonic") && newPrenom ? { prenom: newPrenom } : {}),
-            ...((!existingLead.client || existingLead.client === "Client Reonic") && newFullName ? { client: newFullName } : {}),
-            ...(!existingLead.telephone && newTel ? { telephone: newTel } : {}),
-            ...(!existingLead.email && newEmail2 ? { email: newEmail2 } : {}),
-            ...(!existingLead.adresse && newAdresse ? { adresse: newAdresse } : {}),
-          };
-          toLink.push(patch);
-          return false;
-        }
-        return true;
-      });
-
-      // Appliquer les liens immédiatement
-      if (toLink.length > 0) {
-        setLeads(prev => prev.map(l => {
-          const link = toLink.find(t => t.id === l.id);
-          return link ? { ...l, ...link } : l;
-        }));
-        toLink.forEach(link => {
-          const { id, ...patch } = link;
-          sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
-            if (error) console.error("[Reonic Link]", error.message);
-
-          });
-        });
-        console.log(`[Reonic] ${toLink.length} lead(s) lié(s) et enrichis`);
-      }
       for (const lead of currentLeads.filter(l => l.reonic_id)) {
-        var _offer$currentSignatu5;
         const offer = reonicMap.get(lead.reonic_id);
         if (!offer) continue;
-        // v3 : champs directs — plus besoin de parsing complexe
-        const newPrix = offer.totalPlannedPrice || 0;
-        const newStatus = offer.signatureStatus || offer.deal?.state || "";
-        const newMessage = offer.customerMessage || "";
-        // Mapping statut v3 — calculé localement (offer.mblrStatut n'existe pas dans silentSync)
-        const newMblrStatut = (() => {
-          if (offer.archivedAt) return "perdu";
-          if (offer.deal && offer.deal.state === "Won") return "converti";
-          if (offer.deal && offer.deal.state === "Lost") return "perdu";
-          if (offer.stage === "request") return "a_appeler";
-          return "devis_ligne";
-        })();
-        const PROTECTED_STATUTS_v3 = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille"];
-        // devis_ligne est normalement protégé, SAUF si Reonic dit que c'est une demande (request)
-        // dans ce cas on corrige le mauvais statut initial
-        const isWrongDevisLigne = lead.statut === "devis_ligne" && newMblrStatut === "a_appeler";
-        const canChangeStatut = !PROTECTED_STATUTS_v3.includes(lead.statut) || isWrongDevisLigne;
-        const statutChanged = canChangeStatut && newMblrStatut !== lead.statut;
-
-        const prixChanged_v3 = newPrix !== Number(lead.prix_reonic || 0);
-        const statusChanged_v3 = newStatus !== (lead.reonic_status || "");
-        const messageChanged_v3 = !lead.message && !!newMessage;
-        // Enrichissement contact : mettre à jour nom/prénom/téléphone si manquants
+        const newStatut = reonicToMblrStatut(offer);
+        const isWrongDevisLigne = lead.statut === "devis_ligne" && newStatut === "a_appeler";
+        const canChangeStatut = !PROTECTED.includes(lead.statut) || isWrongDevisLigne;
+        const statutChanged = canChangeStatut && newStatut !== lead.statut;
+        const newPrix = getReonicPrix(offer);
+        const prixChanged = newPrix !== Number(lead.prix_reonic || 0);
+        const newStatus = (offer.deal && offer.deal.state) || "";
+        const statusChanged = newStatus !== (lead.reonic_status || "");
+        // Enrichissement contact depuis la liste (sans mobile/phone)
         const c = offer.customerContact || null;
+        const newEmail = (c && c.primaryEmail) || "";
+        const addr = offer.address || {};
+        const newAdresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
+        const emailMissing = !lead.email && !!newEmail;
+        const adresseMissing = !lead.adresse && !!newAdresse;
         const newNom = (c && c.lastName) || "";
         const newPrenom = (c && c.firstName) || "";
         const newFullName = (c && c.fullName) || `${newPrenom} ${newNom}`.trim();
-        const newTel = (c && (c.mobile || c.phone)) || "";
-        const newEmail = (c && c.primaryEmail) || "";
-        const newAddrParts = offer.address ? [offer.address.street, offer.address.houseNumber, offer.address.postcode, offer.address.city].filter(Boolean) : [];
-        const newAdresse = newAddrParts.join(" ");
-        // Déclencher si nom/prenom vides OU si client est un placeholder, ET que Reonic a des données
-        const nameMissing = (!lead.nom && !lead.prenom) || lead.client === "Client Reonic" || !lead.client;
-        const contactChanged = nameMissing && !!(newNom || newPrenom || newFullName);
-        const telMissing = !lead.telephone && !!newTel;
-        const emailMissing = !lead.email && !!newEmail;
-        const adresseMissing = !lead.adresse && !!newAdresse;
-        // Date de création : utiliser la vraie date Reonic si le lead a une date d'import (aujourd'hui)
-        const reonicDate = (() => {
-          const d = offer.requestCreatedAt || offer.projectCreatedAt;
-          if (!d) return null;
-          const dt = new Date(d);
-          return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
-        })();
-        const today = new Date().toLocaleDateString("fr-FR");
-        const dateNeedsUpdate = reonicDate && lead.date_creation === today && reonicDate !== today;
-        // DEBUG : log si contact manquant pour diagnostiquer
-        if (nameMissing && !contactChanged) {
-          console.warn("[Reonic] Lead sans nom sans données contact:", lead.id, "customerContact:", JSON.stringify(offer.customerContact));
-        }
-        if (statutChanged || prixChanged_v3 || statusChanged_v3 || messageChanged_v3 || contactChanged || telMissing || emailMissing || adresseMissing || dateNeedsUpdate) {          const patch = {
-            id: lead.id,
-            statut: statutChanged ? newMblrStatut : lead.statut,
-            prix_reonic: newPrix,
-            reonic_status: newStatus,
-            message: newMessage || lead.message || ""
-          };
-          if (contactChanged) {
-            patch.nom = newNom;
-            patch.prenom = newPrenom;
-            patch.client = newFullName || lead.client || "";
-          }
-          if (telMissing) patch.telephone = newTel;
+        const nameMissing = (!lead.nom || !lead.client || lead.client === "Client Reonic") && !!(newNom || newPrenom);
+        const reonicDate = isoToFr(offer.requestCreatedAt || offer.projectCreatedAt);
+        const todayFr = new Date().toLocaleDateString("fr-FR");
+        const dateNeedsUpdate = reonicDate && lead.date_creation === todayFr && reonicDate !== todayFr;
+        if (statutChanged || prixChanged || statusChanged || emailMissing || adresseMissing || nameMissing || dateNeedsUpdate) {
+          const patch = { id: lead.id };
+          if (statutChanged) patch.statut = newStatut;
+          patch.prix_reonic = newPrix;
+          patch.reonic_status = newStatus;
           if (emailMissing) patch.email = newEmail;
           if (adresseMissing) patch.adresse = newAdresse;
+          if (nameMissing) { patch.nom = newNom; patch.prenom = newPrenom; patch.client = newFullName || lead.client; }
           if (dateNeedsUpdate) patch.date_creation = reonicDate;
           toUpdate.push(patch);
         }
       }
-      console.log(`[Reonic Sync] Reonic: ${results.length} | Nouveaux: ${newOffers.length} | MàJ: ${toUpdate.length} | Liens: ${toLink.length}`);
 
-      if (newOffers.length === 0 && toUpdate.length === 0 && toLink.length === 0) {
+      // 6. Pour chaque nouveau, appel individuel pour avoir mobile/phone
+      const toInsert = [];
+      for (const offer of newOffers) {
+        // Appel individuel pour avoir mobile/phone
+        const detail = await fetchProjectDetail(offer.id);
+        const c = (detail && detail.customerContact) || offer.customerContact || null;
+        const phone = normalizePhone((c && (c.mobile || c.phone)) || "");
+        const email = ((c && c.primaryEmail) || "").toLowerCase();
+        // Déduplication par téléphone/email
+        if (phone && existingPhones.has(phone)) {
+          // Lier au lead existant
+          const existing = currentLeads.find(l => normalizePhone(l.telephone) === phone && !l.reonic_id);
+          if (existing) {
+            const addr = offer.address || {};
+            const adresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
+            toUpdate.push({ id: existing.id, reonic_id: offer.id, prix_reonic: getReonicPrix(offer), reonic_status: (offer.deal && offer.deal.state) || "", ...(adresse && !existing.adresse ? { adresse } : {}) });
+          }
+          continue;
+        }
+        if (email && existingEmails.has(email)) {
+          const existing = currentLeads.find(l => (l.email || "").toLowerCase() === email && !l.reonic_id);
+          if (existing) {
+            toUpdate.push({ id: existing.id, reonic_id: offer.id, prix_reonic: getReonicPrix(offer), reonic_status: (offer.deal && offer.deal.state) || "" });
+          }
+          continue;
+        }
+        // Vraiment nouveau
+        const addr = offer.address || {};
+        const adresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
+        const prenom = (c && c.firstName) || "";
+        const nom = (c && c.lastName) || "";
+        const fullName = (c && c.fullName) || `${prenom} ${nom}`.trim();
+        toInsert.push({
+          id: Date.now() + toInsert.length,
+          reonic_id: offer.id,
+          prenom,
+          nom,
+          client: fullName || (c && c.primaryEmail) || "Client Reonic",
+          email: (c && c.primaryEmail) || "",
+          telephone: (c && (c.mobile || c.phone)) || "",
+          adresse,
+          message: offer.customerMessage || "",
+          canal: "Site web",
+          statut: reonicToMblrStatut(offer),
+          date_creation: isoToFr(offer.requestCreatedAt || offer.projectCreatedAt) || new Date().toLocaleDateString("fr-FR"),
+          prix_reonic: getReonicPrix(offer),
+          prix_reonic_base: Number((offer.primaryOfferVariant && offer.primaryOfferVariant.componentsTotalPrice) || 0),
+          prix_reonic_override: offer.primaryOfferVariant && offer.primaryOfferVariant.totalPriceOverride != null ? Number(offer.primaryOfferVariant.totalPriceOverride) : null,
+          reonic_status: (offer.deal && offer.deal.state) || "",
+          nb_appels: 0,
+          historique_appels: [],
+          date_rdv: "", heure_rdv: "", rapport_rdv: null,
+          par: "", date_relance: "", notes: "", vente_id: null
+        });
+        if (phone) existingPhones.add(phone);
+        if (email) existingEmails.add(email);
+      }
+
+      // 7. Enrichissement téléphone leads existants (appel individuel)
+      for (const lead of toEnrich) {
+        const detail = await fetchProjectDetail(lead.reonic_id);
+        const c = detail && detail.customerContact;
+        const newTel = (c && (c.mobile || c.phone)) || "";
+        if (newTel && !toUpdate.find(u => u.id === lead.id)) {
+          toUpdate.push({ id: lead.id, telephone: newTel });
+        } else if (newTel) {
+          const existing = toUpdate.find(u => u.id === lead.id);
+          if (existing) existing.telephone = newTel;
+        }
+      }
+
+      console.log(`[Reonic Sync] Total: ${allResults.length} | Nouveaux: ${toInsert.length} | MàJ: ${toUpdate.length}`);
+
+      if (toInsert.length === 0 && toUpdate.length === 0) {
         setAutoSyncStatus(null);
         autoSyncRef.current = false;
         return;
       }
 
-      // 8. Insérer les nouveaux
-      const base = Date.now();
-      const now = new Date().toLocaleDateString("fr-FR");
-      const existingPhones = new Set(currentLeads.map(l => normalizePhone(l.telephone)).filter(Boolean));
-      const existingEmails = new Set(currentLeads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
-      const sentToReonic = new Set(currentLeads.filter(l => l.reonic_sent || l.reonic_id).flatMap(l => [normalizePhone(l.telephone), (l.email || "").toLowerCase()]).filter(Boolean));
-      const toInsert = reallyNew.filter(o => {
-        // v3 : contact embarqué directement dans offer.customerContact
-        const c = o.customerContact || null;
-        // v3 : mobile/phone/primaryEmail
-        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
-        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
-        if (phone && (existingPhones.has(phone) || sentToReonic.has(phone))) return false;
-        if (email && (existingEmails.has(email) || sentToReonic.has(email))) return false;
-        return true;
-      }).map((offer, idx) => {
-        var _offer$options6, _offer$options6$, _offer$options6$$wall, _offer$options7, _offer$options7$, _offer$options7$$sola, _offer$currentSignatu6;
-        // v3 : contact embarqué directement
-        const c = offer.customerContact || null;
-        const _prenom = (c === null || c === void 0 ? void 0 : c.firstName) || "";
-        const _nom = (c === null || c === void 0 ? void 0 : c.lastName) || "";
-        const _fullName = (c === null || c === void 0 ? void 0 : c.fullName) || "";
-        const prenom = _prenom || (_fullName ? _fullName.split(" ")[0] : "");
-        const nom = _nom || (_fullName && !_prenom ? _fullName.split(" ").slice(1).join(" ") : _nom);
-        // v3 : adresse géocodée depuis offer.address
-        const addr = offer.address || {};
-        const adresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
-        const wallbox = (((_offer$options6 = offer.options) === null || _offer$options6 === void 0 ? void 0 : (_offer$options6$ = _offer$options6[0]) === null || _offer$options6$ === void 0 ? void 0 : (_offer$options6$$wall = _offer$options6$.wallboxPlanned) === null || _offer$options6$$wall === void 0 ? void 0 : _offer$options6$$wall.components) || []).map(x => x.name).join(", ");
-        const solar = (((_offer$options7 = offer.options) === null || _offer$options7 === void 0 ? void 0 : (_offer$options7$ = _offer$options7[0]) === null || _offer$options7$ === void 0 ? void 0 : (_offer$options7$$sola = _offer$options7$.solarPlanned) === null || _offer$options7$$sola === void 0 ? void 0 : _offer$options7$$sola.components) || []).map(x => x.name).join(", ");
-        const produits = [wallbox, solar].filter(Boolean).join(" · ");
-        const type = getReonicTypeStatic(offer);
-        const ti = RTYPE_INFO[type] || RTYPE_INFO.lead;
-        return {
-          id: base + idx,
-          reonic_id: offer.id,
-          prenom,
-          nom,
-          client: `${prenom} ${nom}`.trim() || (c === null || c === void 0 ? void 0 : c.primaryEmail) || "Client Reonic",
-          email: (c === null || c === void 0 ? void 0 : c.primaryEmail) || "",
-          telephone: (c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone) || "",
-          adresse,
-          message: offer.customerMessage || "",
-          canal: "Site web",
-          statut: offer.stage === "request" ? "a_appeler" : "devis_ligne",
-          date_creation: (() => { const d = offer.requestCreatedAt || offer.projectCreatedAt; if (!d) return now; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`; })(),
-          prix_reonic: offer.totalPlannedPrice || 0,
-          reonic_status: offer.signatureStatus || (offer.deal && offer.deal.state) || "",
-          nb_appels: 0,
-          historique_appels: [],
-          date_rdv: "",
-          heure_rdv: "",
-          rapport_rdv: null,
-          par: "",
-          date_relance: "",
-          notes: "",
-          vente_id: null
-        };
-      });
-
-      // 7. Appliquer les mises à jour
+      // 8. Appliquer toUpdate
       if (toUpdate.length > 0) {
         setLeads(prev => prev.map(l => {
           const u = toUpdate.find(x => x.id === l.id);
-          return u ? {
-            ...l,
-            ...u
-          } : l;
+          return u ? { ...l, ...u } : l;
         }));
-        toUpdate.forEach(u => sb.from("leads").update({
-          statut: u.statut,
-          prix_reonic: u.prix_reonic,
-          reonic_status: u.reonic_status,
-          ...(u.message ? { message: u.message } : {}),
-          ...(u.nom !== undefined ? { nom: u.nom } : {}),
-          ...(u.prenom !== undefined ? { prenom: u.prenom } : {}),
-          ...(u.client !== undefined ? { client: u.client } : {}),
-          ...(u.telephone !== undefined ? { telephone: u.telephone } : {}),
-          ...(u.email !== undefined ? { email: u.email } : {}),
-          ...(u.adresse !== undefined ? { adresse: u.adresse } : {}),
-          ...(u.date_creation !== undefined ? { date_creation: u.date_creation } : {})
-        }).eq("id", u.id).then(({
-          error
-        }) => {
-          if (error) console.error("[Reonic] update:", error.message);
-        }));
+        toUpdate.forEach(u => {
+          const { id, ...patch } = u;
+          sb.from("leads").update(patch).eq("id", id).then(({ error }) => {
+            if (error) console.error("[Reonic] update:", error.message);
+          });
+        });
       }
 
-      // 8. Insérer les nouveaux
+      // 9. Insérer les nouveaux
       if (toInsert.length > 0) {
         setLeads(prev => [...toInsert, ...prev]);
-        const toSave = toInsert.map(l => ({
+        sb.from("leads").upsert(toInsert.map(l => ({
           ...l,
           historique_appels: JSON.stringify(l.historique_appels || [])
-        }));
-        sb.from("leads").upsert(toSave).then(({
-          error
-        }) => {
+        }))).then(({ error }) => {
           if (error) console.error("[Reonic] insert:", error.message);
         });
       }
-      setAutoSyncStatus({
-        nb: toInsert.length,
-        updated: toUpdate.length
-      });      setTimeout(() => setAutoSyncStatus(null), 8000);
-    } catch (e) {
+
+      setAutoSyncStatus({ nb: toInsert.length, updated: toUpdate.length });
+      setTimeout(() => setAutoSyncStatus(null), 8000);
+    } catch(e) {
       console.error("[Reonic Sync] Erreur:", e.message);
       setAutoSyncStatus(null);
     }
     autoSyncRef.current = false;
-  }, [reonicApiKey, reonicClientId, leads, EDGE_URL]);
+  }, [reonicApiKey, leads, EDGE_URL]);
 
-  // Ré-enrichir les contacts existants (téléphone/email/adresse manquants) depuis Reonic
+  // ── Bouton ré-enrichir : force appel individuel sur tous les leads sans téléphone ──
   const [reenrichStatus, setReenrichStatus] = useState(null);
   const reenrichContacts = React.useCallback(async () => {
     if (!reonicApiKey || !EDGE_URL) return;
     setReenrichStatus("loading");
     try {
-      const res = await fetch(EDGE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_projects", apiKey: reonicApiKey, payload: {} })
-      });
-      const data = await res.json();
-      if (!data.ok) { setReenrichStatus("error"); return; }
-      const results = data.data || [];
-      const reonicMap = new Map(results.map(o => [o.id, o]));
       const currentLeads = localLeadsRef.current || leads;
-      // Leads avec reonic_id qui ont des champs contact manquants
-      const toFix = currentLeads.filter(l => l.reonic_id && (!l.telephone || !l.email || !l.adresse || !l.nom));
+      const toFix = currentLeads.filter(l => l.reonic_id && !l.telephone);
       let fixed = 0;
       for (const lead of toFix) {
-        const offer = reonicMap.get(lead.reonic_id);
-        if (!offer) continue;
-        const c = offer.customerContact || null;
-        const newTel = (c && (c.mobile || c.phone)) || "";
-        const newEmail = (c && c.primaryEmail) || "";
-        const addr = offer.address || {};
-        const newAdresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
-        const newNom = (c && c.lastName) || "";
-        const newPrenom = (c && c.firstName) || "";
-        const newFullName = (c && c.fullName) || `${newPrenom} ${newNom}`.trim();
+        const detail = await fetchProjectDetail(lead.reonic_id);
+        const c = detail && detail.customerContact;
+        if (!c) continue;
+        const newTel = (c.mobile || c.phone) || "";
+        const newEmail = !lead.email ? (c.primaryEmail || "") : "";
         const patch = {};
-        if (!lead.telephone && newTel) patch.telephone = newTel;
-        if (!lead.email && newEmail) patch.email = newEmail;
-        if (!lead.adresse && newAdresse) patch.adresse = newAdresse;
-        if (!lead.nom && newNom) { patch.nom = newNom; patch.prenom = newPrenom; patch.client = newFullName || lead.client; }
+        if (newTel) patch.telephone = newTel;
+        if (newEmail) patch.email = newEmail;
+        if (!lead.nom && c.lastName) { patch.nom = c.lastName; patch.prenom = c.firstName || ""; patch.client = c.fullName || `${c.firstName || ""} ${c.lastName}`.trim() || lead.client; }
         if (Object.keys(patch).length === 0) continue;
         fixed++;
         setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...patch } : l));
         await sb.from("leads").update(patch).eq("id", lead.id);
       }
       setReenrichStatus({ fixed });
-      setTimeout(() => setReenrichStatus(null), 5000);
+      setTimeout(() => setReenrichStatus(null), 6000);
     } catch(e) {
       console.error("[Reenrich]", e.message);
       setReenrichStatus("error");
@@ -22464,16 +22414,16 @@ function LeadsTab({
   }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || "")), [leads]);
   const updateLead = (id, patch) => {
     setLeads(p => p.map(l => l.id === id ? { ...l, ...patch } : l));
-    // Persistance directe — évite le upsert global de saveDB qui cause des régressions
     const { reonic_sent, ...safePatch } = patch;
     sb.from("leads").update(safePatch).eq("id", id).then(({ error }) => {
       if (error) console.error("[updateLead]", error.message);
     });
-    // Sync statut → Reonic si le lead a un reonic_id et que le statut change vers un état final
-    if (patch.statut && ["converti", "perdu"].includes(patch.statut) && reonicApiKey && EDGE_URL) {
+    // Sync statut vers Reonic pour TOUS les statuts MBLR
+    if (patch.statut && reonicApiKey && EDGE_URL && MBLR_TO_REONIC_STATE[patch.statut]) {
       const lead = (leadsRef.current || leads).find(l => l.id === id);
       const reonicId = (lead && lead.reonic_id) || null;
       if (reonicId) {
+        const reonicState = MBLR_TO_REONIC_STATE[patch.statut];
         fetch(EDGE_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -22482,18 +22432,18 @@ function LeadsTab({
             apiKey: reonicApiKey,
             payload: {
               projectId: reonicId,
-              mblrStatut: patch.statut,
+              state: reonicState.state,
+              archived: patch.statut === "perdu" ? true : undefined,
               notes: patch.notes || null
             }
           })
         }).then(r => r.json()).then(d => {
           if (!d.ok) console.warn("[Reonic] update_deal_state:", d.error);
-          else console.log("[Reonic] ✅ Statut synced:", patch.statut, "→", reonicId);
+          else console.log("[Reonic] ✅ Statut synced:", patch.statut, "→", reonicState.state, reonicId);
         }).catch(e => console.warn("[Reonic] update_deal_state error:", e.message));
       }
     }
-  };
-  const pasDeReponse = lead => {
+  }; const pasDeReponse = lead => {
     const nb = (lead.nb_appels || 0) + 1;
     const now = new Date();
     const callLog = {
