@@ -1393,9 +1393,23 @@ function OffresTab({
       prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
       reonic_status: (offer.deal && offer.deal.state) || ""
     };
-    setPkgModal({ offer, leadBase });
+    setPkgModal({ offer, leadBase, requestedPkgNames: null });
     setSelectedPkgs(new Set());
     setPkgSearch("");
+    if (reonicApiKey && EDGE_URL) {
+      fetch(EDGE_URL, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_project", apiKey: reonicApiKey, payload: { projectId: offer.id } })
+      }).then(r => r.json()).then(d => {
+        if (!d.ok || !d.data) return;
+        const rp = d.data.requestedPackages || {};
+        const names = Object.values(rp).filter(Boolean).map(p => p.name).filter(Boolean);
+        const tel = (d.data.customerContact && (d.data.customerContact.mobile || d.data.customerContact.phone)) || "";
+        setPkgModal(prev => prev ? { ...prev,
+          requestedPkgNames: names,
+          leadBase: { ...prev.leadBase, telephone: tel || prev.leadBase.telephone }
+        } : null);
+      }).catch(() => {});
+    }
     if (packages.length === 0 && reonicApiKey && EDGE_URL) {
       setPkgLoading(true);
       try {
@@ -1564,7 +1578,19 @@ function OffresTab({
             ),
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 4 } },
               pkgModal.leadBase.client, " — sélectionnez les packages à inclure dans la vente"
-            )
+            ),
+            pkgModal.requestedPkgNames && pkgModal.requestedPkgNames.length > 0 &&
+              /*#__PURE__*/React.createElement("div", {
+                style: { marginTop: 8, padding: "8px 10px", background: "#F0FDF4",
+                  borderRadius: 8, border: "1px solid #86EFAC" }
+              },
+                /*#__PURE__*/React.createElement("div", {
+                  style: { fontSize: 11, fontWeight: 700, color: "#166534", marginBottom: 4 }
+                }, "📦 Packages demandés dans Reonic"),
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#16a34a" } },
+                  pkgModal.requestedPkgNames.join(" · ")
+                )
+              )
           ),
           /*#__PURE__*/React.createElement("button", {
             onClick: () => setPkgModal(null),
@@ -1768,7 +1794,12 @@ function OffresTab({
             /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 2 } },
               [c.primaryEmail, addr.city && `📍 ${addr.city}`, date && `📅 ${date}`]
                 .filter(Boolean).join(" · ")
-            )
+            ),
+            offer.customerMessage && /*#__PURE__*/React.createElement("div", {
+              style: { fontSize: 11, color: "#64748B", marginTop: 4, fontStyle: "italic",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                maxWidth: "100%", opacity: 0.85 }
+            }, "💬 ", offer.customerMessage)
           ),
           prix && (prix.override != null || prix.base > 0) && /*#__PURE__*/React.createElement("div", {
             style: { textAlign: "right", minWidth: 90 }
@@ -1845,7 +1876,12 @@ function OffresTab({
                 /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#16a34a", marginTop: 2 } },
                   [c.primaryEmail, addr.city && `📍 ${addr.city}`, date && `📅 ${date}`]
                     .filter(Boolean).join(" · ")
-                )
+                ),
+                offer.customerMessage && /*#__PURE__*/React.createElement("div", {
+                  style: { fontSize: 11, color: "#16a34a", marginTop: 4, fontStyle: "italic",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    maxWidth: "100%", opacity: 0.85 }
+                }, "💬 ", offer.customerMessage)
               ),
               prix && (prix.override != null || prix.base > 0) && /*#__PURE__*/React.createElement("div", {
                 style: { textAlign: "right", minWidth: 90 }
