@@ -1370,8 +1370,72 @@ function OffresTab({
   const [projects, setProjects] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
-  const [filter, setFilter] = React.useState("tous"); // tous | request | offer | installation
+  const [filter, setFilter] = React.useState("tous");
   const [search, setSearch] = React.useState("");
+
+  // Modal selection package
+  const [pkgModal, setPkgModal] = React.useState(null);
+  const [packages, setPackages] = React.useState([]);
+  const [pkgLoading, setPkgLoading] = React.useState(false);
+  const [selectedPkgs, setSelectedPkgs] = React.useState(new Set());
+
+  const openPackageModal = async (offer) => {
+    const c = offer.customerContact || {};
+    const addr = offer.address || {};
+    const prix = getPrix(offer);
+    const leadBase = {
+      id: offer.id, reonic_id: offer.id,
+      client: c.fullName || c.primaryEmail || "Client Reonic",
+      prenom: c.firstName || "", nom: c.lastName || "",
+      email: c.primaryEmail || "", telephone: c.mobile || c.phone || "",
+      adresse: [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" "),
+      prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
+      reonic_status: (offer.deal && offer.deal.state) || ""
+    };
+    setPkgModal({ offer, leadBase });
+    setSelectedPkgs(new Set());
+    if (packages.length === 0 && reonicApiKey && EDGE_URL) {
+      setPkgLoading(true);
+      try {
+        const res = await fetch(EDGE_URL, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get_packages", apiKey: reonicApiKey, payload: {} })
+        });
+        const data = await res.json();
+        setPackages(data.ok ? (data.data || []) : []);
+      } catch(e) { setPackages([]); }
+      setPkgLoading(false);
+    }
+  };
+
+  const confirmPackageSelection = async () => {
+    if (!pkgModal) return;
+    const materiels = [];
+    for (const pkgId of selectedPkgs) {
+      try {
+        const res = await fetch(EDGE_URL, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "get_package", apiKey: reonicApiKey, payload: { packageId: pkgId } })
+        });
+        const data = await res.json();
+        if (!data.ok || !data.data) continue;
+        for (const item of (data.data.items || [])) {
+          materiels.push({
+            reonic_component_id: item.component && item.component.id || null,
+            article: item.componentName || "Composant Reonic",
+            cat: "reonic", unite: "pce",
+            qty: Number(item.quantity) || 1,
+            prix_unit: Number(item.salesPrice) || 0,
+            prix_reonic: Number(item.salesPrice) || 0
+          });
+        }
+      } catch(e) {}
+    }
+    const lead = { ...pkgModal.leadBase, materiels };
+    window._leadToConvert = lead;
+    if (onLeadConverted) onLeadConverted(lead);
+    setPkgModal(null);
+  };
 
   const fetchProjects = React.useCallback(async () => {
     if (!reonicApiKey || !EDGE_URL) {
@@ -1476,7 +1540,98 @@ function OffresTab({
     { k: "installation", label: "Installations" }
   ];
 
+  const TYPE_LABELS_PKG = {
+    solar: "Solaire", evCharger: "Borne de recharge", batteryStorage: "Batterie",
+    heatPump: "Pompe à chaleur", optionalComponents: "Optionnel", additionalComponents: "Additionnel"
+  };
+
   return /*#__PURE__*/React.createElement("div", { style: { maxWidth: 900, margin: "0 auto" } },
+
+    pkgModal && /*#__PURE__*/React.createElement("div", {
+      style: { position: "fixed", inset: 0, background: "rgba(15,23,42,0.7)", zIndex: 999,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { background: "#FFF", borderRadius: 16, padding: 24, width: "100%", maxWidth: 520,
+          maxHeight: "80vh", display: "flex", flexDirection: "column", gap: 16 }
+      },
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 17, color: "#1E293B" } },
+              "📦 Choisir le(s) package(s) Reonic"
+            ),
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 4 } },
+              pkgModal.leadBase.client, " — sélectionnez les packages à inclure dans la vente"
+            )
+          ),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: () => setPkgModal(null),
+            style: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94A3B8" }
+          }, "×")
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
+          pkgLoading
+            ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 24, color: "#64748B" } }, "⏳ Chargement…")
+            : packages.length === 0
+              ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 24, color: "#94A3B8" } },
+                  "Aucun package. Vérifiez votre configuration Reonic."
+                )
+              : packages.filter(p => p.active !== false).map(pkg => {
+                  const sel = selectedPkgs.has(pkg.id);
+                  return /*#__PURE__*/React.createElement("div", {
+                    key: pkg.id,
+                    onClick: () => setSelectedPkgs(prev => {
+                      const next = new Set(prev);
+                      sel ? next.delete(pkg.id) : next.add(pkg.id);
+                      return next;
+                    }),
+                    style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                      borderRadius: 10, border: sel ? "2px solid #7C3AED" : "1px solid #E2E8F0",
+                      background: sel ? "#F5F3FF" : "#F8FAFC", cursor: "pointer" }
+                  },
+                    /*#__PURE__*/React.createElement("div", {
+                      style: { width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                        background: sel ? "#7C3AED" : "#FFF", border: sel ? "none" : "2px solid #CBD5E1",
+                        display: "flex", alignItems: "center", justifyContent: "center" }
+                    }, sel && /*#__PURE__*/React.createElement("span", { style: { color: "#FFF", fontSize: 12, fontWeight: 800 } }, "✓")),
+                    /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+                      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#1E293B" } }, pkg.name),
+                      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#64748B", marginTop: 1 } },
+                        [TYPE_LABELS_PKG[pkg.target] || pkg.target,
+                         pkg.items && pkg.items.length ? pkg.items.length + " composant(s)" : null
+                        ].filter(Boolean).join(" · ")
+                      )
+                    )
+                  );
+                })
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid #F1F5F9" } },
+          /*#__PURE__*/React.createElement("button", {
+            onClick: () => setPkgModal(null),
+            style: { background: "#F1F5F9", border: "none", borderRadius: 8, padding: "9px 16px",
+              fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748B", fontFamily: '"Outfit",sans-serif' }
+          }, "Annuler"),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: () => {
+              window._leadToConvert = { ...pkgModal.leadBase, materiels: [] };
+              if (onLeadConverted) onLeadConverted(window._leadToConvert);
+              setPkgModal(null);
+            },
+            style: { background: "#F1F5F9", border: "none", borderRadius: 8, padding: "9px 16px",
+              fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748B", fontFamily: '"Outfit",sans-serif' }
+          }, "Sans package"),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: confirmPackageSelection,
+            disabled: selectedPkgs.size === 0,
+            style: { background: selectedPkgs.size > 0 ? "linear-gradient(135deg,#7C3AED,#6D28D9)" : "#C4B5FD",
+              border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700,
+              cursor: selectedPkgs.size > 0 ? "pointer" : "not-allowed", color: "#FFF",
+              fontFamily: '"Outfit",sans-serif' }
+          }, selectedPkgs.size > 0 ? "📦 Continuer avec " + selectedPkgs.size + " package(s)" : "Sélectionnez un package")
+        )
+      )
+    ),
+
     // Header
     /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -1607,18 +1762,7 @@ function OffresTab({
                 }, "✓ Vente créée")
               : canCreateVente && canEdit(role)
                 ? /*#__PURE__*/React.createElement("button", {
-                    onClick: () => {
-                      window._leadToConvert = {
-                        id: offer.id, reonic_id: offer.id,
-                        client: c.fullName || c.primaryEmail || "Client Reonic",
-                        prenom: c.firstName || "", nom: c.lastName || "",
-                        email: c.primaryEmail || "", telephone: "",
-                        adresse: [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" "),
-                        prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
-                        reonic_status: (offer.deal && offer.deal.state) || ""
-                      };
-                      if (onLeadConverted) onLeadConverted(window._leadToConvert);
-                    },
+                    onClick: () => { openPackageModal(offer); },
                     style: BTN("linear-gradient(135deg,#7C3AED,#6D28D9)", { fontSize: 12, padding: "6px 12px" })
                   }, "💰 Créer vente")
                 : null
@@ -1695,21 +1839,9 @@ function OffresTab({
                     }, "✓ Vente créée")
                   : canEdit(role)
                     ? /*#__PURE__*/React.createElement("button", {
-                        onClick: () => {
-                          window._leadToConvert = {
-                            id: offer.id, reonic_id: offer.id,
-                            client: c.fullName || c.primaryEmail || "Client Reonic",
-                            prenom: c.firstName || "", nom: c.lastName || "",
-                            email: c.primaryEmail || "", telephone: "",
-                            adresse: [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" "),
-                            prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
-                            reonic_status: "Won"
-                          };
-                          if (onLeadConverted) onLeadConverted(window._leadToConvert);
-                        },
-                        style: BTN("linear-gradient(135deg,#10B981,#059669)", { fontSize: 12, padding: "6px 12px" })
-                      }, "💰 Créer vente")
-                    : null
+                        onClick: () => { openPackageModal(offer); },
+                          style: BTN("linear-gradient(135deg,#10B981,#059669)", { fontSize: 12, padding: "6px 12px" })
+                        }, "💰 Créer vente")                 : null
               )
             );
           };
