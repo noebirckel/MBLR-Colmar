@@ -24609,13 +24609,6 @@ function App() {
     try {
       localStorage.setItem("reonic_mapping", JSON.stringify(m));
     } catch (e) {}
-
-  // Catalogue Reonic — composants avec marge configurée
-  const [reonicCatalog, setReonicCatalog] = React.useState([]);
-  const saveReonicCatalog = async (items) => {
-    setReonicCatalog(items);
-    await sb.from("app_configs").upsert({ key: "reonic_catalog", value: JSON.stringify(items), updated_at: new Date().toISOString() }, { onConflict: "key" });
-  };
     sb.from("app_configs").upsert({
       key: "reonic_mapping",
       value: m,
@@ -24628,6 +24621,17 @@ function App() {
       if (error) console.error("saveReonicMapping:", error.message);
     });
   };
+
+  // ── Catalogue Reonic — composants avec marge configurée ──
+  const [reonicCatalog, setReonicCatalog] = React.useState([]);
+  const saveReonicCatalog = async (items) => {
+    setReonicCatalog(items);
+    await sb.from("app_configs").upsert(
+      { key: "reonic_catalog", value: JSON.stringify(items), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+  };
+
   const [rapports, setRapports] = React.useState([]);
   const [view, setView] = React.useState(() => {
     try {
