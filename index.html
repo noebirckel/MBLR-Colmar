@@ -18392,6 +18392,418 @@ const LEAD_STATUTS = {
     icon: "❌"
   }
 };
+function ReonicConfig({
+  reonicApiKey,
+  saveReonicApiKey,
+  supabaseUrl,
+  supabaseKey
+}) {
+  const EDGE_URL = `${supabaseUrl}/functions/v1/reonic-proxy-v3`;
+  const [testStatus, setTestStatus] = useState(null);
+  const [keyDraft, setKeyDraft] = useState(reonicApiKey || "");
+  const [clientIdDraft, setClientIdDraft] = useState(() => {
+    try {
+      return localStorage.getItem("reonic_client_id") || "";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [showKey, setShowKey] = useState(false);
+  const testConnection = async () => {
+    if (!keyDraft.trim()) {
+      setTestStatus("error");
+      return;
+    }
+    setTestStatus("loading");
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          action: "test",
+          apiKey: keyDraft.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        saveReonicApiKey(keyDraft.trim());
+        try {
+          localStorage.setItem("reonic_client_id", clientIdDraft.trim());
+        } catch (e) {}
+        // Sauvegarder client_id en base pour tous les utilisateurs
+        sb.from("app_configs").upsert({
+          key: "reonic_client_id",
+          value: clientIdDraft.trim(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: "key"
+        }).then(({
+          error
+        }) => {
+          if (error) console.error("saveClientId:", error.message);
+        });
+        setTestStatus("ok");
+      } else {
+        setTestStatus({
+          err: data.error || "Erreur inconnue"
+        });
+      }
+    } catch (e) {
+      setTestStatus("error");
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#FFFFFF",
+      borderRadius: 12,
+      border: "1px solid #E2E8F0",
+      padding: "16px 18px",
+      marginBottom: 14,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      background: "#F0FDF4",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 20,
+      flexShrink: 0
+    }
+  }, "\u26A1"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      color: "#0F172A"
+    }
+  }, "Int\xE9gration Reonic"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#64748B"
+    }
+  }, "Synchronisation leads et devis")), reonicApiKey && testStatus === "ok" ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: "auto",
+      background: "#F0FDF4",
+      color: "#16A34A",
+      border: "1px solid #BBF7D0",
+      borderRadius: 20,
+      padding: "2px 10px",
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, "\u2705 Connect\xE9") : /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: "auto",
+      background: "#F8FAFC",
+      color: "#94A3B8",
+      border: "1px solid #E2E8F0",
+      borderRadius: 20,
+      padding: "2px 10px",
+      fontSize: 11
+    }
+  }, reonicApiKey ? "Clé sauvegardée" : "Non configuré")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      color: "#64748B",
+      display: "block",
+      marginBottom: 5,
+      textTransform: "uppercase",
+      letterSpacing: "0.06em"
+    }
+  }, "Client ID Reonic"), /*#__PURE__*/React.createElement("input", {
+    value: clientIdDraft,
+    onChange: e => setClientIdDraft(e.target.value),
+    placeholder: "Ex: abc123-def456-...",
+    style: {
+      width: "100%",
+      background: "#F8FAFC",
+      border: "1px solid #E2E8F0",
+      borderRadius: 8,
+      color: "#0F172A",
+      padding: "9px 12px",
+      fontSize: 13,
+      outline: "none",
+      fontFamily: '"Outfit",sans-serif',
+      boxSizing: "border-box"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: "#94A3B8",
+      marginTop: 3
+    }
+  }, "Reonic \u2192 Param\xE8tres \u2192 Int\xE9grations \u2192 votre Client ID")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      color: "#64748B",
+      display: "block",
+      marginBottom: 5,
+      textTransform: "uppercase",
+      letterSpacing: "0.06em"
+    }
+  }, "Cl\xE9 API Reonic"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: showKey ? "text" : "password",
+    value: keyDraft,
+    onChange: e => setKeyDraft(e.target.value),
+    placeholder: "Coller votre cl\xE9 API ici\u2026",
+    style: {
+      flex: 1,
+      background: "#F8FAFC",
+      border: "1px solid #E2E8F0",
+      borderRadius: 8,
+      color: "#0F172A",
+      padding: "9px 12px",
+      fontSize: 13,
+      outline: "none",
+      fontFamily: '"Outfit",sans-serif'
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowKey(p => !p),
+    style: {
+      background: "#F1F5F9",
+      border: "1px solid #E2E8F0",
+      borderRadius: 8,
+      color: "#64748B",
+      padding: "8px 10px",
+      cursor: "pointer",
+      fontSize: 13,
+      fontFamily: '"Outfit",sans-serif'
+    }
+  }, showKey ? "🙈" : "👁️"))), /*#__PURE__*/React.createElement("button", {
+    onClick: testConnection,
+    disabled: !keyDraft.trim() || testStatus === "loading",
+    style: {
+      width: "100%",
+      background: testStatus === "ok" ? "linear-gradient(135deg,#10B981,#059669)" : testStatus && testStatus !== "loading" ? "#FEF2F2" : "linear-gradient(135deg,#3B82F6,#2563EB)",
+      border: "none",
+      borderRadius: 8,
+      color: testStatus && testStatus !== "ok" && testStatus !== "loading" ? "#DC2626" : "#FFF",
+      padding: "10px 16px",
+      cursor: "pointer",
+      fontWeight: 700,
+      fontSize: 13,
+      fontFamily: '"Outfit",sans-serif',
+      opacity: !keyDraft.trim() ? 0.5 : 1,
+      marginBottom: 8
+    }
+  }, testStatus === "loading" ? "⏳ Test en cours…" : testStatus === "ok" ? "✅ Connexion réussie" : testStatus && testStatus !== "loading" ? "❌ Erreur — réessayer" : "🔗 Tester la connexion"), testStatus && testStatus !== "ok" && testStatus !== "loading" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "8px 12px",
+      background: "#FEF2F2",
+      border: "1px solid #FECACA",
+      borderRadius: 8,
+      fontSize: 12,
+      color: "#DC2626",
+      marginBottom: 8
+    }
+  }, "\u274C ", typeof testStatus === "object" ? testStatus.err : "Vérifiez votre clé API et votre Client ID."), reonicApiKey && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12,
+      borderTop: "1px solid #F1F5F9",
+      paddingTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      background: "#10B981",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      color: "#0F172A"
+    }
+  }, "Sync automatique active")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#64748B",
+      lineHeight: 1.6
+    }
+  }, "\xC0 chaque ouverture de l'onglet Leads, Ma Borne LR v\xE9rifie automatiquement les nouveaux leads Reonic et les importe sans action de votre part. Les perdus et doublons sont exclus automatiquement.")));
+}
+function ReonicCatalogConfig({
+  reonicApiKey,
+  supabaseUrl,
+  catalog,
+  saveCatalog
+}) {
+  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [marges, setMarges] = React.useState(() => {
+    const m = {};
+    (catalog || []).forEach(c => { m[c.id] = c.marge != null ? c.marge : 20; });
+    return m;
+  });
+  const [search, setSearch] = React.useState("");
+
+  const refreshCatalog = async () => {
+    if (!reonicApiKey || !EDGE_URL) return;
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_components", apiKey: reonicApiKey, payload: {} })
+      });
+      const data = await res.json();
+      if (!data.ok) { setError(data.error || "Erreur"); setLoading(false); return; }
+      const items = (data.data || []).map(c => ({
+        id: c.id,
+        name: c.name,
+        brand: c.brand || "",
+        componentType: c.componentType || "autre",
+        salesPrice: c.salesPrice || 0,
+        purchasePrice: c.purchasePrice || null,
+        quantityUnit: c.quantityUnit || "item",
+        marge: marges[c.id] != null ? marges[c.id] : 20
+      }));
+      saveCatalog(items);
+      const newMarges = {};
+      items.forEach(c => { newMarges[c.id] = c.marge; });
+      setMarges(newMarges);
+    } catch(e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const updateMarge = (id, val) => {
+    const v = Math.max(0, Math.min(200, Number(val) || 0));
+    setMarges(p => ({ ...p, [id]: v }));
+    const updated = (catalog || []).map(c => c.id === id ? { ...c, marge: v } : c);
+    saveCatalog(updated);
+  };
+
+  const filtered = React.useMemo(() => {
+    if (!search.trim()) return catalog || [];
+    const s = search.toLowerCase();
+    return (catalog || []).filter(c =>
+      (c.name || "").toLowerCase().includes(s) ||
+      (c.brand || "").toLowerCase().includes(s) ||
+      (c.componentType || "").toLowerCase().includes(s)
+    );
+  }, [catalog, search]);
+
+  const TYPE_LABELS = {
+    module: "Module", inverter: "Onduleur", microinverter: "Micro-onduleur",
+    optimizer: "Optimiseur", virtualBattery: "Batterie virtuelle",
+    batteryStorage: "Batterie", evCharger: "Borne de recharge",
+    heatPump: "Pompe à chaleur", hotWaterHeatPump: "Chauffe-eau PAC",
+    heatingRod: "Résistance", heatingStorage: "Ballon",
+    installationFee: "Installation", serviceFee: "Service",
+    other: "Autre"
+  };
+
+  const fmt = n => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+
+  return React.createElement("div", {
+    style: { background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0", padding: 20, marginBottom: 16 }
+  },
+    React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
+      React.createElement("div", null,
+        React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: "#1E293B" } }, "📦 Catalogue Reonic"),
+        React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 2 } },
+          (catalog || []).length, " composant(s) — configurez la marge par article"
+        )
+      ),
+      React.createElement("button", {
+        onClick: refreshCatalog, disabled: loading,
+        style: { background: loading ? "#94A3B8" : "linear-gradient(135deg,#10B981,#059669)", border: "none",
+          borderRadius: 8, color: "#FFF", padding: "8px 14px", fontSize: 13, fontWeight: 700,
+          cursor: loading ? "not-allowed" : "pointer", fontFamily: '"Outfit",sans-serif' }
+      }, loading ? "⏳ Chargement…" : "🔄 Actualiser le catalogue")
+    ),
+    error && React.createElement("div", {
+      style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#991B1B", marginBottom: 12 }
+    }, "❌ ", error),
+    (catalog || []).length === 0
+      ? React.createElement("div", { style: { textAlign: "center", padding: "24px", color: "#94A3B8", fontSize: 13 } },
+          "Cliquez sur \"Actualiser le catalogue\" pour charger les composants Reonic."
+        )
+      : React.createElement(React.Fragment, null,
+          React.createElement("input", {
+            type: "text", placeholder: "🔍 Rechercher un composant…",
+            value: search, onChange: e => setSearch(e.target.value),
+            style: { width: "100%", boxSizing: "border-box", border: "1px solid #E2E8F0", borderRadius: 8,
+              padding: "8px 12px", fontSize: 13, marginBottom: 12, fontFamily: '"Outfit",sans-serif', outline: "none" }
+          }),
+          React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, maxHeight: 400, overflowY: "auto" } },
+            filtered.map(c => {
+              const marge = marges[c.id] != null ? marges[c.id] : 20;
+              const prixVente = c.salesPrice * (1 + marge / 100);
+              return React.createElement("div", {
+                key: c.id,
+                style: { display: "flex", alignItems: "center", gap: 10, padding: "8px 10px",
+                  background: "#F8FAFC", borderRadius: 8, border: "1px solid #E2E8F0", flexWrap: "wrap" }
+              },
+                React.createElement("div", { style: { flex: 1, minWidth: 160 } },
+                  React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#1E293B" } }, c.name),
+                  React.createElement("div", { style: { fontSize: 11, color: "#64748B" } },
+                    [c.brand, TYPE_LABELS[c.componentType] || c.componentType].filter(Boolean).join(" · ")
+                  )
+                ),
+                React.createElement("div", { style: { fontSize: 12, color: "#64748B", minWidth: 80, textAlign: "right" } },
+                  "Achat: ", fmt(c.purchasePrice || c.salesPrice)
+                ),
+                React.createElement("div", { style: { fontSize: 12, color: "#2563EB", minWidth: 80, textAlign: "right" } },
+                  "Reonic: ", fmt(c.salesPrice)
+                ),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+                  React.createElement("span", { style: { fontSize: 11, color: "#64748B" } }, "Marge"),
+                  React.createElement("input", {
+                    type: "number", min: 0, max: 200, value: marge,
+                    onChange: e => updateMarge(c.id, e.target.value),
+                    style: { width: 52, border: "1px solid #E2E8F0", borderRadius: 6, padding: "3px 6px",
+                      fontSize: 12, textAlign: "center", fontFamily: '"Outfit",sans-serif', outline: "none" }
+                  }),
+                  React.createElement("span", { style: { fontSize: 11, color: "#64748B" } }, "%")
+                ),
+                React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#10B981", minWidth: 80, textAlign: "right" } },
+                  "→ ", fmt(prixVente)
+                )
+              );
+            })
+          )
+        )
+  );
+}
+
 function SCard({
   n,
   title,
@@ -18454,6 +18866,7 @@ function VentesTab({
   reonicMapping,
   reonicApiKey,
   supabaseUrl,
+  reonicCatalog,
   onVenteSaved,
   onVenteUpdated,
   onDeleteVente
@@ -18899,21 +19312,42 @@ function VentesTab({
     }));
   };
   const addMat = () => {
-    const a = stock.find(s => s.id === Number(mItem.id));
-    setForm(p => ({
-      ...p,
-      materiels: [...p.materiels.filter(x => x.id !== mItem.id), {
-        id: mItem.id,
-        article: a === null || a === void 0 ? void 0 : a.article,
-        cat: a === null || a === void 0 ? void 0 : a.cat,
-        qty: Number(mItem.qty),
-        prix_unit: (a === null || a === void 0 ? void 0 : a.prix) || 0
-      }]
-    }));
-    setMItem({
-      id: "",
-      qty: ""
-    });
+    if (!mItem.id || !mItem.qty) return;
+    // Chercher dans le catalogue Reonic d'abord, puis dans le stock MBLR
+    const reonicComp = (reonicCatalog || []).find(c => c.id === mItem.id);
+    if (reonicComp) {
+      const marge = reonicComp.marge != null ? reonicComp.marge : 20;
+      const prixVente = Number(reonicComp.salesPrice || 0) * (1 + marge / 100);
+      setForm(p => ({
+        ...p,
+        materiels: [...p.materiels.filter(x => x.reonic_component_id !== mItem.id), {
+          reonic_component_id: reonicComp.id,
+          article: reonicComp.name,
+          brand: reonicComp.brand || "",
+          cat: reonicComp.componentType || "autre",
+          unite: reonicComp.quantityUnit === "meter" ? "ml" : "pce",
+          qty: Number(mItem.qty),
+          prix_unit: Math.round(prixVente * 100) / 100,
+          prix_reonic: reonicComp.salesPrice || 0,
+          marge
+        }]
+      }));
+    } else {
+      const a = stock.find(s => s.id === Number(mItem.id));
+      if (!a) return;
+      setForm(p => ({
+        ...p,
+        materiels: [...p.materiels.filter(x => x.id !== mItem.id), {
+          id: mItem.id,
+          article: a.article,
+          cat: a.cat,
+          unite: a.unite || "pce",
+          qty: Number(mItem.qty),
+          prix_unit: a.prix || 0
+        }]
+      }));
+    }
+    setMItem({ id: "", qty: "" });
   };
   const addCable = () => {
     if (!cItem.id || !cItem.qty) return;
@@ -19315,21 +19749,35 @@ function VentesTab({
       }
     })), /*#__PURE__*/React.createElement("select", {
       value: mItem.id,
-      onChange: e => setMItem(p => ({
-        ...p,
-        id: e.target.value
-      })),
-      style: {
-        ...INP(),
-        flex: 2,
-        fontSize: 12
-      }
-    }, /*#__PURE__*/React.createElement("option", {
-      value: ""
-    }, "S\xE9lectionner\u2026"), BORNES.filter(s => !matSearch || (s.article + " " + (s.cat || "")).toLowerCase().includes(matSearch.toLowerCase())).map(s => /*#__PURE__*/React.createElement("option", {
-      key: s.id,
-      value: s.id
-    }, s.article, " (", fmt(s.prix), ")"))), /*#__PURE__*/React.createElement("input", {
+      onChange: e => setMItem(p => ({ ...p, id: e.target.value })),
+      style: { ...INP(), flex: 2, fontSize: 12 }
+    },
+      /*#__PURE__*/React.createElement("option", { value: "" }, "S\xE9lectionner un composant\u2026"),
+      (reonicCatalog || []).length > 0
+        ? [
+            /*#__PURE__*/React.createElement("optgroup", { key: "reonic", label: "\uD83D\uDCE6 Catalogue Reonic" },
+              ...(reonicCatalog || [])
+                .filter(c => !matSearch || (c.name + " " + (c.brand || "")).toLowerCase().includes(matSearch.toLowerCase()))
+                .map(c => {
+                  const marge = c.marge != null ? c.marge : 20;
+                  const prix = c.salesPrice * (1 + marge / 100);
+                  return /*#__PURE__*/React.createElement("option", { key: c.id, value: c.id },
+                    c.name, c.brand ? " — " + c.brand : "", " (", fmt(prix), " avec ", marge, "% marge)"
+                  );
+                })
+            ),
+            /*#__PURE__*/React.createElement("optgroup", { key: "stock", label: "\uD83C\uDFEA Stock MBLR" },
+              ...BORNES.filter(s => !matSearch || (s.article + " " + (s.cat || "")).toLowerCase().includes(matSearch.toLowerCase()))
+                .map(s => /*#__PURE__*/React.createElement("option", { key: s.id, value: s.id },
+                  s.article, " (", fmt(s.prix), ")"
+                ))
+            )
+          ]
+        : BORNES.filter(s => !matSearch || (s.article + " " + (s.cat || "")).toLowerCase().includes(matSearch.toLowerCase()))
+            .map(s => /*#__PURE__*/React.createElement("option", { key: s.id, value: s.id },
+              s.article, " (", fmt(s.prix), ")"
+            ))
+    ), /*#__PURE__*/React.createElement("input", {
       type: "number",
       min: "1",
       value: mItem.qty,
@@ -24161,6 +24609,13 @@ function App() {
     try {
       localStorage.setItem("reonic_mapping", JSON.stringify(m));
     } catch (e) {}
+
+  // Catalogue Reonic — composants avec marge configurée
+  const [reonicCatalog, setReonicCatalog] = React.useState([]);
+  const saveReonicCatalog = async (items) => {
+    setReonicCatalog(items);
+    await sb.from("app_configs").upsert({ key: "reonic_catalog", value: JSON.stringify(items), updated_at: new Date().toISOString() }, { onConflict: "key" });
+  };
     sb.from("app_configs").upsert({
       key: "reonic_mapping",
       value: m,
@@ -24582,6 +25037,10 @@ function App() {
               try {
                 localStorage.setItem("reonic_mapping", JSON.stringify(row.value));
               } catch (e) {}
+            }
+            if (row.key === "reonic_catalog" && row.value) {
+              const cat = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+              setReonicCatalog(Array.isArray(cat) ? cat : []);
             }
           });
         }
@@ -26975,6 +27434,7 @@ function App() {
     reonicMapping: reonicMapping,
     reonicApiKey: reonicApiKey,
     supabaseUrl: SUPABASE_URL,
+    reonicCatalog: reonicCatalog,
     onVenteUpdated: v => {
       SC2(prev => {
         const updated = prev.map(ch => {
@@ -31974,10 +32434,11 @@ function App() {
     saveReonicApiKey: saveReonicApiKey,
     supabaseUrl: SUPABASE_URL,
     supabaseKey: SUPABASE_KEY
-  }), reonicApiKey && /*#__PURE__*/React.createElement(ReonicMappingConfig, {
-    mapping: reonicMapping,
-    saveMapping: saveReonicMapping,
-    stock: stock
+  }), reonicApiKey && /*#__PURE__*/React.createElement(ReonicCatalogConfig, {
+    reonicApiKey: reonicApiKey,
+    supabaseUrl: SUPABASE_URL,
+    catalog: reonicCatalog,
+    saveCatalog: saveReonicCatalog
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#FFFFFF",
