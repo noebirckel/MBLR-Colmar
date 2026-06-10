@@ -21868,7 +21868,13 @@ function LeadsTab({
       const liveIds = new Set(currentLeads.map(l => l.reonic_id).filter(Boolean));
       const allKnownIds = liveIds;
 
-      const newOffers = results.filter(o => !allKnownIds.has(o.id));
+      const newOffers = results.filter(o => {
+        if (allKnownIds.has(o.id)) return false;
+        // Ne pas importer les projets déjà terminés/archivés comme nouveaux leads
+        if (o.archivedAt) return false;
+        if (o.deal && (o.deal.state === "Won" || o.deal.state === "Lost")) return false;
+        return true;
+      });
 
       // 4. Mises à jour : leads existants dont le statut/prix/contact a changé
       const reonicMap = new Map(results.map(o => [o.id, o]));
@@ -21944,8 +21950,14 @@ function LeadsTab({
         const newPrix = offer.totalPlannedPrice || 0;
         const newStatus = offer.signatureStatus || offer.deal?.state || "";
         const newMessage = offer.customerMessage || "";
-        // Mapping statut v3
-        const newMblrStatut = offer.mblrStatut || "devis_ligne";
+        // Mapping statut v3 — calculé localement (offer.mblrStatut n'existe pas dans silentSync)
+        const newMblrStatut = (() => {
+          if (offer.archivedAt) return "perdu";
+          if (offer.deal && offer.deal.state === "Won") return "converti";
+          if (offer.deal && offer.deal.state === "Lost") return "perdu";
+          if (offer.stage === "request") return "a_appeler";
+          return "devis_ligne";
+        })();
         const PROTECTED_STATUTS_v3 = ["rdv_fixe", "rdv_fait", "relance", "converti", "perdu", "en_veille"];
         // devis_ligne est normalement protégé, SAUF si Reonic dit que c'est une demande (request)
         // dans ce cas on corrige le mauvais statut initial
@@ -22054,7 +22066,7 @@ function LeadsTab({
           adresse,
           message: offer.customerMessage || "",
           canal: "Site web",
-          statut: "devis_ligne",
+          statut: offer.stage === "request" ? "a_appeler" : "devis_ligne",
           date_creation: (() => { const d = offer.requestCreatedAt || offer.projectCreatedAt; if (!d) return now; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`; })(),
           prix_reonic: offer.totalPlannedPrice || 0,
           reonic_status: offer.signatureStatus || (offer.deal && offer.deal.state) || "",
