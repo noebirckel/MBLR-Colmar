@@ -21803,6 +21803,32 @@ function LeadsTab({
     window._autoSyncStatus = autoSyncStatus;
   }, [autoSyncStatus]);
   const autoSyncRef = React.useRef(false);
+
+  // ── IDs Reonic ignorés (leads supprimés manuellement) ── persisté en app_configs
+  const [ignoredReonicIds, setIgnoredReonicIds] = useState(new Set());
+  const ignoredReonicIdsRef = React.useRef(new Set());
+  React.useEffect(() => { ignoredReonicIdsRef.current = ignoredReonicIds; }, [ignoredReonicIds]);
+
+  // Charger les IDs ignorés depuis app_configs au montage
+  React.useEffect(() => {
+    sb.from("app_configs").select("value").eq("key", "reonic_ignored_ids").maybeSingle().then(({ data }) => {
+      if (data && data.value) {
+        try {
+          const ids = new Set(Array.isArray(data.value) ? data.value : JSON.parse(data.value));
+          setIgnoredReonicIds(ids);
+          ignoredReonicIdsRef.current = ids;
+        } catch(e) {}
+      }
+    });
+  }, []);
+
+  const addIgnoredReonicIds = async (newIds) => {
+    if (!newIds || newIds.length === 0) return;
+    const merged = new Set([...ignoredReonicIdsRef.current, ...newIds]);
+    setIgnoredReonicIds(merged);
+    ignoredReonicIdsRef.current = merged;
+    await sb.from("app_configs").upsert({ key: "reonic_ignored_ids", value: JSON.stringify([...merged]) });
+  };
   // Ref locale pour avoir toujours les leads à jour dans silentSync (évite la closure stale)
   const localLeadsRef = React.useRef(leads);
   React.useEffect(() => { localLeadsRef.current = leads; }, [leads]);
@@ -21873,6 +21899,8 @@ function LeadsTab({
         // Ne pas importer les projets déjà terminés/archivés comme nouveaux leads
         if (o.archivedAt) return false;
         if (o.deal && (o.deal.state === "Won" || o.deal.state === "Lost")) return false;
+        // Ne pas réimporter les leads supprimés manuellement
+        if (ignoredReonicIdsRef.current.has(o.id)) return false;
         return true;
       });
 
@@ -22134,7 +22162,53 @@ function LeadsTab({
     autoSyncRef.current = false;
   }, [reonicApiKey, reonicClientId, leads, EDGE_URL]);
 
-  // Lancer le sync automatique au montage + exposer pour le bouton manuel
+  // Ré-enrichir les contacts existants (téléphone/email/adresse manquants) depuis Reonic
+  const [reenrichStatus, setReenrichStatus] = useState(null);
+  const reenrichContacts = React.useCallback(async () => {
+    if (!reonicApiKey || !EDGE_URL) return;
+    setReenrichStatus("loading");
+    try {
+      const res = await fetch(EDGE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get_projects", apiKey: reonicApiKey, payload: {} })
+      });
+      const data = await res.json();
+      if (!data.ok) { setReenrichStatus("error"); return; }
+      const results = data.data || [];
+      const reonicMap = new Map(results.map(o => [o.id, o]));
+      const currentLeads = localLeadsRef.current || leads;
+      // Leads avec reonic_id qui ont des champs contact manquants
+      const toFix = currentLeads.filter(l => l.reonic_id && (!l.telephone || !l.email || !l.adresse || !l.nom));
+      let fixed = 0;
+      for (const lead of toFix) {
+        const offer = reonicMap.get(lead.reonic_id);
+        if (!offer) continue;
+        const c = offer.customerContact || null;
+        const newTel = (c && (c.mobile || c.phone)) || "";
+        const newEmail = (c && c.primaryEmail) || "";
+        const addr = offer.address || {};
+        const newAdresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
+        const newNom = (c && c.lastName) || "";
+        const newPrenom = (c && c.firstName) || "";
+        const newFullName = (c && c.fullName) || `${newPrenom} ${newNom}`.trim();
+        const patch = {};
+        if (!lead.telephone && newTel) patch.telephone = newTel;
+        if (!lead.email && newEmail) patch.email = newEmail;
+        if (!lead.adresse && newAdresse) patch.adresse = newAdresse;
+        if (!lead.nom && newNom) { patch.nom = newNom; patch.prenom = newPrenom; patch.client = newFullName || lead.client; }
+        if (Object.keys(patch).length === 0) continue;
+        fixed++;
+        setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...patch } : l));
+        await sb.from("leads").update(patch).eq("id", lead.id);
+      }
+      setReenrichStatus({ fixed });
+      setTimeout(() => setReenrichStatus(null), 5000);
+    } catch(e) {
+      console.error("[Reenrich]", e.message);
+      setReenrichStatus("error");
+    }
+  }, [reonicApiKey, EDGE_URL, leads]);
   React.useEffect(() => {
     // Nettoyer les anciens synced IDs du localStorage (obsolète)
     try { localStorage.removeItem("reonic_synced_ids"); } catch(e) {}
@@ -25481,7 +25555,13 @@ function LeadsTab({
       color: "#16A34A",
       border: "1px solid #BBF7D0"
     }
-  }, "\u2705 ", autoSyncStatus.nb > 0 ? `${autoSyncStatus.nb} nouveau${autoSyncStatus.nb > 1 ? "x" : ""} lead${autoSyncStatus.nb > 1 ? "s" : ""}` : "", autoSyncStatus.nb > 0 && autoSyncStatus.updated > 0 ? " · " : "", autoSyncStatus.updated > 0 ? `${autoSyncStatus.updated} mis à jour` : ""))), subView === "liste" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "\u2705 ", autoSyncStatus.nb > 0 ? `${autoSyncStatus.nb} nouveau${autoSyncStatus.nb > 1 ? "x" : ""} lead${autoSyncStatus.nb > 1 ? "s" : ""}` : "", autoSyncStatus.nb > 0 && autoSyncStatus.updated > 0 ? " · " : "", autoSyncStatus.updated > 0 ? `${autoSyncStatus.updated} mis à jour` : "")),
+  canEdit(role) && reonicApiKey && /*#__PURE__*/React.createElement("button", {
+    onClick: reenrichContacts,
+    disabled: reenrichStatus === "loading",
+    title: "Ré-enrichir les contacts existants (téléphone, email, adresse manquants)",
+    style: BTN("#6366F1", { padding: "8px 13px", fontSize: 13, opacity: reenrichStatus === "loading" ? 0.6 : 1 })
+  }, reenrichStatus === "loading" ? "\u23F3 Enrichissement\u2026" : reenrichStatus && reenrichStatus.fixed !== undefined ? `\u2705 ${reenrichStatus.fixed} contact(s) mis à jour` : "\uD83D\uDCDE Ré-enrichir contacts")), subView === "liste" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#FFFFFF",
       borderRadius: 12,
@@ -25585,6 +25665,12 @@ function LeadsTab({
       onClick: () => {
         if (!confirm(`Supprimer d\xE9finitivement ${selectedLeads.size} lead(s) ?\n\nCette action est irr\xE9versible.`)) return;
         const ids = [...selectedLeads];
+        // M\xE9moriser les reonic_id supprim\xE9s pour \xE9viter leur r\xE9import automatique
+        const reonicIdsToIgnore = ids.map(id => {
+          const l = (localLeadsRef.current || leads).find(x => x.id === id);
+          return l && l.reonic_id ? l.reonic_id : null;
+        }).filter(Boolean);
+        if (reonicIdsToIgnore.length > 0) addIgnoredReonicIds(reonicIdsToIgnore);
         setLeads(p => p.filter(l => !ids.includes(l.id)));
         ids.forEach(id => sb.from("leads").delete().eq("id", id).then(({ error }) => {
           if (error) console.error("[BulkDelete]", error.message);
