@@ -1360,6 +1360,7 @@ function OffresTab({
   onLeadConverted
 }) {
   const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
+  const canEdit = r => ["administrateur", "commercial", "secretaire"].includes(r);
   const BTN = (bg, e = {}) => ({
     background: bg, border: "none", borderRadius: 10, color: "#FFF",
     padding: "9px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13,
