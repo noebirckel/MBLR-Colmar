@@ -27654,7 +27654,7 @@ function App() {
   })(), view === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
     isMobile: isMobile,
     ventes: ventes,
-    leads: leads,
+    leads: [],
     chantiers: chantiersPipeline,
     stock: stock,
     orders: orders,
@@ -28191,11 +28191,7 @@ function App() {
   })(), role === "administrateur" && (() => {
     const todayISO = new Date().toISOString().split("T")[0];
     const today = new Date().toLocaleDateString("fr-FR");
-    const rdvDuJour = (leads || []).filter(l => {
-      if (!l.date_rdv) return false;
-      const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-      return rdv === todayISO;
-    }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
+    const rdvDuJour = [];
     const installDuJour = chantiersPipeline.filter(ch => ch.date_installation === today && ch.statut !== "termine");
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -28577,11 +28573,7 @@ function App() {
     };
     return /*#__PURE__*/React.createElement("div", null, (() => {
       const todayISO = new Date().toISOString().split("T")[0];
-      const rdvDuJour = (leads || []).filter(l => {
-        if (!l.date_rdv) return false;
-        const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-        return rdv === todayISO;
-      }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
+      const rdvDuJour = [];
       if (rdvDuJour.length === 0) return /*#__PURE__*/React.createElement("div", {
         style: {
           background: "#FFFFFF",
@@ -32406,23 +32398,7 @@ function App() {
         n: ventes.filter(v => (Date.now() - v.id) / 3600000 < 24).length,
         c: "#10B981"
       };
-      if (t === "leads") {
-        const todayISO2 = new Date().toISOString().split("T")[0];
-        const rdvSansRapport = (leads || []).filter(l => {
-          if (!l.date_rdv) return false;
-          const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-          return rdv === todayISO2 && !l.rapport_rdv;
-        }).length;
-        const relancesRetard = (leads || []).filter(l => {
-          if (!l.date_relance || ["converti", "perdu", "sans_reponse"].includes(l.statut)) return false;
-          const [j, m, a] = (l.date_relance || "").split("/");
-          return new Date(Number(a), Number(m) - 1, Number(j)).getTime() <= Date.now();
-        }).length;
-        return {
-          n: rdvSansRapport + relancesRetard,
-          c: rdvSansRapport > 0 ? "#A855F7" : "#EF4444"
-        };
-      }
+      if (t === "leads") { return { n: 0, c: "#EF4444" }; }
       return {
         n: 0,
         c: "#EF4444"
