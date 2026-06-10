@@ -26024,7 +26024,6 @@ function App() {
         }
       }
       await run("rapports", nrapp);
-      if (nleads) await run("leads", nleads);
       setSync("saved");
     } catch (e) {
       setSync("error");
@@ -29094,14 +29093,9 @@ function App() {
       const v = ventes.find(vt => vt.id === ch.vente_id);
       return s + Number((v === null || v === void 0 ? void 0 : v.prix_ht) || 0);
     }, 0);
-    // Taux de transformation leads ce mois
-    const _leadsMonth = (leads || []).filter(l => {
-      const d = l.date_creation;
-      if (!d) return false;
-      const [j, m, a] = (d || "").split("/");
-      return Number(m) === _now.getMonth() + 1 && Number(a) === _now.getFullYear();
-    });
-    const _txConvert = _leadsMonth.length > 0 ? Math.round(_leadsMonth.filter(l => l.statut === "converti").length / _leadsMonth.length * 100) : null;
+    // Taux de transformation leads ce mois (leads supprimés — remplacé par ventes)
+    const _leadsMonth = [];
+    const _txConvert = null;
     // Mini histogramme CA 6 mois
     const _hist6 = Array.from({
       length: 6
@@ -29502,11 +29496,7 @@ function App() {
   })(), role === "administrateur" && (() => {
     const todayISO = new Date().toISOString().split("T")[0];
     const today = new Date().toLocaleDateString("fr-FR");
-    const rdvDuJour = (leads || []).filter(l => {
-      if (!l.date_rdv) return false;
-      const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-      return rdv === todayISO;
-    }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
+    const rdvDuJour = [];
     const installDuJour = chantiersPipeline.filter(ch => ch.date_installation === today && ch.statut !== "termine");
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -29888,11 +29878,7 @@ function App() {
     };
     return /*#__PURE__*/React.createElement("div", null, (() => {
       const todayISO = new Date().toISOString().split("T")[0];
-      const rdvDuJour = (leads || []).filter(l => {
-        if (!l.date_rdv) return false;
-        const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-        return rdv === todayISO;
-      }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
+      const rdvDuJour = [];
       if (rdvDuJour.length === 0) return /*#__PURE__*/React.createElement("div", {
         style: {
           background: "#FFFFFF",
@@ -33717,22 +33703,7 @@ function App() {
         n: ventes.filter(v => (Date.now() - v.id) / 3600000 < 24).length,
         c: "#10B981"
       };
-      if (t === "leads") {
-        const todayISO2 = new Date().toISOString().split("T")[0];
-        const rdvSansRapport = (leads || []).filter(l => {
-          if (!l.date_rdv) return false;
-          const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
-          return rdv === todayISO2 && !l.rapport_rdv;
-        }).length;
-        const relancesRetard = (leads || []).filter(l => {
-          if (!l.date_relance || ["converti", "perdu", "sans_reponse"].includes(l.statut)) return false;
-          const [j, m, a] = (l.date_relance || "").split("/");
-          return new Date(Number(a), Number(m) - 1, Number(j)).getTime() <= Date.now();
-        }).length;
-        return {
-          n: rdvSansRapport + relancesRetard,
-          c: rdvSansRapport > 0 ? "#A855F7" : "#EF4444"
-        };
+      if (t === "leads") { return null;
       }
       return {
         n: 0,
