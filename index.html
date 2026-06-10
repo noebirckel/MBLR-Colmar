@@ -26782,7 +26782,109 @@ function App() {
       padding: isMobile ? "12px 12px 80px" : "20px 24px",
       background: "#F1F5F9"
     }
-  }, view === "offres" && /*#__PURE__*/React.createElement(OffresTab, {
+  }, view === "ventes" && /*#__PURE__*/React.createElement(VentesTab, {
+    isMobile: isMobile,
+    ventes: ventes,
+    setVentes: SV,
+    setVentesRaw: setVentes,
+    stock: stock,
+    profile: profile,
+    fmt: fmt,
+    role: role,
+    installConfigs: installConfigs,
+    marqueConfigs: marqueConfigs,
+    reonicMapping: reonicMapping,
+    onVenteUpdated: v => {
+      SC2(prev => {
+        const updated = prev.map(ch => {
+          if (String(ch.vente_id) !== String(v.id)) return ch;
+          if (ch.statut === "termine") return ch;
+          const patch = {
+            materiels: v.materiels || [],
+            cables: v.cables || [],
+            client: v.client,
+            adresse: v.adresse || ch.adresse,
+            duree_chantier: v.duree_chantier || ch.duree_chantier
+          };
+          sb.from("chantiers").update(patch).eq("id", ch.id).then(({ error }) => {
+            if (error) console.error("[VenteUpdate] sync chantier:", error.message);
+          });
+          return { ...ch, ...patch };
+        });
+        return updated;
+      });
+    },
+    onVenteSaved: v => {
+      SC2(p => [{
+        id: Date.now(),
+        vente_id: v.id,
+        client: v.client,
+        materiels: v.materiels || [],
+        cables: v.cables || [],
+        date_creation: new Date().toLocaleDateString("fr-FR"),
+        statut: "a_planifier",
+        adresse: v.adresse || "",
+        notes: "",
+        technicien: installerName || "",
+        duree_chantier: v.duree_chantier || "1j"
+      }, ...p]);
+      SA(p => [{
+        id: Date.now() + 1,
+        vente_id: v.id,
+        client: v.client,
+        montant_vente: v.prix_ht,
+        montant_acompte: Math.round(v.prix_ht * (acompteDefPct / 100)),
+        statut: "a_envoyer",
+        date_creation: new Date().toLocaleDateString("fr-FR")
+      }, ...p]);
+    },
+    onDeleteVente: async id => {
+      await sb.from("ventes").delete().eq("id", id);
+      setVentes(prev => {
+        const filtered = prev.filter(v => v.id !== id);
+        saveDB(null, null, null, filtered, null, null, null, null, null, null);
+        return filtered;
+      });
+      SA(p => p.filter(a => a.vente_id !== id));
+      await sb.from("acomptes").delete().eq("vente_id", id);
+      SC2(p => p.filter(c => c.vente_id !== id));
+      await sb.from("chantiers").delete().eq("vente_id", id);
+    }
+  }), view === "administratif" && /*#__PURE__*/React.createElement(AdminTab, {
+    isMobile: isMobile,
+    acomptes: acomptes,
+    setAcomptes: SA,
+    ventes: ventes,
+    profile: profile,
+    fmt: fmt,
+    role: role,
+    acompteDefPct: acompteDefPct,
+    saveAcomptePct: saveAcomptePct
+  }), view === "cartes" && /*#__PURE__*/React.createElement(CarteTab, {
+    isMobile: isMobile,
+    ventes: ventes,
+    setVentes: SV,
+    chantiers: chantiersPipeline,
+    fmt: fmt,
+    role: role,
+    allProfiles: allProfiles
+  }), view === "clients" && /*#__PURE__*/React.createElement(ClientsTab, {
+    isMobile: isMobile,
+    ventes: ventes,
+    chantiers: chantiersPipeline,
+    savTickets: savTickets,
+    rapports: rapports,
+    acomptes: acomptes,
+    fmt: fmt,
+    role: role,
+    goTo: goTo,
+    initClient: clientInitSearch,
+    onInitUsed: () => setClientInitSearch("")
+  }), view === "messagerie" && /*#__PURE__*/React.createElement(MessagerieTab, {
+    isMobile: isMobile,
+    profile: profile,
+    authUser: authUser
+  }), view === "offres" && /*#__PURE__*/React.createElement(OffresTab, {
     isMobile: isMobile,
     ventes: ventes,
     profile: profile,
@@ -27552,7 +27654,7 @@ function App() {
   })(), view === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
     isMobile: isMobile,
     ventes: ventes,
-    leads: [],
+    leads: leads,
     chantiers: chantiersPipeline,
     stock: stock,
     orders: orders,
@@ -27681,9 +27783,14 @@ function App() {
       const v = ventes.find(vt => vt.id === ch.vente_id);
       return s + Number((v === null || v === void 0 ? void 0 : v.prix_ht) || 0);
     }, 0);
-    // Taux de transformation leads ce mois (leads supprimés — remplacé par ventes)
-    const _leadsMonth = [];
-    const _txConvert = null;
+    // Taux de transformation leads ce mois
+    const _leadsMonth = (leads || []).filter(l => {
+      const d = l.date_creation;
+      if (!d) return false;
+      const [j, m, a] = (d || "").split("/");
+      return Number(m) === _now.getMonth() + 1 && Number(a) === _now.getFullYear();
+    });
+    const _txConvert = _leadsMonth.length > 0 ? Math.round(_leadsMonth.filter(l => l.statut === "converti").length / _leadsMonth.length * 100) : null;
     // Mini histogramme CA 6 mois
     const _hist6 = Array.from({
       length: 6
@@ -27891,7 +27998,7 @@ function App() {
         fontWeight: 700
       }
     }, " \xB7 ", _impaiesAlerte, " en alerte"))), /*#__PURE__*/React.createElement("div", {
-      onClick: () => goTo("offres"),
+      onClick: () => goTo("leads"),
       style: {
         background: "#FFFFFF",
         borderRadius: 12,
@@ -28084,7 +28191,11 @@ function App() {
   })(), role === "administrateur" && (() => {
     const todayISO = new Date().toISOString().split("T")[0];
     const today = new Date().toLocaleDateString("fr-FR");
-    const rdvDuJour = [];
+    const rdvDuJour = (leads || []).filter(l => {
+      if (!l.date_rdv) return false;
+      const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
+      return rdv === todayISO;
+    }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
     const installDuJour = chantiersPipeline.filter(ch => ch.date_installation === today && ch.statut !== "termine");
     return /*#__PURE__*/React.createElement("div", {
       style: {
@@ -28129,7 +28240,7 @@ function App() {
         fontWeight: 700
       }
     }, rdvDuJour.length), /*#__PURE__*/React.createElement("button", {
-      onClick: () => goTo("offres"),
+      onClick: () => goTo("leads"),
       style: {
         background: "#A855F715",
         border: "1px solid #A855F730",
@@ -28243,7 +28354,7 @@ function App() {
         }
       }, "\uD83D\uDCCD"))));
     }), /*#__PURE__*/React.createElement("button", {
-      onClick: () => goTo("offres"),
+      onClick: () => goTo("leads"),
       style: {
         background: "transparent",
         border: "1px solid #E2E8F0",
@@ -28466,7 +28577,11 @@ function App() {
     };
     return /*#__PURE__*/React.createElement("div", null, (() => {
       const todayISO = new Date().toISOString().split("T")[0];
-      const rdvDuJour = [];
+      const rdvDuJour = (leads || []).filter(l => {
+        if (!l.date_rdv) return false;
+        const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
+        return rdv === todayISO;
+      }).sort((a, b) => (a.heure_rdv || "").localeCompare(b.heure_rdv || ""));
       if (rdvDuJour.length === 0) return /*#__PURE__*/React.createElement("div", {
         style: {
           background: "#FFFFFF",
@@ -28491,7 +28606,7 @@ function App() {
         }
       }, "Aucun RDV pr\xE9vu aujourd'hui"), /*#__PURE__*/React.createElement("button", {
         onClick: () => {
-          if (window._openNewRdv) window._openNewRdv();else goTo("offres");
+          if (window._openNewRdv) window._openNewRdv();else goTo("leads");
         },
         style: {
           background: "linear-gradient(135deg,#A855F7,#7C3AED)",
@@ -28545,7 +28660,7 @@ function App() {
         }
       }, rdvDuJour.length, " RDV"), /*#__PURE__*/React.createElement("button", {
         onClick: () => {
-          if (window._openNewRdv) window._openNewRdv();else goTo("offres");
+          if (window._openNewRdv) window._openNewRdv();else goTo("leads");
         },
         style: {
           background: "linear-gradient(135deg,#A855F7,#7C3AED)",
@@ -28664,7 +28779,7 @@ function App() {
           }
         }, "\uD83D\uDCCD"), /*#__PURE__*/React.createElement("button", {
           onClick: () => {
-            if (window._openRdvRapport) window._openRdvRapport(lead);else goTo("offres");
+            if (window._openRdvRapport) window._openRdvRapport(lead);else goTo("leads");
           },
           style: {
             background: hasRapport ? "#E2E8F0" : "linear-gradient(135deg,#A855F7,#7C3AED)",
@@ -32291,7 +32406,22 @@ function App() {
         n: ventes.filter(v => (Date.now() - v.id) / 3600000 < 24).length,
         c: "#10B981"
       };
-      if (t === "leads") { return null;
+      if (t === "leads") {
+        const todayISO2 = new Date().toISOString().split("T")[0];
+        const rdvSansRapport = (leads || []).filter(l => {
+          if (!l.date_rdv) return false;
+          const rdv = l.date_rdv.includes("-") ? l.date_rdv : l.date_rdv.split("/").reverse().join("-");
+          return rdv === todayISO2 && !l.rapport_rdv;
+        }).length;
+        const relancesRetard = (leads || []).filter(l => {
+          if (!l.date_relance || ["converti", "perdu", "sans_reponse"].includes(l.statut)) return false;
+          const [j, m, a] = (l.date_relance || "").split("/");
+          return new Date(Number(a), Number(m) - 1, Number(j)).getTime() <= Date.now();
+        }).length;
+        return {
+          n: rdvSansRapport + relancesRetard,
+          c: rdvSansRapport > 0 ? "#A855F7" : "#EF4444"
+        };
       }
       return {
         n: 0,
