@@ -1439,8 +1439,9 @@ function OffresTab({
     [ventes]
   );
 
+  // filtres : on exclut les demandes (stage=request) ET on sépare les Gagnés
   const filtered = React.useMemo(() => {
-    let list = projects.filter(o => !o.archivedAt);
+    let list = projects.filter(o => !o.archivedAt && o.stage !== "request" && !(o.deal && o.deal.state === "Won"));
     if (filter !== "tous") list = list.filter(o => o.stage === filter);
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -1448,15 +1449,29 @@ function OffresTab({
         const c = o.customerContact || {};
         return (c.fullName || "").toLowerCase().includes(s) ||
           (c.primaryEmail || "").toLowerCase().includes(s) ||
-          (o.address && o.address.city || "").toLowerCase().includes(s);
+          ((o.address && o.address.city) || "").toLowerCase().includes(s);
       });
     }
     return list;
   }, [projects, filter, search]);
 
+  // Section Gagnés séparée
+  const filteredWon = React.useMemo(() => {
+    let list = projects.filter(o => !o.archivedAt && o.deal && o.deal.state === "Won");
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      list = list.filter(o => {
+        const c = o.customerContact || {};
+        return (c.fullName || "").toLowerCase().includes(s) ||
+          (c.primaryEmail || "").toLowerCase().includes(s) ||
+          ((o.address && o.address.city) || "").toLowerCase().includes(s);
+      });
+    }
+    return list;
+  }, [projects, search]);
+
   const FILTERS = [
     { k: "tous", label: "Tous" },
-    { k: "request", label: "Demandes" },
     { k: "offer", label: "Offres" },
     { k: "installation", label: "Installations" }
   ];
@@ -1528,11 +1543,11 @@ function OffresTab({
       style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }
     },
       ...[
-        { label: "Total", val: projects.filter(o => !o.archivedAt).length, color: "#2563EB" },
-        { label: "Demandes", val: projects.filter(o => !o.archivedAt && o.stage === "request").length, color: "#F59E0B" },
+        { label: "En cours", val: projects.filter(o => !o.archivedAt && o.stage !== "request" && !(o.deal && o.deal.state === "Won")).length, color: "#2563EB" },
         { label: "Offres", val: projects.filter(o => !o.archivedAt && o.stage === "offer").length, color: "#2563EB" },
-        { label: "Gagné", val: projects.filter(o => o.deal && o.deal.state === "Won").length, color: "#10B981" },
-        { label: "Ventes créées", val: ventesReonicIds.size, color: "#7C3AED" }
+        { label: "Installations", val: projects.filter(o => !o.archivedAt && o.stage === "installation").length, color: "#7C3AED" },
+        { label: "Gagnés", val: projects.filter(o => o.deal && o.deal.state === "Won").length, color: "#10B981" },
+        { label: "Ventes créées", val: ventesReonicIds.size, color: "#059669" }
       ].map(s =>
         /*#__PURE__*/React.createElement("div", {
           key: s.label,
@@ -1542,88 +1557,165 @@ function OffresTab({
       )
     ),
 
-    // Liste projets
-    !loading && /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
-      filtered.length === 0
-        ? /*#__PURE__*/React.createElement("div", {
-            style: { background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0",
-              padding: "32px", textAlign: "center", color: "#94A3B8" }
-          }, "Aucun projet trouvé")
-        : filtered.map(offer => {
+    // Liste principale (offres + installations, sans demandes ni gagnés)
+    !loading && /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 } },
+      (() => {
+        const renderOffer = (offer, accentColor) => {
+        const c = offer.customerContact || {};
+        const addr = offer.address || {};
+        const badge = getStatutBadge(offer);
+        const prix = getPrix(offer);
+        const date = isoToFr(offer.offerCreatedAt || offer.requestCreatedAt || offer.projectCreatedAt);
+        const hasVente = ventesReonicIds.has(offer.id);
+        const canCreateVente = !hasVente && !(offer.deal && offer.deal.state === "Lost") && !offer.archivedAt;
+        return /*#__PURE__*/React.createElement("div", {
+          key: offer.id,
+          style: { background: "#FFF", borderRadius: 12,
+            border: `1px solid ${accentColor || "#E2E8F0"}`,
+            padding: "14px 16px", display: "flex", alignItems: "center",
+            gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+            /*#__PURE__*/React.createElement("div", {
+              style: { fontWeight: 700, fontSize: 14, color: "#1E293B",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+            }, c.fullName || c.primaryEmail || "Client inconnu"),
+            /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 2 } },
+              [c.primaryEmail, addr.city && `📍 ${addr.city}`, date && `📅 ${date}`]
+                .filter(Boolean).join(" · ")
+            )
+          ),
+          prix && (prix.override != null || prix.base > 0) && /*#__PURE__*/React.createElement("div", {
+            style: { textAlign: "right", minWidth: 90 }
+          },
+            prix.override != null && /*#__PURE__*/React.createElement("div", {
+              style: { fontWeight: 700, fontSize: 14, color: "#1E293B" }
+            }, (prix.override / 1000).toFixed(1), "k€"),
+            prix.base > 0 && /*#__PURE__*/React.createElement("div", {
+              style: { fontSize: 11, color: "#94A3B8",
+                textDecoration: prix.override != null ? "line-through" : "none" }
+            }, (prix.base / 1000).toFixed(1), "k€ base")
+          ),
+          /*#__PURE__*/React.createElement("div", {
+            style: { padding: "4px 10px", borderRadius: 20, fontSize: 11,
+              fontWeight: 700, color: badge.color, background: badge.bg, whiteSpace: "nowrap" }
+          }, badge.label),
+          /*#__PURE__*/React.createElement("div", { style: { minWidth: 120, textAlign: "right" } },
+            hasVente
+              ? /*#__PURE__*/React.createElement("span", {
+                  style: { fontSize: 12, color: "#10B981", fontWeight: 700 }
+                }, "✓ Vente créée")
+              : canCreateVente && canEdit(role)
+                ? /*#__PURE__*/React.createElement("button", {
+                    onClick: () => {
+                      window._leadToConvert = {
+                        id: offer.id, reonic_id: offer.id,
+                        client: c.fullName || c.primaryEmail || "Client Reonic",
+                        prenom: c.firstName || "", nom: c.lastName || "",
+                        email: c.primaryEmail || "", telephone: "",
+                        adresse: [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" "),
+                        prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
+                        reonic_status: (offer.deal && offer.deal.state) || ""
+                      };
+                      if (onLeadConverted) onLeadConverted(window._leadToConvert);
+                    },
+                    style: BTN("linear-gradient(135deg,#7C3AED,#6D28D9)", { fontSize: 12, padding: "6px 12px" })
+                  }, "💰 Créer vente")
+                : null
+          )
+        );
+      };
+        if (filtered.length === 0) return /*#__PURE__*/React.createElement("div", {
+          style: { background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0",
+            padding: "32px", textAlign: "center", color: "#94A3B8" }
+        }, "Aucune offre en cours");
+        return filtered.map(o => renderOffer(o, null));
+      })()
+    ),
+
+    // Section Gagnés
+    !loading && filteredWon.length > 0 && /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }
+      },
+        /*#__PURE__*/React.createElement("div", {
+          style: { flex: 1, height: 1, background: "#D1FAE5" }
+        }),
+        /*#__PURE__*/React.createElement("span", {
+          style: { fontSize: 12, fontWeight: 800, color: "#059669",
+            textTransform: "uppercase", letterSpacing: "0.06em", whiteSpace: "nowrap" }
+        }, "✅ Gagnés — ", filteredWon.length),
+        /*#__PURE__*/React.createElement("div", {
+          style: { flex: 1, height: 1, background: "#D1FAE5" }
+        })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+        (() => {
+          const renderWon = (offer) => {
             const c = offer.customerContact || {};
             const addr = offer.address || {};
-            const badge = getStatutBadge(offer);
             const prix = getPrix(offer);
-            const date = isoToFr(offer.requestCreatedAt || offer.projectCreatedAt);
+            const date = isoToFr(offer.offerCreatedAt || offer.requestCreatedAt || offer.projectCreatedAt);
             const hasVente = ventesReonicIds.has(offer.id);
-            const canCreateVente = !hasVente && offer.stage !== "request" && !(offer.deal && offer.deal.state === "Lost") && !offer.archivedAt;
-
             return /*#__PURE__*/React.createElement("div", {
               key: offer.id,
-              style: { background: "#FFF", borderRadius: 12, border: "1px solid #E2E8F0",
+              style: { background: "#F0FDF4", borderRadius: 12, border: "1px solid #86EFAC",
                 padding: "14px 16px", display: "flex", alignItems: "center",
                 gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" }
             },
-              // Infos client
               /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                 /*#__PURE__*/React.createElement("div", {
-                  style: { fontWeight: 700, fontSize: 14, color: "#1E293B",
+                  style: { fontWeight: 700, fontSize: 14, color: "#166534",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
                 }, c.fullName || c.primaryEmail || "Client inconnu"),
-                /*#__PURE__*/React.createElement("div", {
-                  style: { fontSize: 12, color: "#64748B", marginTop: 2 }
-                },
+                /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "#16a34a", marginTop: 2 } },
                   [c.primaryEmail, addr.city && `📍 ${addr.city}`, date && `📅 ${date}`]
                     .filter(Boolean).join(" · ")
                 )
               ),
-              // Prix
               prix && (prix.override != null || prix.base > 0) && /*#__PURE__*/React.createElement("div", {
                 style: { textAlign: "right", minWidth: 90 }
               },
                 prix.override != null && /*#__PURE__*/React.createElement("div", {
-                  style: { fontWeight: 700, fontSize: 14, color: "#1E293B" }
+                  style: { fontWeight: 700, fontSize: 14, color: "#166534" }
                 }, (prix.override / 1000).toFixed(1), "k€"),
                 prix.base > 0 && /*#__PURE__*/React.createElement("div", {
-                  style: { fontSize: 11, color: "#94A3B8",
+                  style: { fontSize: 11, color: "#86EFAC",
                     textDecoration: prix.override != null ? "line-through" : "none" }
                 }, (prix.base / 1000).toFixed(1), "k€ base")
               ),
-              // Badge statut
               /*#__PURE__*/React.createElement("div", {
                 style: { padding: "4px 10px", borderRadius: 20, fontSize: 11,
-                  fontWeight: 700, color: badge.color, background: badge.bg,
-                  whiteSpace: "nowrap" }
-              }, badge.label),
-              // Bouton vente
+                  fontWeight: 700, color: "#059669", background: "#DCFCE7", whiteSpace: "nowrap" }
+              }, "Gagné ✓"),
               /*#__PURE__*/React.createElement("div", { style: { minWidth: 120, textAlign: "right" } },
                 hasVente
                   ? /*#__PURE__*/React.createElement("span", {
                       style: { fontSize: 12, color: "#10B981", fontWeight: 700 }
                     }, "✓ Vente créée")
-                  : canCreateVente && canEdit(role)
+                  : canEdit(role)
                     ? /*#__PURE__*/React.createElement("button", {
                         onClick: () => {
                           window._leadToConvert = {
-                            id: offer.id,
-                            reonic_id: offer.id,
+                            id: offer.id, reonic_id: offer.id,
                             client: c.fullName || c.primaryEmail || "Client Reonic",
-                            prenom: c.firstName || "",
-                            nom: c.lastName || "",
-                            email: c.primaryEmail || "",
-                            telephone: "",
+                            prenom: c.firstName || "", nom: c.lastName || "",
+                            email: c.primaryEmail || "", telephone: "",
                             adresse: [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" "),
                             prix_reonic: prix ? (prix.override != null ? prix.override : prix.base) : 0,
-                            reonic_status: offer.deal && offer.deal.state || ""
+                            reonic_status: "Won"
                           };
                           if (onLeadConverted) onLeadConverted(window._leadToConvert);
                         },
-                        style: BTN("linear-gradient(135deg,#7C3AED,#6D28D9)", { fontSize: 12, padding: "6px 12px" })
+                        style: BTN("linear-gradient(135deg,#10B981,#059669)", { fontSize: 12, padding: "6px 12px" })
                       }, "💰 Créer vente")
                     : null
               )
             );
-          })
+          };
+          return filteredWon.map(o => renderWon(o));
+        })()
+      )
     )
   );
 }
@@ -18300,6 +18392,54 @@ const LEAD_STATUTS = {
     icon: "❌"
   }
 };
+function SCard({
+  n,
+  title,
+  icon,
+  done,
+  children
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#FFFFFF",
+      borderRadius: 14,
+      border: `1px solid ${done ? "#10B98130" : "#E2E8F0"}`,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "11px 16px",
+      borderBottom: children ? "1px solid #E2E8F022" : "none"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: "50%",
+      background: done ? "#10B981" : "#E2E8F0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 11,
+      fontWeight: 800,
+      color: done ? "#fff" : "#64748B",
+      flexShrink: 0
+    }
+  }, done ? "✓" : n), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      color: done ? "#10B981" : "#1E293B"
+    }
+  }, icon, " ", title)), children && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "13px 16px"
+    }
+  }, children));
+}
 function VentesTab({
   isMobile,
   ventes,
