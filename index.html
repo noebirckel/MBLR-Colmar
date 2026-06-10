@@ -22180,23 +22180,20 @@ function LeadsTab({
         setReonicLoading(false);
         return;
       }
-      const results = ((_data$data4 = data.data) === null || _data$data4 === void 0 ? void 0 : _data$data4.results) || [];
+      // v3 : data.data est un tableau direct (pas data.data.results)
+      const results = (Array.isArray(data.data) ? data.data : (data.data && data.data.results) || []);
 
       // Déduplication multi-critères
       const existingReonicIds = new Set(leads.map(l => l.reonic_id).filter(Boolean));
       const existingPhones = new Set(leads.map(l => normalizePhone(l.telephone)).filter(Boolean));
       const existingEmails = new Set(leads.map(l => (l.email || "").toLowerCase()).filter(Boolean));
 
-      // 2. Charger tous les contacts
-      let contactsMap = {};
-// v3 : contacts embarques dans les projets
-
-      // 3. Enrichir + détecter doublons
+      // 3. Enrichir + détecter doublons — v3 : contact embarqué dans offer.customerContact
       const enriched = results.map(offer => {
-        var _offer$customer3;
-        const contact = contactsMap[(_offer$customer3 = offer.customer) === null || _offer$customer3 === void 0 ? void 0 : _offer$customer3.id] || null;
-        const phone = normalizePhone((contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone));
-        const email = ((contact === null || contact === void 0 ? void 0 : contact.email) || "").toLowerCase();
+        // v3 : le contact est directement dans offer.customerContact
+        const c = offer.customerContact || null;
+        const phone = normalizePhone((c === null || c === void 0 ? void 0 : c.mobile) || (c === null || c === void 0 ? void 0 : c.phone));
+        const email = ((c === null || c === void 0 ? void 0 : c.primaryEmail) || "").toLowerCase();
         const isReonicDuplicate = existingReonicIds.has(offer.id);
         const isPhoneDuplicate = phone && existingPhones.has(phone);
         const isEmailDuplicate = email && existingEmails.has(email);
@@ -22204,7 +22201,7 @@ function LeadsTab({
         const dupReason = isReonicDuplicate ? "ID Reonic" : isPhoneDuplicate ? "Téléphone" : isEmailDuplicate ? "Email" : "";
         return {
           ...offer,
-          _contact: contact,
+          _contact: c,       // _contact pointe maintenant sur customerContact
           _duplicate: isDuplicate,
           _dupReason: dupReason
         };
@@ -22232,24 +22229,26 @@ function LeadsTab({
     const base = Date.now();
     const newLeads = toImport.map((offer, idx) => {
       var _offer$options8, _offer$options8$, _offer$options8$$wall, _offer$options9, _offer$options9$, _offer$options9$$sola, _offer$currentSignatu7;
-      const contact = offer._contact;
+      const contact = offer._contact; // pointe sur offer.customerContact en v3
       const prenom = (contact === null || contact === void 0 ? void 0 : contact.firstName) || "";
       const nom = (contact === null || contact === void 0 ? void 0 : contact.lastName) || "";
-      const adresse = [contact === null || contact === void 0 ? void 0 : contact.street, contact === null || contact === void 0 ? void 0 : contact.number, contact === null || contact === void 0 ? void 0 : contact.postcode, contact === null || contact === void 0 ? void 0 : contact.city].filter(Boolean).join(" ");
+      // v3 : adresse dans offer.address (pas dans contact)
+      const addr = offer.address || {};
+      const adresse = [addr.street, addr.houseNumber, addr.postcode, addr.city].filter(Boolean).join(" ");
       const wallbox = (((_offer$options8 = offer.options) === null || _offer$options8 === void 0 ? void 0 : (_offer$options8$ = _offer$options8[0]) === null || _offer$options8$ === void 0 ? void 0 : (_offer$options8$$wall = _offer$options8$.wallboxPlanned) === null || _offer$options8$$wall === void 0 ? void 0 : _offer$options8$$wall.components) || []).map(c => c.name).join(", ");
       const solar = (((_offer$options9 = offer.options) === null || _offer$options9 === void 0 ? void 0 : (_offer$options9$ = _offer$options9[0]) === null || _offer$options9$ === void 0 ? void 0 : (_offer$options9$$sola = _offer$options9$.solarPlanned) === null || _offer$options9$$sola === void 0 ? void 0 : _offer$options9$$sola.components) || []).map(c => c.name).join(", ");
       const produits = [wallbox, solar].filter(Boolean).join(" · ");
       const type = getReonicTypeStatic(offer);
       const ti = RTYPE_INFO[type] || RTYPE_INFO.lead;
-      const nomClient = `${prenom} ${nom}`.trim() || (contact === null || contact === void 0 ? void 0 : contact.email) || "Client Reonic";
+      const nomClient = `${prenom} ${nom}`.trim() || (contact === null || contact === void 0 ? void 0 : contact.primaryEmail) || "Client Reonic";
       return {
         id: base + idx,
         reonic_id: offer.id,
         prenom,
         nom,
         client: nomClient,
-        email: (contact === null || contact === void 0 ? void 0 : contact.email) || "",
-        telephone: (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "",
+        email: (contact === null || contact === void 0 ? void 0 : contact.primaryEmail) || "",
+        telephone: (contact === null || contact === void 0 ? void 0 : contact.mobile) || (contact === null || contact === void 0 ? void 0 : contact.phone) || "",
         adresse,
         message: offer.customerMessage || "",
         canal: "Site web",
@@ -23043,10 +23042,10 @@ function LeadsTab({
     const contact = offer._contact;
     const prenom = (contact === null || contact === void 0 ? void 0 : contact.firstName) || "";
     const nom = (contact === null || contact === void 0 ? void 0 : contact.lastName) || "";
-    const nomComplet = prenom || nom ? `${prenom} ${nom}`.trim() : contact !== null && contact !== void 0 && contact.email ? contact.email : (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "Client inconnu";
-    const tel = (contact === null || contact === void 0 ? void 0 : contact.telephone) || (contact === null || contact === void 0 ? void 0 : contact.mobilePhone) || "";
-    const email = (contact === null || contact === void 0 ? void 0 : contact.email) || "";
-    const ville = (contact === null || contact === void 0 ? void 0 : contact.city) || "";
+    const nomComplet = prenom || nom ? `${prenom} ${nom}`.trim() : contact !== null && contact !== void 0 && contact.primaryEmail ? contact.primaryEmail : (contact === null || contact === void 0 ? void 0 : contact.mobile) || (contact === null || contact === void 0 ? void 0 : contact.phone) || "Client inconnu";
+    const tel = (contact === null || contact === void 0 ? void 0 : contact.mobile) || (contact === null || contact === void 0 ? void 0 : contact.phone) || "";
+    const email = (contact === null || contact === void 0 ? void 0 : contact.primaryEmail) || "";
+    const ville = (offer.address && offer.address.city) || "";
     const wallbox = (((_offer$options0 = offer.options) === null || _offer$options0 === void 0 ? void 0 : (_offer$options0$ = _offer$options0[0]) === null || _offer$options0$ === void 0 ? void 0 : (_offer$options0$$wall = _offer$options0$.wallboxPlanned) === null || _offer$options0$$wall === void 0 ? void 0 : _offer$options0$$wall.components) || []).map(c => c.name).join(", ");
     const prix = offer.totalPlannedPrice;
     const date = offer.offerCreatedAt ? new Date(offer.offerCreatedAt).toLocaleDateString("fr-FR") : "";
