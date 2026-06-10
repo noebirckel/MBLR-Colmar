@@ -27783,14 +27783,9 @@ function App() {
       const v = ventes.find(vt => vt.id === ch.vente_id);
       return s + Number((v === null || v === void 0 ? void 0 : v.prix_ht) || 0);
     }, 0);
-    // Taux de transformation leads ce mois
-    const _leadsMonth = (leads || []).filter(l => {
-      const d = l.date_creation;
-      if (!d) return false;
-      const [j, m, a] = (d || "").split("/");
-      return Number(m) === _now.getMonth() + 1 && Number(a) === _now.getFullYear();
-    });
-    const _txConvert = _leadsMonth.length > 0 ? Math.round(_leadsMonth.filter(l => l.statut === "converti").length / _leadsMonth.length * 100) : null;
+    // Taux de transformation leads ce mois (leads supprimés)
+    const _leadsMonth = [];
+    const _txConvert = null;
     // Mini histogramme CA 6 mois
     const _hist6 = Array.from({
       length: 6
