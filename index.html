@@ -1378,6 +1378,7 @@ function OffresTab({
   const [packages, setPackages] = React.useState([]);
   const [pkgLoading, setPkgLoading] = React.useState(false);
   const [selectedPkgs, setSelectedPkgs] = React.useState(new Set());
+  const [pkgSearch, setPkgSearch] = React.useState("");
 
   const openPackageModal = async (offer) => {
     const c = offer.customerContact || {};
@@ -1394,6 +1395,7 @@ function OffresTab({
     };
     setPkgModal({ offer, leadBase });
     setSelectedPkgs(new Set());
+    setPkgSearch("");
     if (packages.length === 0 && reonicApiKey && EDGE_URL) {
       setPkgLoading(true);
       try {
@@ -1569,14 +1571,37 @@ function OffresTab({
             style: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94A3B8" }
           }, "×")
         ),
-        /*#__PURE__*/React.createElement("div", { style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
+        /*#__PURE__*/React.createElement("input", {
+          type: "text", placeholder: "🔍 Rechercher un package…",
+          value: pkgSearch, onChange: e => setPkgSearch(e.target.value),
+          style: { width: "100%", boxSizing: "border-box", border: "1px solid #E2E8F0", borderRadius: 8,
+            padding: "8px 12px", fontSize: 13, fontFamily: '"Outfit",sans-serif', outline: "none" }
+        }),
+        /*#__PURE__*/React.createElement("div", { style: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, marginTop: 8 } },
           pkgLoading
             ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 24, color: "#64748B" } }, "⏳ Chargement…")
             : packages.length === 0
               ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 24, color: "#94A3B8" } },
                   "Aucun package. Vérifiez votre configuration Reonic."
                 )
-              : packages.filter(p => p.active !== false).map(pkg => {
+              : (() => {
+                  const prixOffre = pkgModal && pkgModal.leadBase ? Number(pkgModal.leadBase.prix_reonic || 0) : 0;
+                  const filtered = packages.filter(p => {
+                    if (p.active === false) return false;
+                    const name = (p.name || "").toLowerCase();
+                    // Filtre < 5000€ : exclure packages avec "pautric" ou "solaire" dans le nom
+                    if (prixOffre < 5000) {
+                      if (name.includes("pautric")) return false;
+                      if (name.includes("solaire")) return false;
+                    }
+                    // Filtre recherche texte
+                    if (pkgSearch.trim()) {
+                      const s = pkgSearch.toLowerCase();
+                      if (!name.includes(s) && !(p.target || "").toLowerCase().includes(s)) return false;
+                    }
+                    return true;
+                  });
+                  return filtered.map(pkg => {
                   const sel = selectedPkgs.has(pkg.id);
                   return /*#__PURE__*/React.createElement("div", {
                     key: pkg.id,
@@ -1603,7 +1628,12 @@ function OffresTab({
                       )
                     )
                   );
-                })
+                });
+                  if (filtered.length === 0) return /*#__PURE__*/React.createElement("div", {
+                    style: { textAlign: "center", padding: "20px", color: "#94A3B8", fontSize: 13 }
+                  }, pkgSearch.trim() ? "Aucun résultat pour \"" + pkgSearch + "\"" : "Aucun package disponible pour cette offre (" + (pkgModal && pkgModal.leadBase ? Math.round(Number(pkgModal.leadBase.prix_reonic||0)/1000*10)/10 : 0) + "k€)");
+                  return filtered.map(pkg => rendered);
+                })()
         ),
         /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid #F1F5F9" } },
           /*#__PURE__*/React.createElement("button", {
