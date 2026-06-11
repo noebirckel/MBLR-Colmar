@@ -19104,6 +19104,8 @@ function VentesTab({
   const emptyForm = () => ({
     client: "",
     description: "",
+    prix_ttc: "",
+    tva_taux: "",
     prix_ht: "",
     adresse: "",
     materiels: [],
@@ -19384,8 +19386,9 @@ function VentesTab({
       ...emptyForm(),
       client: lead.client || "",
       adresse: lead.adresse || "",
+      prix_ttc: lead.prix_reonic > 0 ? String(lead.prix_reonic) : "",
+      tva_taux: "",
       prix_ht: "",
-      prix_reonic_ttc: lead.prix_reonic > 0 ? lead.prix_reonic : null,
       materiels: [],
       lead_id: lead.id || null,
       reonic_id: lead.reonic_id || null
@@ -19452,7 +19455,13 @@ function VentesTab({
     setEditId(null);
   };
   const saveVente = async () => {
-    if (!form.client || !form.prix_ht) return;
+    // Calculer le prix_ht depuis prix_ttc et tva_taux si pas saisi directement
+    const computedPrixHT = form.prix_ht
+      ? Number(form.prix_ht)
+      : form.prix_ttc && form.tva_taux
+        ? Math.round(Number(form.prix_ttc) / (1 + Number(form.tva_taux) / 100) * 100) / 100
+        : 0;
+    if (!form.client || !computedPrixHT) return;
     let coords = form.coords || null;
     if (form.adresse && !coords) {
       try {
@@ -19471,7 +19480,9 @@ function VentesTab({
     }
     const entry = {
       ...form,
-      prix_ht: Number(form.prix_ht),
+      prix_ttc: Number(form.prix_ttc) || 0,
+      tva_taux: Number(form.tva_taux) || 0,
+      prix_ht: computedPrixHT,
       id: editId || Date.now(),
       coords
     };
@@ -20188,44 +20199,51 @@ function VentesTab({
       n: 4,
       title: "Prix de vente",
       icon: "\uD83D\uDCB6",
-      done: !!form.prix_ht
+      done: !!(form.prix_ttc && form.tva_taux) || !!form.prix_ht
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: cout > 0 ? 10 : 0
       }
     },
-      form.prix_reonic_ttc > 0 && /*#__PURE__*/React.createElement("div", {
-        style: { background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8,
-          padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#1D4ED8",
-          lineHeight: 1.6 }
-      },
-        /*#__PURE__*/React.createElement("div", null,
-          /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700 } }, "💶 Prix Reonic (TTC) : "),
-          fmt(form.prix_reonic_ttc)
-        ),
-        /*#__PURE__*/React.createElement("div", { style: { opacity: 0.8, marginTop: 2 } },
-          "→ HT à 5,5 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.055 * 100) / 100)),
-          "  —  10 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.10 * 100) / 100)),
-          "  —  20 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.20 * 100) / 100))
+      /*#__PURE__*/React.createElement(L, { c: "PRIX TTC (€)" }),
+      /*#__PURE__*/React.createElement("input", {
+        type: "number", step: "0.01",
+        value: form.prix_ttc,
+        onChange: e => setForm(p => ({
+          ...p, prix_ttc: e.target.value,
+          prix_ht: p.tva_taux ? String(Math.round(Number(e.target.value) / (1 + Number(p.tva_taux) / 100) * 100) / 100) : ""
+        })),
+        placeholder: "Ex: 1312.50",
+        style: { ...INP(), fontSize: 18, fontWeight: 800 }
+      }),
+      /*#__PURE__*/React.createElement(L, { c: "TAUX DE TVA" }),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+        ["5.5", "10", "20"].map(taux =>
+          /*#__PURE__*/React.createElement("button", {
+            key: taux,
+            onClick: () => setForm(p => ({
+              ...p, tva_taux: taux,
+              prix_ht: p.prix_ttc ? String(Math.round(Number(p.prix_ttc) / (1 + Number(taux) / 100) * 100) / 100) : ""
+            })),
+            style: {
+              flex: 1, padding: "8px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
+              cursor: "pointer", fontFamily: '"Outfit",sans-serif',
+              border: form.tva_taux === taux ? "none" : "1px solid #E2E8F0",
+              background: form.tva_taux === taux ? "linear-gradient(135deg,#3B82F6,#2563EB)" : "#F8FAFC",
+              color: form.tva_taux === taux ? "#FFF" : "#64748B"
+            }
+          }, taux + " %")
         )
       ),
-      /*#__PURE__*/React.createElement(L, {
-        c: "PRIX HT (€)"
-      }), /*#__PURE__*/React.createElement("input", {
-        type: "number",
-        step: "0.01",
-        value: form.prix_ht,
-        onChange: e => setForm(p => ({
-          ...p,
-          prix_ht: e.target.value
-        })),
-        placeholder: "Ex: 1250.00",
-        style: {
-          ...INP(),
-        fontSize: 18,
-        fontWeight: 800
-      }
-    })), cout > 0 && /*#__PURE__*/React.createElement("div", {
+      form.prix_ttc && form.tva_taux && /*#__PURE__*/React.createElement("div", {
+        style: { background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8,
+          padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 13, color: "#166534", fontWeight: 700 } }, "Prix HT"),
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 20, fontWeight: 800, color: "#166534" } },
+          fmt(Math.round(Number(form.prix_ttc) / (1 + Number(form.tva_taux) / 100) * 100) / 100)
+        )
+      )), cout > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "grid",
         gridTemplateColumns: "1fr 1fr 1fr",
@@ -20430,12 +20448,12 @@ function VentesTab({
       })
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       onClick: saveVente,
-      disabled: !form.client || !form.prix_ht,
-      style: BTN(!form.client || !form.prix_ht ? "#FFFFFF" : "linear-gradient(135deg,#10B981,#059669)", {
+      disabled: !form.client || !(form.prix_ht || (form.prix_ttc && form.tva_taux)),
+      style: BTN(!form.client || !(form.prix_ht || (form.prix_ttc && form.tva_taux)) ? "#FFFFFF" : "linear-gradient(135deg,#10B981,#059669)", {
         flex: 2,
         padding: "14px",
         fontSize: 14,
-        opacity: !form.client || !form.prix_ht ? 0.5 : 1
+        opacity: !form.client || !(form.prix_ht || (form.prix_ttc && form.tva_taux)) ? 0.5 : 1
       })
     }, editId ? "💾 Mettre à jour" : "💰 Enregistrer la vente")));
   }
