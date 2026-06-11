@@ -19384,7 +19384,8 @@ function VentesTab({
       ...emptyForm(),
       client: lead.client || "",
       adresse: lead.adresse || "",
-      prix_ht: lead.prix_reonic > 0 ? String(lead.prix_reonic) : "",
+      prix_ht: "",
+      prix_reonic_ttc: lead.prix_reonic > 0 ? lead.prix_reonic : null,
       materiels: [],
       lead_id: lead.id || null,
       reonic_id: lead.reonic_id || null
@@ -20192,19 +20193,35 @@ function VentesTab({
       style: {
         marginBottom: cout > 0 ? 10 : 0
       }
-    }, /*#__PURE__*/React.createElement(L, {
-      c: "PRIX HT (\u20AC)"
-    }), /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      step: "0.01",
-      value: form.prix_ht,
-      onChange: e => setForm(p => ({
-        ...p,
-        prix_ht: e.target.value
-      })),
-      placeholder: "Ex: 1250.00",
-      style: {
-        ...INP(),
+    },
+      form.prix_reonic_ttc > 0 && /*#__PURE__*/React.createElement("div", {
+        style: { background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8,
+          padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#1D4ED8",
+          lineHeight: 1.6 }
+      },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700 } }, "💶 Prix Reonic (TTC) : "),
+          fmt(form.prix_reonic_ttc)
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { opacity: 0.8, marginTop: 2 } },
+          "→ HT à 5,5 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.055 * 100) / 100)),
+          "  —  10 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.10 * 100) / 100)),
+          "  —  20 % : ", /*#__PURE__*/React.createElement("strong", null, fmt(Math.round(form.prix_reonic_ttc / 1.20 * 100) / 100))
+        )
+      ),
+      /*#__PURE__*/React.createElement(L, {
+        c: "PRIX HT (€)"
+      }), /*#__PURE__*/React.createElement("input", {
+        type: "number",
+        step: "0.01",
+        value: form.prix_ht,
+        onChange: e => setForm(p => ({
+          ...p,
+          prix_ht: e.target.value
+        })),
+        placeholder: "Ex: 1250.00",
+        style: {
+          ...INP(),
         fontSize: 18,
         fontWeight: 800
       }
