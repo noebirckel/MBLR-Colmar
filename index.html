@@ -19548,8 +19548,9 @@ function VentesTab({
     // Chercher dans le catalogue Reonic d'abord, puis dans le stock MBLR
     const reonicComp = (reonicCatalog || []).find(c => c.id === mItem.id);
     if (reonicComp) {
-      const marge = reonicComp.marge != null ? reonicComp.marge : 20;
-      const prixVente = Number(reonicComp.salesPrice || 0) * (1 + marge / 100);
+      const prixVente = Number(reonicComp.salesPrice || 0);
+      const prixAchat = reonicComp.prixAchat != null && reonicComp.prixAchat !== "" ? Number(reonicComp.prixAchat) : null;
+      const marge = prixAchat != null && prixVente > 0 ? Math.round((prixVente - prixAchat) / prixVente * 100) : null;
       setForm(p => ({
         ...p,
         materiels: [...p.materiels.filter(x => x.reonic_component_id !== mItem.id), {
@@ -19560,7 +19561,8 @@ function VentesTab({
           unite: reonicComp.quantityUnit === "meter" ? "ml" : "pce",
           qty: Number(mItem.qty),
           prix_unit: Math.round(prixVente * 100) / 100,
-          prix_reonic: reonicComp.salesPrice || 0,
+          prix_reonic: prixVente,
+          prix_achat: prixAchat,
           marge
         }]
       }));
@@ -19991,10 +19993,10 @@ function VentesTab({
               ...(reonicCatalog || [])
                 .filter(c => !matSearch || (c.name + " " + (c.brand || "")).toLowerCase().includes(matSearch.toLowerCase()))
                 .map(c => {
-                  const marge = c.marge != null ? c.marge : 20;
-                  const prix = c.salesPrice * (1 + marge / 100);
+                  const pa = c.prixAchat != null && c.prixAchat !== "" ? Number(c.prixAchat) : null;
+                  const marge = pa != null && c.salesPrice > 0 ? Math.round((c.salesPrice - pa) / c.salesPrice * 100) : null;
                   return /*#__PURE__*/React.createElement("option", { key: c.id, value: c.id },
-                    c.name, c.brand ? " — " + c.brand : "", " (", fmt(prix), " avec ", marge, "% marge)"
+                    c.name, c.brand ? " — " + c.brand : "", " (", fmt(c.salesPrice), marge !== null ? " · marge " + marge + "%" : "", ")"
                   );
                 })
             ),
