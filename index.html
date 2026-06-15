@@ -1357,6 +1357,7 @@ function OffresTab({
   reonicApiKey,
   reonicClientId,
   supabaseUrl,
+  reonicCatalog,
   onLeadConverted
 }) {
   const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
@@ -1436,13 +1437,24 @@ function OffresTab({
         const data = await res.json();
         if (!data.ok || !data.data) continue;
         for (const item of (data.data.items || [])) {
+          const compId = (item.component && item.component.id) || null;
+          const localComp = compId ? (reonicCatalog || []).find(rc => rc.id === compId) : null;
+          const effectivePrice = localComp && localComp.salesPriceOverride != null
+            ? Number(localComp.salesPriceOverride)
+            : Number(item.salesPrice) || 0;
+          const prixAchat = localComp && localComp.prixAchat != null && localComp.prixAchat !== ""
+            ? Number(localComp.prixAchat) : null;
+          const marge = prixAchat != null && effectivePrice > 0
+            ? Math.round((effectivePrice - prixAchat) / effectivePrice * 100) : null;
           materiels.push({
-            reonic_component_id: item.component && item.component.id || null,
+            reonic_component_id: compId,
             article: item.componentName || "Composant Reonic",
             cat: "reonic", unite: "pce",
             qty: Number(item.quantity) || 1,
-            prix_unit: Number(item.salesPrice) || 0,
-            prix_reonic: Number(item.salesPrice) || 0
+            prix_unit: effectivePrice,
+            prix_reonic: effectivePrice,
+            prix_achat: prixAchat,
+            marge
           });
         }
       } catch(e) {}
@@ -18871,6 +18883,11 @@ function ReonicCatalogConfig({
     (catalog || []).forEach(c => { m[c.id] = c.prixAchat != null ? c.prixAchat : ""; });
     return m;
   });
+  const [prixVentes, setPrixVentes] = React.useState(() => {
+    const m = {};
+    (catalog || []).forEach(c => { m[c.id] = c.salesPriceOverride != null ? c.salesPriceOverride : ""; });
+    return m;
+  });
   const [search, setSearch] = React.useState("");
 
   React.useEffect(() => {
@@ -18878,6 +18895,13 @@ function ReonicCatalogConfig({
       const m = { ...prev };
       (catalog || []).forEach(c => {
         if (m[c.id] == null) m[c.id] = c.prixAchat != null ? c.prixAchat : "";
+      });
+      return m;
+    });
+    setPrixVentes(prev => {
+      const m = { ...prev };
+      (catalog || []).forEach(c => {
+        if (m[c.id] == null) m[c.id] = c.salesPriceOverride != null ? c.salesPriceOverride : "";
       });
       return m;
     });
@@ -18900,7 +18924,8 @@ function ReonicCatalogConfig({
           componentType: c.componentType || "autre",
           salesPrice: c.salesPrice || 0,
           quantityUnit: c.quantityUnit || "item",
-          prixAchat: existing && existing.prixAchat != null ? existing.prixAchat : (c.purchasePrice || "")
+          prixAchat: existing && existing.prixAchat != null ? existing.prixAchat : (c.purchasePrice || ""),
+          salesPriceOverride: existing && existing.salesPriceOverride != null ? existing.salesPriceOverride : null
         };
       });
       saveCatalog(items);
@@ -18912,6 +18937,13 @@ function ReonicCatalogConfig({
     const v = val === "" ? "" : Math.max(0, Number(val) || 0);
     setPrixAchats(p => ({ ...p, [id]: v }));
     const updated = (catalog || []).map(c => c.id === id ? { ...c, prixAchat: v } : c);
+    saveCatalog(updated);
+  };
+
+  const updatePrixVente = (id, val) => {
+    const v = val === "" ? null : Math.max(0, Number(val) || 0);
+    setPrixVentes(p => ({ ...p, [id]: val === "" ? "" : v }));
+    const updated = (catalog || []).map(c => c.id === id ? { ...c, salesPriceOverride: v } : c);
     saveCatalog(updated);
   };
 
@@ -18949,7 +18981,7 @@ function ReonicCatalogConfig({
       React.createElement("div", null,
         React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: "#1E293B" } }, "\uD83D\uDCE6 Catalogue Reonic"),
         React.createElement("div", { style: { fontSize: 12, color: "#64748B", marginTop: 2 } },
-          (catalog || []).length, " composant(s) \u2014 saisissez le prix d\u2019achat pour calculer la marge"
+          (catalog || []).length, " composant(s) \u2014 prix de vente et prix d\u2019achat modifiables"
         )
       ),
       React.createElement("button", {
@@ -18967,7 +18999,7 @@ function ReonicCatalogConfig({
         color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }
     },
       React.createElement("div", { style: { flex: 1 } }, "Composant"),
-      React.createElement("div", { style: { width: 100, textAlign: "right" } }, "Prix vente"),
+      React.createElement("div", { style: { width: 120, textAlign: "center" } }, "Prix vente (\u20ac)"),
       React.createElement("div", { style: { width: 120, textAlign: "center" } }, "Prix achat (\u20ac)"),
       React.createElement("div", { style: { width: 70, textAlign: "center" } }, "Marge")
     ),
@@ -18985,8 +19017,11 @@ function ReonicCatalogConfig({
           React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4, maxHeight: 420, overflowY: "auto" } },
             filtered.map(c => {
               const pa = prixAchats[c.id] !== undefined ? prixAchats[c.id] : (c.prixAchat != null ? c.prixAchat : "");
-              const marge = calcMarge(c.salesPrice, pa);
+              const pv = prixVentes[c.id] !== undefined ? prixVentes[c.id] : (c.salesPriceOverride != null ? c.salesPriceOverride : "");
+              const effectiveSalesPrice = pv !== "" && pv != null ? Number(pv) : c.salesPrice;
+              const marge = calcMarge(effectiveSalesPrice, pa);
               const margeColor = marge === null ? "#94A3B8" : marge >= 30 ? "#10B981" : marge >= 15 ? "#F59E0B" : "#EF4444";
+              const isOverridden = pv !== "" && pv != null;
               return React.createElement("div", {
                 key: c.id,
                 style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 10px",
@@ -18999,8 +19034,23 @@ function ReonicCatalogConfig({
                     [c.brand, TYPE_LABELS[c.componentType] || c.componentType].filter(Boolean).join(" \u00b7 ")
                   )
                 ),
-                React.createElement("div", { style: { width: 100, textAlign: "right", fontWeight: 700, fontSize: 13, color: "#2563EB", flexShrink: 0 } },
-                  fmtEur(c.salesPrice)
+                React.createElement("div", { style: { width: 120, flexShrink: 0 } },
+                  React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 3, justifyContent: "center" } },
+                    React.createElement("input", {
+                      type: "number", min: 0, step: "0.01",
+                      value: pv, placeholder: fmtEur(c.salesPrice).replace(/\s*\u20ac/, ""),
+                      onChange: e => updatePrixVente(c.id, e.target.value),
+                      style: { width: "100%", border: "1px solid #CBD5E1", borderRadius: 6, padding: "4px 7px",
+                        fontSize: 12, textAlign: "right", fontFamily: '"Outfit",sans-serif', outline: "none",
+                        background: isOverridden ? "#EFF6FF" : "#FFF", fontWeight: isOverridden ? 700 : 400,
+                        color: isOverridden ? "#1D4ED8" : "#0F172A" }
+                    }),
+                    React.createElement("span", { style: { fontSize: 11, color: "#94A3B8", flexShrink: 0 } }, "\u20AC")
+                  ),
+                  isOverridden && React.createElement("div", {
+                    style: { fontSize: 10, color: "#94A3B8", textAlign: "center", marginTop: 1,
+                      textDecoration: "line-through" }
+                  }, "Reonic: ", fmtEur(c.salesPrice))
                 ),
                 React.createElement("div", { style: { width: 120, flexShrink: 0, display: "flex", alignItems: "center", gap: 3, justifyContent: "center" } },
                   React.createElement("input", {
@@ -19350,13 +19400,25 @@ function VentesTab({
         for (const item of (pkgData.data.items || [])) {
           const comp = componentMap.get(item.component.id) || null;
           if (!comp) continue;
+          // Appliquer le prix de vente configuré en Paramètres (override) si présent
+          const localComp = (reonicCatalog || []).find(rc => rc.id === comp.id);
+          const effectivePrice = localComp && localComp.salesPriceOverride != null
+            ? Number(localComp.salesPriceOverride)
+            : Number(item.salesPrice) || 0;
+          const prixAchat = localComp && localComp.prixAchat != null && localComp.prixAchat !== ""
+            ? Number(localComp.prixAchat) : null;
+          const marge = prixAchat != null && effectivePrice > 0
+            ? Math.round((effectivePrice - prixAchat) / effectivePrice * 100) : null;
           allItems.push({
             reonic_component_id: comp.id,
             article: comp.name || "Composant Reonic",
             cat: comp.componentType || "autre",
             unite: comp.quantityUnit === "meter" ? "ml" : "pce",
             qty: Number(item.quantity) || 1,
-            prix_unit: Number(item.salesPrice) || 0,
+            prix_unit: effectivePrice,
+            prix_reonic: effectivePrice,
+            prix_achat: prixAchat,
+            marge,
             brand: comp.brand || ""
           });
         }
@@ -19548,7 +19610,7 @@ function VentesTab({
     // Chercher dans le catalogue Reonic d'abord, puis dans le stock MBLR
     const reonicComp = (reonicCatalog || []).find(c => c.id === mItem.id);
     if (reonicComp) {
-      const prixVente = Number(reonicComp.salesPrice || 0);
+      const prixVente = reonicComp.salesPriceOverride != null ? Number(reonicComp.salesPriceOverride) : Number(reonicComp.salesPrice || 0);
       const prixAchat = reonicComp.prixAchat != null && reonicComp.prixAchat !== "" ? Number(reonicComp.prixAchat) : null;
       const marge = prixAchat != null && prixVente > 0 ? Math.round((prixVente - prixAchat) / prixVente * 100) : null;
       setForm(p => ({
@@ -19993,10 +20055,11 @@ function VentesTab({
               ...(reonicCatalog || [])
                 .filter(c => !matSearch || (c.name + " " + (c.brand || "")).toLowerCase().includes(matSearch.toLowerCase()))
                 .map(c => {
+                  const sp = c.salesPriceOverride != null ? Number(c.salesPriceOverride) : Number(c.salesPrice || 0);
                   const pa = c.prixAchat != null && c.prixAchat !== "" ? Number(c.prixAchat) : null;
-                  const marge = pa != null && c.salesPrice > 0 ? Math.round((c.salesPrice - pa) / c.salesPrice * 100) : null;
+                  const marge = pa != null && sp > 0 ? Math.round((sp - pa) / sp * 100) : null;
                   return /*#__PURE__*/React.createElement("option", { key: c.id, value: c.id },
-                    c.name, c.brand ? " — " + c.brand : "", " (", fmt(c.salesPrice), marge !== null ? " · marge " + marge + "%" : "", ")"
+                    c.name, c.brand ? " — " + c.brand : "", " (", fmt(sp), marge !== null ? " · marge " + marge + "%" : "", ")"
                   );
                 })
             ),
@@ -27795,6 +27858,7 @@ function App() {
     reonicApiKey: reonicApiKey,
     reonicClientId: reonicApiKey ? localStorage.getItem("reonic_client_id") : "",
     supabaseUrl: SUPABASE_URL,
+    reonicCatalog: reonicCatalog,
     onLeadConverted: lead => {
       window._leadToConvert = lead;
       goTo("ventes");
