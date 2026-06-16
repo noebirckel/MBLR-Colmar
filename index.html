@@ -440,6 +440,49 @@ const _isReonicSystemMsg = txt =>
 
 // Normalise un numéro de téléphone pour la déduplication :
 // supprime tout sauf les chiffres, convertit +33XXXXXXXXX → 0XXXXXXXXX
+// Génère un ID numérique compatible bigint, quasi sans collision même multi-utilisateurs
+// (timestamp ms * 1000 + compteur local 0-999) — reste sous la limite bigint (9.2e18)
+let _genIdCounter = 0;
+const genId = () => Date.now() * 1000 + (_genIdCounter = (_genIdCounter + 1) % 1000);
+
+// Appel centralisé vers l'Edge Function reonic-proxy-v3.
+// La clé API Reonic n'est plus envoyée par le client : le JWT de session suffit,
+// l'Edge Function vérifie le rôle et lit la clé depuis son secret serveur.
+// Retourne toujours { ok, ...} ou { ok:false, error } — ne lève jamais d'exception réseau brute.
+const callReonicProxy = async (edgeUrl, action, payload = {}) => {
+  try {
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return { ok: false, error: "Session expirée — reconnectez-vous." };
+
+    const res = await fetch(edgeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action, payload }),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) return { ok: false, error: "Session expirée — reconnectez-vous." };
+      if (res.status === 403) return { ok: false, error: "Accès refusé pour votre rôle." };
+      return { ok: false, error: `Erreur serveur (${res.status})` };
+    }
+    return await res.json();
+  } catch (e) {
+    return { ok: false, error: "Erreur réseau : " + e.message };
+  }
+};
+
+// Calcule le prix HT depuis un prix TTC et un taux de TVA (%), avec garde anti-NaN
+const htDepuisTtc = (ttc, tva) => {
+  const t = Number(ttc) || 0;
+  const v = Number(tva) || 0;
+  const rounded = Math.round(t / (1 + v / 100) * 100) / 100;
+  return Number.isFinite(rounded) ? rounded : 0;
+};
+
 const normalizePhone = p => {
   if (!p) return "";
   const digits = (p + "").replace(/\D/g, "");
@@ -1354,7 +1397,6 @@ function OffresTab({
   profile,
   fmt,
   role,
-  reonicApiKey,
   reonicClientId,
   supabaseUrl,
   reonicCatalog,
@@ -1380,6 +1422,7 @@ function OffresTab({
   const [pkgLoading, setPkgLoading] = React.useState(false);
   const [selectedPkgs, setSelectedPkgs] = React.useState(new Set());
   const [pkgSearch, setPkgSearch] = React.useState("");
+  const [pkgError, setPkgError] = React.useState(null);
 
   const openPackageModal = async (offer) => {
     const c = offer.customerContact || {};
@@ -1397,11 +1440,13 @@ function OffresTab({
     setPkgModal({ offer, leadBase, requestedPkgNames: null });
     setSelectedPkgs(new Set());
     setPkgSearch("");
-    if (reonicApiKey && EDGE_URL) {
-      fetch(EDGE_URL, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_project", apiKey: reonicApiKey, payload: { projectId: offer.id } })
-      }).then(r => r.json()).then(d => {
-        if (!d.ok || !d.data) return;
+    setPkgError(null);
+    if (EDGE_URL) {
+      callReonicProxy(EDGE_URL, "get_project", { projectId: offer.id }).then(d => {
+        if (!d.ok || !d.data) {
+          if (!d.ok && d.error) console.error("[get_project]", d.error);
+          return;
+        }
         const rp = d.data.requestedPackages || {};
         const names = Object.values(rp).filter(Boolean).map(p => p.name).filter(Boolean);
         const tel = (d.data.customerContact && (d.data.customerContact.mobile || d.data.customerContact.phone)) || "";
@@ -1409,33 +1454,34 @@ function OffresTab({
           requestedPkgNames: names,
           leadBase: { ...prev.leadBase, telephone: tel || prev.leadBase.telephone }
         } : null);
-      }).catch(() => {});
+      });
     }
-    if (packages.length === 0 && reonicApiKey && EDGE_URL) {
+    if (packages.length === 0 && EDGE_URL) {
       setPkgLoading(true);
-      try {
-        const res = await fetch(EDGE_URL, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get_packages", apiKey: reonicApiKey, payload: {} })
-        });
-        const data = await res.json();
-        setPackages(data.ok ? (data.data || []) : []);
-      } catch(e) { setPackages([]); }
+      const data = await callReonicProxy(EDGE_URL, "get_packages", {});
+      if (!data.ok) {
+        setPackages([]);
+        setPkgError("Impossible de charger les packages : " + (data.error || "erreur inconnue"));
+      } else {
+        setPackages(data.data || []);
+      }
       setPkgLoading(false);
     }
   };
 
   const confirmPackageSelection = async () => {
     if (!pkgModal) return;
+    setPkgError(null);
     const materiels = [];
+    const failedPkgs = [];
     for (const pkgId of selectedPkgs) {
-      try {
-        const res = await fetch(EDGE_URL, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get_package", apiKey: reonicApiKey, payload: { packageId: pkgId } })
-        });
-        const data = await res.json();
-        if (!data.ok || !data.data) continue;
+      const data = await callReonicProxy(EDGE_URL, "get_package", { packageId: pkgId });
+      if (!data.ok || !data.data) {
+        if (!data.ok && data.error) console.error("[get_package]", data.error);
+        failedPkgs.push(pkgId);
+        continue;
+      }
+      {
         for (const item of (data.data.items || [])) {
           const compId = (item.component && item.component.id) || null;
           const localComp = compId ? (reonicCatalog || []).find(rc => rc.id === compId) : null;
@@ -1457,7 +1503,10 @@ function OffresTab({
             marge
           });
         }
-      } catch(e) {}
+      }
+    }
+    if (failedPkgs.length > 0) {
+      setPkgError(`⚠️ ${failedPkgs.length} package(s) n\u2019ont pas pu être chargés. Réessayez ou continuez sans eux.`);
     }
     const lead = { ...pkgModal.leadBase, materiels };
     window._leadToConvert = lead;
@@ -1466,39 +1515,26 @@ function OffresTab({
   };
 
   const fetchProjects = React.useCallback(async () => {
-    if (!reonicApiKey || !EDGE_URL) {
-      setError("Clé API Reonic non configurée dans Paramètres.");
+    if (!EDGE_URL) {
+      setError("Configuration Supabase manquante.");
       return;
     }
     setLoading(true);
     setError(null);
-    try {
-      const allResults = [];
-      let page = 1;
-      let hasMore = true;
-      while (hasMore && page <= 20) {
-        const res = await fetch(EDGE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "get_projects",
-            apiKey: reonicApiKey,
-            payload: { page, itemsPerPage: 200, sort: "-projectCreatedAt" }
-          })
-        });
-        const data = await res.json();
-        if (!data.ok) { setError(data.error || "Erreur Reonic"); break; }
-        allResults.push(...(data.data || []));
-        const pag = data.pagination || {};
-        hasMore = page < (pag.totalPages || 1);
-        page++;
-      }
-      setProjects(allResults);
-    } catch(e) {
-      setError("Erreur réseau : " + e.message);
+    const allResults = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore && page <= 20) {
+      const data = await callReonicProxy(EDGE_URL, "get_projects", { page, itemsPerPage: 200, sort: "-projectCreatedAt" });
+      if (!data.ok) { setError(data.error || "Erreur Reonic"); break; }
+      allResults.push(...(data.data || []));
+      const pag = data.pagination || {};
+      hasMore = page < (pag.totalPages || 1);
+      page++;
     }
+    setProjects(allResults);
     setLoading(false);
-  }, [reonicApiKey, EDGE_URL]);
+  }, [EDGE_URL]);
 
   React.useEffect(() => { fetchProjects(); }, []);
 
@@ -1609,6 +1645,10 @@ function OffresTab({
             style: { background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94A3B8" }
           }, "×")
         ),
+        pkgError && /*#__PURE__*/React.createElement("div", {
+          style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
+            padding: "8px 12px", fontSize: 12, color: "#991B1B" }
+        }, "⚠️ ", pkgError),
         /*#__PURE__*/React.createElement("input", {
           type: "text", placeholder: "🔍 Rechercher un package…",
           value: pkgSearch, onChange: e => setPkgSearch(e.target.value),
@@ -1709,7 +1749,7 @@ function OffresTab({
         style: { margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: "#1E293B" }
       }, "📋 Offres Reonic"),
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
-        reonicApiKey && /*#__PURE__*/React.createElement("button", {
+        /*#__PURE__*/React.createElement("button", {
           onClick: fetchProjects,
           disabled: loading,
           style: BTN("linear-gradient(135deg,#10B981,#059669)", { opacity: loading ? 0.6 : 1 })
@@ -1747,11 +1787,6 @@ function OffresTab({
     ),
 
     // États
-    !reonicApiKey && /*#__PURE__*/React.createElement("div", {
-      style: { background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12,
-        padding: "16px", color: "#92400E", textAlign: "center" }
-    }, "⚙️ Configurez votre clé API Reonic dans Paramètres pour accéder aux offres."),
-
     error && /*#__PURE__*/React.createElement("div", {
       style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12,
         padding: "16px", color: "#991B1B", marginBottom: 12 }
@@ -10263,7 +10298,7 @@ function SavTab({
     if (!newForm || !newForm.client || !newForm.num_serie || !newForm.description) return;
     setTickets(p => [{
       ...newForm,
-      id: Date.now()
+      id: genId()
     }, ...p]);
     setNewForm(null);
   };
@@ -11077,7 +11112,7 @@ function SavTab({
     }
   }, "\u2795 Nouveau ticket"), tabView === "contacts" && role === "administrateur" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setNewContact({
-      id: Date.now(),
+      id: genId(),
       marque: "",
       tel: "",
       site: ""
@@ -12458,7 +12493,7 @@ function RapportsTab({
     if (!form.chantier_nom || !form.technicien || !form.date) return;
     const entry = {
       ...form,
-      id: form.id || Date.now()
+      id: form.id || genId()
     };
     setRapports(p => form.id ? p.map(r => r.id === form.id ? entry : r) : [entry, ...p]);
 
@@ -12471,7 +12506,7 @@ function RapportsTab({
         const ch = chantiers.find(c => c.id === form.chantier_id || c.id === Number(form.chantier_id));
         const vente = ventes.find(v => v.id === (ch === null || ch === void 0 ? void 0 : ch.vente_id));
         const newTicket = {
-          id: Date.now(),
+          id: genId(),
           client: form.chantier_nom,
           num_serie: (vente === null || vente === void 0 ? void 0 : vente.num_serie) || "",
           marque: (vente === null || vente === void 0 ? void 0 : vente.marque) || (ch === null || ch === void 0 ? void 0 : ch.marque) || "",
@@ -12541,7 +12576,7 @@ function RapportsTab({
       raison: r.etat_final === "urgence" ? "Intervention urgente signalée" : "Intervention à revoir"
     };
     const newCh = {
-      id: Date.now(),
+      id: genId(),
       client: r.chantier_nom || "",
       adresse: r.adresse || "",
       technicien: r.technicien || "",
@@ -13677,7 +13712,7 @@ function RapportsTab({
         return;
       }
       const toImport = chantiersTermines.map(ch => ({
-        id: Date.now() + Math.floor(Math.random() * 9999),
+        id: genId(),
         chantier_id: ch.id,
         chantier_nom: ch.client,
         adresse: ch.adresse || "",
@@ -13875,7 +13910,7 @@ function RapportsTab({
       const ch = chantiers.find(c => c.id === r.chantier_id || c.id === Number(r.chantier_id));
       const vente = null; // pas de ventes passées en prop ici
       const ticket = {
-        id: Date.now() + Math.floor(Math.random() * 1000),
+        id: genId(),
         client: r.chantier_nom || "",
         num_serie: "",
         marque: (ch === null || ch === void 0 ? void 0 : ch.marque) || "",
@@ -15315,7 +15350,7 @@ function CarteTab({
         }
       });
       const data = await res.json();
-      const coords = data.length > 0 ? {
+      const coords = data.length > 0 && Number.isFinite(parseFloat(data[0].lat)) && Number.isFinite(parseFloat(data[0].lon)) ? {
         lat: parseFloat(data[0].lat),
         lng: parseFloat(data[0].lon)
       } : null;
@@ -15325,7 +15360,7 @@ function CarteTab({
         return;
       }
       const entry = {
-        id: Date.now(),
+        id: genId(),
         client: addForm.client,
         adresse: addForm.adresse,
         date: addForm.date,
@@ -15411,12 +15446,16 @@ function CarteTab({
         }
       });
       const d = await r.json();
-      if (d[0] && mapInstanceRef.current) {
-        mapInstanceRef.current.flyTo([parseFloat(d[0].lat), parseFloat(d[0].lon)], 13, {
+      const lat = d[0] ? parseFloat(d[0].lat) : NaN;
+      const lon = d[0] ? parseFloat(d[0].lon) : NaN;
+      if (Number.isFinite(lat) && Number.isFinite(lon) && mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([lat, lon], 13, {
           duration: 1
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("[geocode village]", e.message);
+    }
     setVillageLoading(false);
   };
 
@@ -15489,7 +15528,7 @@ function CarteTab({
         });
         const d = await r.json();
         setAddAddrSugg(d.map(x => x.display_name));
-      } catch (e) {}
+      } catch (e) { console.error("[address suggest]", e.message); }
     }, 400);
   };
   useEffect(() => {
@@ -17119,7 +17158,7 @@ function AdminTab({
     onClick: () => {
       setAcomptes(p => [{
         ...newForm,
-        id: Date.now()
+        id: genId()
       }, ...p]);
       setNewModal(false);
       setNewForm({
@@ -18603,14 +18642,10 @@ const LEAD_STATUTS = {
   }
 };
 function ReonicConfig({
-  reonicApiKey,
-  saveReonicApiKey,
-  supabaseUrl,
-  supabaseKey
+  supabaseUrl
 }) {
   const EDGE_URL = `${supabaseUrl}/functions/v1/reonic-proxy-v3`;
   const [testStatus, setTestStatus] = useState(null);
-  const [keyDraft, setKeyDraft] = useState(reonicApiKey || "");
   const [clientIdDraft, setClientIdDraft] = useState(() => {
     try {
       return localStorage.getItem("reonic_client_id") || "";
@@ -18618,52 +18653,30 @@ function ReonicConfig({
       return "";
     }
   });
-  const [showKey, setShowKey] = useState(false);
+
   const testConnection = async () => {
-    if (!keyDraft.trim()) {
-      setTestStatus("error");
-      return;
-    }
     setTestStatus("loading");
-    try {
-      const res = await fetch(EDGE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          action: "test",
-          apiKey: keyDraft.trim()
-        })
+    const data = await callReonicProxy(EDGE_URL, "test", {});
+    if (data.ok) {
+      try {
+        localStorage.setItem("reonic_client_id", clientIdDraft.trim());
+      } catch (e) {}
+      // Sauvegarder client_id en base pour tous les utilisateurs
+      sb.from("app_configs").upsert({
+        key: "reonic_client_id",
+        value: clientIdDraft.trim(),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "key"
+      }).then(({ error }) => {
+        if (error) console.error("saveClientId:", error.message);
       });
-      const data = await res.json();
-      if (data.ok) {
-        saveReonicApiKey(keyDraft.trim());
-        try {
-          localStorage.setItem("reonic_client_id", clientIdDraft.trim());
-        } catch (e) {}
-        // Sauvegarder client_id en base pour tous les utilisateurs
-        sb.from("app_configs").upsert({
-          key: "reonic_client_id",
-          value: clientIdDraft.trim(),
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: "key"
-        }).then(({
-          error
-        }) => {
-          if (error) console.error("saveClientId:", error.message);
-        });
-        setTestStatus("ok");
-      } else {
-        setTestStatus({
-          err: data.error || "Erreur inconnue"
-        });
-      }
-    } catch (e) {
-      setTestStatus("error");
+      setTestStatus("ok");
+    } else {
+      setTestStatus({ err: data.error || "Erreur inconnue" });
     }
   };
+
   return /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#FFFFFF",
@@ -18673,204 +18686,79 @@ function ReonicConfig({
       marginBottom: 14,
       boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-      background: "#F0FDF4",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 20,
-      flexShrink: 0
-    }
-  }, "\u26A1"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "Int\xE9gration Reonic"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#64748B"
-    }
-  }, "Synchronisation leads et devis")), reonicApiKey && testStatus === "ok" ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: "auto",
-      background: "#F0FDF4",
-      color: "#16A34A",
-      border: "1px solid #BBF7D0",
-      borderRadius: 20,
-      padding: "2px 10px",
-      fontSize: 11,
-      fontWeight: 700
-    }
-  }, "\u2705 Connect\xE9") : /*#__PURE__*/React.createElement("span", {
-    style: {
-      marginLeft: "auto",
-      background: "#F8FAFC",
-      color: "#94A3B8",
-      border: "1px solid #E2E8F0",
-      borderRadius: 20,
-      padding: "2px 10px",
-      fontSize: 11
-    }
-  }, reonicApiKey ? "Clé sauvegardée" : "Non configuré")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 5,
-      textTransform: "uppercase",
-      letterSpacing: "0.06em"
-    }
-  }, "Client ID Reonic"), /*#__PURE__*/React.createElement("input", {
-    value: clientIdDraft,
-    onChange: e => setClientIdDraft(e.target.value),
-    placeholder: "Ex: abc123-def456-...",
-    style: {
-      width: "100%",
-      background: "#F8FAFC",
-      border: "1px solid #E2E8F0",
-      borderRadius: 8,
-      color: "#0F172A",
-      padding: "9px 12px",
-      fontSize: 13,
-      outline: "none",
-      fontFamily: '"Outfit",sans-serif',
-      boxSizing: "border-box"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#94A3B8",
-      marginTop: 3
-    }
-  }, "Reonic \u2192 Param\xE8tres \u2192 Int\xE9grations \u2192 votre Client ID")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 5,
-      textTransform: "uppercase",
-      letterSpacing: "0.06em"
-    }
-  }, "Cl\xE9 API Reonic"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: showKey ? "text" : "password",
-    value: keyDraft,
-    onChange: e => setKeyDraft(e.target.value),
-    placeholder: "Coller votre cl\xE9 API ici\u2026",
-    style: {
-      flex: 1,
-      background: "#F8FAFC",
-      border: "1px solid #E2E8F0",
-      borderRadius: 8,
-      color: "#0F172A",
-      padding: "9px 12px",
-      fontSize: 13,
-      outline: "none",
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowKey(p => !p),
-    style: {
-      background: "#F1F5F9",
-      border: "1px solid #E2E8F0",
-      borderRadius: 8,
-      color: "#64748B",
-      padding: "8px 10px",
-      cursor: "pointer",
-      fontSize: 13,
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, showKey ? "🙈" : "👁️"))), /*#__PURE__*/React.createElement("button", {
-    onClick: testConnection,
-    disabled: !keyDraft.trim() || testStatus === "loading",
-    style: {
-      width: "100%",
-      background: testStatus === "ok" ? "linear-gradient(135deg,#10B981,#059669)" : testStatus && testStatus !== "loading" ? "#FEF2F2" : "linear-gradient(135deg,#3B82F6,#2563EB)",
-      border: "none",
-      borderRadius: 8,
-      color: testStatus && testStatus !== "ok" && testStatus !== "loading" ? "#DC2626" : "#FFF",
-      padding: "10px 16px",
-      cursor: "pointer",
-      fontWeight: 700,
-      fontSize: 13,
-      fontFamily: '"Outfit",sans-serif',
-      opacity: !keyDraft.trim() ? 0.5 : 1,
-      marginBottom: 8
-    }
-  }, testStatus === "loading" ? "⏳ Test en cours…" : testStatus === "ok" ? "✅ Connexion réussie" : testStatus && testStatus !== "loading" ? "❌ Erreur — réessayer" : "🔗 Tester la connexion"), testStatus && testStatus !== "ok" && testStatus !== "loading" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 12px",
-      background: "#FEF2F2",
-      border: "1px solid #FECACA",
-      borderRadius: 8,
-      fontSize: 12,
-      color: "#DC2626",
-      marginBottom: 8
-    }
-  }, "\u274C ", typeof testStatus === "object" ? testStatus.err : "Vérifiez votre clé API et votre Client ID."), reonicApiKey && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 12,
-      borderTop: "1px solid #F1F5F9",
-      paddingTop: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      background: "#10B981",
-      flexShrink: 0
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13,
-      color: "#0F172A"
-    }
-  }, "Sync automatique active")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#64748B",
-      lineHeight: 1.6
-    }
-  }, "\xC0 chaque ouverture de l'onglet Leads, Ma Borne LR v\xE9rifie automatiquement les nouveaux leads Reonic et les importe sans action de votre part. Les perdus et doublons sont exclus automatiquement.")));
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { width: 36, height: 36, borderRadius: 8, background: "#F0FDF4",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }
+      }, "\u26A1"),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 14, color: "#0F172A" } }, "Int\xE9gration Reonic"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#64748B" } }, "Cl\xE9 API g\xE9r\xE9e c\xF4t\xE9 serveur (s\xE9curis\xE9e)")
+      ),
+      testStatus === "ok"
+        ? /*#__PURE__*/React.createElement("span", {
+            style: { marginLeft: "auto", background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0",
+              borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 700 }
+          }, "\u2705 Connect\xE9")
+        : /*#__PURE__*/React.createElement("span", {
+            style: { marginLeft: "auto", background: "#F8FAFC", color: "#94A3B8", border: "1px solid #E2E8F0",
+              borderRadius: 20, padding: "2px 10px", fontSize: 11 }
+          }, "Non test\xE9")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { marginBottom: 10 } },
+      /*#__PURE__*/React.createElement("label", {
+        style: { fontSize: 10, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 5,
+          textTransform: "uppercase", letterSpacing: "0.06em" }
+      }, "Client ID Reonic"),
+      /*#__PURE__*/React.createElement("input", {
+        value: clientIdDraft,
+        onChange: e => setClientIdDraft(e.target.value),
+        placeholder: "Ex: abc123-def456-...",
+        style: { width: "100%", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8,
+          color: "#0F172A", padding: "9px 12px", fontSize: 13, outline: "none",
+          fontFamily: '"Outfit",sans-serif', boxSizing: "border-box" }
+      }),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "#94A3B8", marginTop: 3 } },
+        "Reonic \u2192 Param\xE8tres \u2192 Int\xE9grations \u2192 votre Client ID"
+      )
+    ),
+    /*#__PURE__*/React.createElement("div", {
+      style: { padding: "8px 12px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8,
+        fontSize: 11, color: "#1D4ED8", marginBottom: 10, lineHeight: 1.5 }
+    }, "\uD83D\uDD12 La cl\xE9 API Reonic est configur\xE9e directement sur le serveur (secret Supabase) et n\u2019est jamais transmise au navigateur. Pour la changer, contactez un administrateur technique."),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: testConnection,
+      disabled: testStatus === "loading",
+      style: {
+        width: "100%",
+        background: testStatus === "ok" ? "linear-gradient(135deg,#10B981,#059669)" : testStatus && testStatus !== "loading" ? "#FEF2F2" : "linear-gradient(135deg,#3B82F6,#2563EB)",
+        border: "none", borderRadius: 8,
+        color: testStatus && testStatus !== "ok" && testStatus !== "loading" ? "#DC2626" : "#FFF",
+        padding: "10px 16px", cursor: "pointer", fontWeight: 700, fontSize: 13,
+        fontFamily: '"Outfit",sans-serif', marginBottom: 8
+      }
+    }, testStatus === "loading" ? "\u23F3 Test en cours\u2026" : testStatus === "ok" ? "\u2705 Connexion r\xE9ussie" : testStatus && testStatus !== "loading" ? "\u274C Erreur \u2014 r\xE9essayer" : "\uD83D\uDD17 Tester la connexion"),
+    testStatus && testStatus !== "ok" && testStatus !== "loading" && /*#__PURE__*/React.createElement("div", {
+      style: { padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
+        fontSize: 12, color: "#DC2626", marginBottom: 8 }
+    }, "\u274C ", typeof testStatus === "object" ? testStatus.err : "Erreur de connexion au serveur."),
+    testStatus === "ok" && /*#__PURE__*/React.createElement("div", {
+      style: { marginTop: 12, borderTop: "1px solid #F1F5F9", paddingTop: 12 }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
+        /*#__PURE__*/React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: "#10B981", flexShrink: 0 } }),
+        /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#0F172A" } }, "Connexion active")
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#64748B", lineHeight: 1.6 } },
+        "L\'onglet Offres et la cr\xE9ation de vente peuvent r\xE9cup\xE9rer les donn\xE9es Reonic."
+      )
+    )
+  );
 }
 function ReonicCatalogConfig({
-  reonicApiKey,
   supabaseUrl,
   catalog,
   saveCatalog
@@ -18908,28 +18796,26 @@ function ReonicCatalogConfig({
   }, [catalog]);
 
   const refreshCatalog = async () => {
-    if (!reonicApiKey || !EDGE_URL) return;
+    if (!EDGE_URL) return;
     setLoading(true); setError(null);
-    try {
-      const res = await fetch(EDGE_URL, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_components", apiKey: reonicApiKey, payload: {} })
-      });
-      const data = await res.json();
-      if (!data.ok) { setError(data.error || "Erreur"); setLoading(false); return; }
-      const items = (data.data || []).map(c => {
-        const existing = (catalog || []).find(x => x.id === c.id);
-        return {
-          id: c.id, name: c.name, brand: c.brand || "",
-          componentType: c.componentType || "autre",
-          salesPrice: c.salesPrice || 0,
-          quantityUnit: c.quantityUnit || "item",
-          prixAchat: existing && existing.prixAchat != null ? existing.prixAchat : (c.purchasePrice || ""),
-          salesPriceOverride: existing && existing.salesPriceOverride != null ? existing.salesPriceOverride : null
-        };
-      });
-      saveCatalog(items);
-    } catch(e) { setError(e.message); }
+    const data = await callReonicProxy(EDGE_URL, "get_components", {});
+    if (!data.ok) {
+      setError(data.error || "Erreur");
+      setLoading(false);
+      return;
+    }
+    const items = (data.data || []).map(c => {
+      const existing = (catalog || []).find(x => x.id === c.id);
+      return {
+        id: c.id, name: c.name, brand: c.brand || "",
+        componentType: c.componentType || "autre",
+        salesPrice: c.salesPrice || 0,
+        quantityUnit: c.quantityUnit || "item",
+        prixAchat: existing && existing.prixAchat != null ? existing.prixAchat : (c.purchasePrice || ""),
+        salesPriceOverride: existing && existing.salesPriceOverride != null ? existing.salesPriceOverride : null
+      };
+    });
+    saveCatalog(items);
     setLoading(false);
   };
 
@@ -19134,7 +19020,6 @@ function VentesTab({
   installConfigs,
   marqueConfigs,
   reonicMapping,
-  reonicApiKey,
   supabaseUrl,
   reonicCatalog,
   onVenteSaved,
@@ -19189,6 +19074,7 @@ function VentesTab({
     setViewMode(v);
   };
   const [reonicLoading, setReonicLoading] = useState(false);
+  const [reonicError, setReonicError] = useState(null);
   const [form, setForm] = useState(() => {
     try {
       const d = localStorage.getItem("vente_draft");
@@ -19348,6 +19234,11 @@ function VentesTab({
   };
   const pendingLeadRef = React.useRef(null); // lead en attente de conversion
 
+  // Ref toujours à jour — évite la stale closure dans l'effet [] de conversion de lead
+  // (si reonicCatalog se charge après le montage, loadReonicComponents doit lire la version fraîche)
+  const reonicCatalogRef = React.useRef(reonicCatalog);
+  React.useEffect(() => { reonicCatalogRef.current = reonicCatalog; }, [reonicCatalog]);
+
   const openCreate = () => {
     setEditId(null);
     setForm(emptyForm());
@@ -19366,73 +19257,61 @@ function VentesTab({
   const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
 
   const loadReonicComponents = async (reonicProjectId) => {
-    if (!reonicApiKey || !EDGE_URL || !reonicProjectId) return [];
-    try {
-      // 1. Détail du projet → requestedPackages + téléphone
-      const projRes = await fetch(EDGE_URL, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_project", apiKey: reonicApiKey, payload: { projectId: reonicProjectId } })
-      });
-      const projData = await projRes.json();
-      if (!projData.ok) return [];
-      const project = projData.data;
+    if (!EDGE_URL || !reonicProjectId) return { items: [], tel: "", error: null };
+    // 1. Détail du projet → requestedPackages + téléphone
+    const projData = await callReonicProxy(EDGE_URL, "get_project", { projectId: reonicProjectId });
+    if (!projData.ok) return { items: [], tel: "", error: projData.error || "Erreur Reonic (projet)" };
+    const project = projData.data;
 
-      // 2. Catalogue de composants (1 seul appel pour tout résoudre)
-      const catRes = await fetch(EDGE_URL, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "get_components", apiKey: reonicApiKey, payload: {} })
-      });
-      const catData = await catRes.json();
-      const componentMap = new Map((catData.data || []).map(c => [c.id, c]));
+    // 2. Catalogue de composants (1 seul appel pour tout résoudre)
+    const catData = await callReonicProxy(EDGE_URL, "get_components", {});
+    if (!catData.ok) return { items: [], tel: "", error: catData.error || "Erreur Reonic (catalogue)" };
+    const componentMap = new Map((catData.data || []).map(c => [c.id, c]));
 
-      // 3. Packages du projet (solar, evCharger, batteryStorage, heating)
-      const pkgIds = Object.values(project.requestedPackages || {})
-        .filter(Boolean).map(p => p.id).filter(Boolean);
+    // 3. Packages du projet (solar, evCharger, batteryStorage, heating)
+    const pkgIds = Object.values(project.requestedPackages || {})
+      .filter(Boolean).map(p => p.id).filter(Boolean);
 
-      const allItems = [];
-      for (const pkgId of pkgIds) {
-        const pkgRes = await fetch(EDGE_URL, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "get_package", apiKey: reonicApiKey, payload: { packageId: pkgId } })
+    const allItems = [];
+    let pkgErrorCount = 0;
+    for (const pkgId of pkgIds) {
+      const pkgData = await callReonicProxy(EDGE_URL, "get_package", { packageId: pkgId });
+      if (!pkgData.ok || !pkgData.data) { pkgErrorCount++; continue; }
+      for (const item of (pkgData.data.items || [])) {
+        const comp = componentMap.get(item.component.id) || null;
+        if (!comp) continue;
+        // Appliquer le prix de vente configuré en Paramètres (override) si présent
+        const localComp = (reonicCatalogRef.current || []).find(rc => rc.id === comp.id);
+        const effectivePrice = localComp && localComp.salesPriceOverride != null
+          ? Number(localComp.salesPriceOverride)
+          : Number(item.salesPrice) || 0;
+        const prixAchat = localComp && localComp.prixAchat != null && localComp.prixAchat !== ""
+          ? Number(localComp.prixAchat) : null;
+        const marge = prixAchat != null && effectivePrice > 0
+          ? Math.round((effectivePrice - prixAchat) / effectivePrice * 100) : null;
+        allItems.push({
+          reonic_component_id: comp.id,
+          article: comp.name || "Composant Reonic",
+          cat: comp.componentType || "autre",
+          unite: comp.quantityUnit === "meter" ? "ml" : "pce",
+          qty: Number(item.quantity) || 1,
+          prix_unit: effectivePrice,
+          prix_reonic: effectivePrice,
+          prix_achat: prixAchat,
+          marge,
+          brand: comp.brand || ""
         });
-        const pkgData = await pkgRes.json();
-        if (!pkgData.ok || !pkgData.data) continue;
-        for (const item of (pkgData.data.items || [])) {
-          const comp = componentMap.get(item.component.id) || null;
-          if (!comp) continue;
-          // Appliquer le prix de vente configuré en Paramètres (override) si présent
-          const localComp = (reonicCatalog || []).find(rc => rc.id === comp.id);
-          const effectivePrice = localComp && localComp.salesPriceOverride != null
-            ? Number(localComp.salesPriceOverride)
-            : Number(item.salesPrice) || 0;
-          const prixAchat = localComp && localComp.prixAchat != null && localComp.prixAchat !== ""
-            ? Number(localComp.prixAchat) : null;
-          const marge = prixAchat != null && effectivePrice > 0
-            ? Math.round((effectivePrice - prixAchat) / effectivePrice * 100) : null;
-          allItems.push({
-            reonic_component_id: comp.id,
-            article: comp.name || "Composant Reonic",
-            cat: comp.componentType || "autre",
-            unite: comp.quantityUnit === "meter" ? "ml" : "pce",
-            qty: Number(item.quantity) || 1,
-            prix_unit: effectivePrice,
-            prix_reonic: effectivePrice,
-            prix_achat: prixAchat,
-            marge,
-            brand: comp.brand || ""
-          });
-        }
       }
-
-      // Téléphone depuis le projet détaillé
-      const c = project.customerContact || {};
-      const tel = c.mobile || c.phone || "";
-
-      return { items: allItems, tel };
-    } catch(e) {
-      console.error("[loadReonicComponents]", e.message);
-      return { items: [], tel: "" };
     }
+
+    // Téléphone depuis le projet détaillé
+    const c = project.customerContact || {};
+    const tel = c.mobile || c.phone || "";
+
+    const error = pkgErrorCount > 0
+      ? `${pkgErrorCount} package(s) Reonic n\u2019ont pas pu \u00eatre charg\u00e9s (composants potentiellement incomplets)`
+      : null;
+    return { items: allItems, tel, error };
   };
 
   // Pré-remplir la vente depuis une offre Reonic
@@ -19460,18 +19339,18 @@ function VentesTab({
     goToView("form");
 
     // Charger les composants Reonic en arrière-plan
-    if (lead.reonic_id && reonicApiKey) {
+    if (lead.reonic_id) {
       setReonicLoading(true);
+      setReonicError(null);
       loadReonicComponents(lead.reonic_id).then(result => {
         if (!result) return;
-        const { items, tel } = result;
+        const { items, tel, error } = result;
         setForm(prev => ({
           ...prev,
           materiels: items.length > 0 ? items : prev.materiels,
           ...(tel && !prev.telephone ? { telephone: tel } : {})
         }));
-        if (items.length > 0) console.log(`[Reonic] ${items.length} composant(s) chargés:`, items.map(i => i.article));
-        else console.warn("[Reonic] Aucun composant trouvé pour ce projet");
+        if (error) setReonicError(error);
         setReonicLoading(false);
       });
     }
@@ -19509,7 +19388,7 @@ function VentesTab({
       }).eq("id", leadToRevert.id).then(({
         error
       }) => {
-        if (error) console.error("revert lead:", error.message);else console.log("[Revert] Lead remis en devis_ligne:", leadToRevert.client || leadToRevert.id);
+        if (error) console.error("revert lead:", error.message);
       });
     }
     pendingLeadRef.current = null;
@@ -19521,7 +19400,7 @@ function VentesTab({
     const computedPrixHT = form.prix_ht
       ? Number(form.prix_ht)
       : form.prix_ttc && form.tva_taux
-        ? Math.round(Number(form.prix_ttc) / (1 + Number(form.tva_taux) / 100) * 100) / 100
+        ? htDepuisTtc(form.prix_ttc, form.tva_taux)
         : 0;
     if (!form.client || !computedPrixHT) return;
     let coords = form.coords || null;
@@ -19533,19 +19412,23 @@ function VentesTab({
           }
         });
         const j = await r.json();
-        if (j && j[0]) coords = {
-          lat: parseFloat(j[0].lat),
-          lng: parseFloat(j[0].lon),
-          display: j[0].display_name
-        };
-      } catch (e) {}
+        if (j && j[0]) {
+          const lat = parseFloat(j[0].lat);
+          const lng = parseFloat(j[0].lon);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            coords = { lat, lng, display: j[0].display_name };
+          }
+        }
+      } catch (e) {
+        console.error("[geocode vente]", e.message);
+      }
     }
     const entry = {
       ...form,
       prix_ttc: Number(form.prix_ttc) || 0,
       tva_taux: Number(form.tva_taux) || 0,
       prix_ht: computedPrixHT,
-      id: editId || Date.now(),
+      id: editId || genId(),
       coords
     };
     if (editId) {
@@ -19567,7 +19450,7 @@ function VentesTab({
     setUploadingVentePhotos(true);
     const urls = [];
     const venteId = editId || form._tmpId || (() => {
-      const id = Date.now();
+      const id = genId();
       setForm(p => ({
         ...p,
         _tmpId: id
@@ -19837,8 +19720,8 @@ function VentesTab({
               display: x.display_name,
               lat: parseFloat(x.lat),
               lng: parseFloat(x.lon)
-            })));
-          } catch (e2) {}
+            })).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lng)));
+          } catch (e2) { console.error("[address suggest]", e2.message); }
         }, 400);
       },
       placeholder: "Adresse d'installation",
@@ -19927,7 +19810,12 @@ function VentesTab({
         color: "#94A3B8",
         marginBottom: 10
       }
-    }, reonicLoading ? "\u23F3 Chargement des composants Reonic\u2026" : "Aucun mat\xE9riel \u2014 ajoute des composants ci-dessous."), form.materiels.map((m, i) => /*#__PURE__*/React.createElement("div", {
+    }, reonicLoading ? "\u23F3 Chargement des composants Reonic\u2026" : "Aucun mat\xE9riel \u2014 ajoute des composants ci-dessous."),
+    reonicError && /*#__PURE__*/React.createElement("div", {
+      style: { background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8,
+        padding: "8px 12px", fontSize: 12, color: "#92400E", marginBottom: 10 }
+    }, "\u26A0\uFE0F ", reonicError),
+    form.materiels.map((m, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
         display: "flex",
@@ -20276,7 +20164,7 @@ function VentesTab({
         value: form.prix_ttc,
         onChange: e => setForm(p => ({
           ...p, prix_ttc: e.target.value,
-          prix_ht: p.tva_taux ? String(Math.round(Number(e.target.value) / (1 + Number(p.tva_taux) / 100) * 100) / 100) : ""
+          prix_ht: p.tva_taux ? String(htDepuisTtc(e.target.value, p.tva_taux)) : ""
         })),
         placeholder: "Ex: 1312.50",
         style: { ...INP(), fontSize: 18, fontWeight: 800 }
@@ -20288,7 +20176,7 @@ function VentesTab({
             key: taux,
             onClick: () => setForm(p => ({
               ...p, tva_taux: taux,
-              prix_ht: p.prix_ttc ? String(Math.round(Number(p.prix_ttc) / (1 + Number(taux) / 100) * 100) / 100) : ""
+              prix_ht: p.prix_ttc ? String(htDepuisTtc(p.prix_ttc, taux)) : ""
             })),
             style: {
               flex: 1, padding: "8px 0", borderRadius: 8, fontWeight: 700, fontSize: 13,
@@ -20306,7 +20194,7 @@ function VentesTab({
       },
         /*#__PURE__*/React.createElement("span", { style: { fontSize: 13, color: "#166534", fontWeight: 700 } }, "Prix HT"),
         /*#__PURE__*/React.createElement("span", { style: { fontSize: 20, fontWeight: 800, color: "#166534" } },
-          fmt(Math.round(Number(form.prix_ttc) / (1 + Number(form.tva_taux) / 100) * 100) / 100)
+          fmt(htDepuisTtc(form.prix_ttc, form.tva_taux))
         )
       )), cout > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
@@ -20643,7 +20531,7 @@ function VentesTab({
           vente_id: null
         }).eq("client", v.client).eq("statut", "converti");
       }
-      console.log("[Revert]", v.client, "→ devis_ligne", lead ? "(lead trouvé)" : "(fallback Supabase)");
+      
       setRevertConf(null);
     },
     style: BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)", {
@@ -23169,7 +23057,7 @@ function ChantierTab({
       if (!problemModal.desc.trim()) return;
       const ch = problemModal.ch;
       const probs = [...(ch.problemes_admin || []), {
-        id: Date.now(),
+        id: genId(),
         type: problemModal.type,
         desc: problemModal.desc,
         date: new Date().toLocaleDateString("fr-FR"),
@@ -23330,7 +23218,7 @@ function ChantierTab({
       setChantiers(updated);
       // Ajouter/mettre à jour dans la table rapports
       const entry = {
-        id: Date.now(),
+        id: genId(),
         chantier_id: ch.id,
         chantier_nom: ch.client,
         adresse: ch.adresse || "",
@@ -23402,7 +23290,7 @@ function ChantierTab({
       setChantiers(updated);
       // Ajouter dans la table rapports
       const entry = {
-        id: Date.now(),
+        id: genId(),
         chantier_id: ch.id,
         chantier_nom: ch.client,
         adresse: ch.adresse || "",
@@ -23854,7 +23742,7 @@ function ChantierTab({
       if (!newForm.client) return;
       setChantiers(p => [{
         ...newForm,
-        id: Date.now(),
+        id: genId(),
         date_creation: new Date().toLocaleDateString("fr-FR"),
         statut: "a_planifier",
         checklist: {
@@ -24892,30 +24780,6 @@ function App() {
       if (error) console.error("saveMarqueConfigs:", error.message);
     });
   };
-  const [reonicApiKey, setReonicApiKey] = React.useState(() => {
-    try {
-      return localStorage.getItem("reonic_api_key") || "";
-    } catch (e) {
-      return "";
-    }
-  });
-  const saveReonicApiKey = k => {
-    setReonicApiKey(k);
-    try {
-      localStorage.setItem("reonic_api_key", k);
-    } catch (e) {}
-    sb.from("app_configs").upsert({
-      key: "reonic_api_key",
-      value: k,
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: "key"
-    }).then(({
-      error
-    }) => {
-      if (error) console.error("saveReonicApiKey:", error.message);
-    });
-  };
   const [reonicMapping, setReonicMapping] = React.useState(() => {
     try {
       const s = localStorage.getItem("reonic_mapping");
@@ -25345,12 +25209,6 @@ function App() {
                 localStorage.setItem("marque_configs", JSON.stringify(row.value));
               } catch (e) {}
             }
-            if (row.key === "reonic_api_key" && row.value) {
-              setReonicApiKey(row.value);
-              try {
-                localStorage.setItem("reonic_api_key", row.value);
-              } catch (e) {}
-            }
             if (row.key === "reonic_client_id" && row.value) {
               try {
                 localStorage.setItem("reonic_client_id", row.value);
@@ -25503,7 +25361,6 @@ function App() {
     };
   }, [profile, addNotif]);
   const doSave = React.useCallback(async (ns, no, nh, nv, nc, na, nsav, nobj, nrapp, nleads) => {
-    console.log("doSave called, firstLoad=", firstLoad.current);
     if (firstLoad.current) {
       console.warn("saveDB blocked: firstLoad still true");
       return;
@@ -25528,15 +25385,10 @@ function App() {
       await run("historique", nh);
       if (nv) {
         try {
-          console.log("ventes to save:", JSON.stringify(nv[0]));
           const {
             data: dvt,
             error: evt
           } = await sb.from("ventes").upsert(nv).select();
-          console.log("ventes upsert result:", JSON.stringify({
-            rows: dvt === null || dvt === void 0 ? void 0 : dvt.length,
-            error: evt === null || evt === void 0 ? void 0 : evt.message
-          }));
           if (evt) throw new Error("ventes: " + evt.message + " | " + evt.details + " | " + evt.hint);
         } catch (ex) {
           console.error("ventes exception:", ex.message, ex.stack);
@@ -25548,7 +25400,7 @@ function App() {
       // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour Supabase
       if (nobj) {
         const rows = Object.entries(nobj).map(([k, v]) => ({
-          id: Date.now() + Math.floor(Math.random() * 100000),
+          id: genId(),
           key: k,
           ca: v.ca || 0,
           marge: v.marge || 0
@@ -26607,7 +26459,7 @@ function App() {
     onClick: () => {
       if (Number(oForm.qty) <= 0) return;
       const o = {
-        id: Date.now(),
+        id: genId(),
         article_id: oModal,
         article: oArt.article,
         qty: Number(oForm.qty),
@@ -26972,7 +26824,7 @@ function App() {
       if (eComp === -1) {
         n = [...stock, {
           ...cForm,
-          id: Date.now(),
+          id: genId(),
           prix: Number(cForm.prix) || 0
         }];
       } else {
@@ -27756,7 +27608,6 @@ function App() {
     installConfigs: installConfigs,
     marqueConfigs: marqueConfigs,
     reonicMapping: reonicMapping,
-    reonicApiKey: reonicApiKey,
     supabaseUrl: SUPABASE_URL,
     reonicCatalog: reonicCatalog,
     onVenteUpdated: v => {
@@ -27781,7 +27632,7 @@ function App() {
     },
     onVenteSaved: v => {
       SC2(p => [{
-        id: Date.now(),
+        id: genId(),
         vente_id: v.id,
         client: v.client,
         materiels: v.materiels || [],
@@ -27794,11 +27645,11 @@ function App() {
         duree_chantier: v.duree_chantier || "1j"
       }, ...p]);
       SA(p => [{
-        id: Date.now() + 1,
+        id: genId(),
         vente_id: v.id,
         client: v.client,
         montant_vente: v.prix_ht,
-        montant_acompte: Math.round(v.prix_ht * (acompteDefPct / 100)),
+        montant_acompte: Math.round(v.prix_ht * (acompteDefPct / 100) * 100) / 100,
         statut: "a_envoyer",
         date_creation: new Date().toLocaleDateString("fr-FR")
       }, ...p]);
@@ -27855,8 +27706,7 @@ function App() {
     profile: profile,
     fmt: fmt,
     role: role,
-    reonicApiKey: reonicApiKey,
-    reonicClientId: reonicApiKey ? localStorage.getItem("reonic_client_id") : "",
+    reonicClientId: localStorage.getItem("reonic_client_id") || "",
     supabaseUrl: SUPABASE_URL,
     reonicCatalog: reonicCatalog,
     onLeadConverted: lead => {
@@ -32755,12 +32605,8 @@ function App() {
       fontFamily: '"Outfit",sans-serif'
     }
   }, "+ Nouveau")), /*#__PURE__*/React.createElement(ReonicConfig, {
-    reonicApiKey: reonicApiKey,
-    saveReonicApiKey: saveReonicApiKey,
-    supabaseUrl: SUPABASE_URL,
-    supabaseKey: SUPABASE_KEY
-  }), reonicApiKey && /*#__PURE__*/React.createElement(ReonicCatalogConfig, {
-    reonicApiKey: reonicApiKey,
+    supabaseUrl: SUPABASE_URL
+  }), /*#__PURE__*/React.createElement(ReonicCatalogConfig, {
     supabaseUrl: SUPABASE_URL,
     catalog: reonicCatalog,
     saveCatalog: saveReonicCatalog
@@ -33357,7 +33203,7 @@ function App() {
         c: "#3B82F6"
       };
       if (t === "ventes") return {
-        n: ventes.filter(v => (Date.now() - v.id) / 3600000 < 24).length,
+        n: ventes.filter(v => (Date.now() - (v.id > 1e14 ? Math.floor(v.id / 1000) : v.id)) / 3600000 < 24).length,
         c: "#10B981"
       };
       if (t === "leads") { return { n: 0, c: "#EF4444" }; }
