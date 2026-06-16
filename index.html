@@ -449,6 +449,35 @@ const genId = () => Date.now() * 1000 + (_genIdCounter = (_genIdCounter + 1) % 1
 // La clé API Reonic n'est plus envoyée par le client : le JWT de session suffit,
 // l'Edge Function vérifie le rôle et lit la clé depuis son secret serveur.
 // Retourne toujours { ok, ...} ou { ok:false, error } — ne lève jamais d'exception réseau brute.
+// Appel centralisé vers l'Edge Function admin-users (création/modification/suppression
+// de comptes via service_role, jamais exposé au client). Même contrat que callReonicProxy.
+const callAdminUsers = async (supabaseUrl, action, payload = {}) => {
+  try {
+    const edgeUrl = `${supabaseUrl}/functions/v1/admin-users`;
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) return { ok: false, error: "Session expirée — reconnectez-vous." };
+
+    const res = await fetch(edgeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ action, payload }),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) return { ok: false, error: "Session expirée — reconnectez-vous." };
+      if (res.status === 403) return { ok: false, error: "Accès réservé aux administrateurs." };
+      return { ok: false, error: `Erreur serveur (${res.status})` };
+    }
+    return await res.json();
+  } catch (e) {
+    return { ok: false, error: "Erreur réseau : " + e.message };
+  }
+};
+
 const callReonicProxy = async (edgeUrl, action, payload = {}) => {
   try {
     const { data: sessionData } = await sb.auth.getSession();
@@ -17710,7 +17739,8 @@ function EquipeTab({
   chantiers,
   setChantiers,
   rapports,
-  setRapports
+  setRapports,
+  supabaseUrl
 }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17785,34 +17815,26 @@ function EquipeTab({
     loadUsers();
   }, []);
   const createUser = async () => {
-    var _data$user;
     if (!form.nom || !form.email || !form.pass) {
       setErr("Tous les champs sont requis.");
       return;
     }
-    setSaving(true);
-    setErr("");
-    const {
-      data,
-      error
-    } = await sb.auth.signUp({
-      email: form.email,
-      password: form.pass
-    });
-    if (error) {
-      setErr("Erreur : " + error.message);
-      setSaving(false);
+    if (form.pass.length < 6) {
+      setErr("Mot de passe trop court (min. 6 caractères).");
       return;
     }
-    const uid = (_data$user = data.user) === null || _data$user === void 0 ? void 0 : _data$user.id;
-    if (uid) {
-      await sb.from("profiles").insert({
-        id: uid,
-        email: form.email,
-        nom: form.nom,
-        role: form.role,
-        actif: true
-      });
+    setSaving(true);
+    setErr("");
+    const result = await callAdminUsers(supabaseUrl, "create_user", {
+      email: form.email,
+      password: form.pass,
+      nom: form.nom,
+      role: form.role,
+    });
+    if (!result.ok) {
+      setErr("Erreur : " + (result.error || "inconnue"));
+      setSaving(false);
+      return;
     }
     await loadUsers();
     setModal(false);
@@ -17856,28 +17878,19 @@ function EquipeTab({
         return;
       }
 
-      // Changer le mot de passe via admin API si renseigné
+      // Changer le mot de passe via l'Edge Function admin-users (service_role) si renseigné
       if (editForm.newPass.trim()) {
-        var _sb$auth$admin;
         if (editForm.newPass.length < 6) {
           setEditErr("Mot de passe min. 6 caractères.");
           setEditSaving(false);
           return;
         }
-        // Utiliser updateUser (fonctionne seulement pour le compte connecté) ou admin
-        // Solution : appel à l'API admin via la fonction edge si dispo, sinon info
-        const {
-          error: pwErr
-        } = await ((_sb$auth$admin = sb.auth.admin) === null || _sb$auth$admin === void 0 ? void 0 : _sb$auth$admin.updateUserById(editUser.id, {
-          password: editForm.newPass
-        }).catch(() => ({
-          error: {
-            message: "API admin non disponible"
-          }
-        })));
-        if (pwErr) {
-          // Fallback : signaler mais continuer le reste
-          setEditErr("⚠️ Profil mis à jour, mais le mot de passe n'a pas pu être changé (nécessite les droits service_role). Nom et rôle sauvegardés.");
+        const pwResult = await callAdminUsers(supabaseUrl, "update_password", {
+          userId: editUser.id,
+          newPassword: editForm.newPass,
+        });
+        if (!pwResult.ok) {
+          setEditErr("⚠️ Profil mis à jour, mais le mot de passe n'a pas pu être changé : " + (pwResult.error || "erreur inconnue"));
           setUsers(p => p.map(u => u.id === editUser.id ? {
             ...u,
             nom: editForm.nom,
@@ -28518,7 +28531,8 @@ function App() {
     chantiers: chantiersPipeline,
     setChantiers: SC2,
     rapports: rapports,
-    setRapports: SR
+    setRapports: SR,
+    supabaseUrl: SUPABASE_URL
   }), view === "chantier" && /*#__PURE__*/React.createElement(ChantierTab, {
     isMobile: isMobile,
     ventes: ventes,
