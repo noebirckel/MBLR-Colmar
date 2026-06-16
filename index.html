@@ -11060,7 +11060,12 @@ function SavTab({
     style: {
       color: "#0F172A"
     }
-  }, delConf.client), " \u2014 ", delConf.num_serie), /*#__PURE__*/React.createElement("div", {
+  }, delConf.client), " \u2014 ", delConf.num_serie),
+  delConfErr && /*#__PURE__*/React.createElement("div", {
+    style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
+      padding: "8px 12px", fontSize: 12, color: "#991B1B", marginBottom: 14 }
+  }, "\u26A0\uFE0F ", delConfErr),
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -19108,6 +19113,7 @@ function VentesTab({
   const [search, setSearch] = useState("");
   const [editId, setEditId] = useState(null);
   const [delConf, setDelConf] = useState(null);
+  const [delConfErr, setDelConfErr] = useState(null);
   const [revertConf, setRevertConf] = useState(null);
   const [matSearch, setMatSearch] = useState("");
   const [matCat, setMatCat] = useState("tous");
@@ -19386,25 +19392,8 @@ function VentesTab({
   };
   const cancelForm = () => {
     clearDraft();
-    // Trouver le lead à réverter : pendingLeadRef OU form.lead_id
-    const leadToRevert = pendingLeadRef.current || (form.lead_id && !editId ? {
-      id: form.lead_id,
-      client: form.client
-    } : null);
-    if (leadToRevert && !editId) {
-      pendingLeadRef.current = null;
-      window._leadToConvert = null;
-      if (window._revertLead) window._revertLead(leadToRevert.id);
-      sb.from("leads").update({
-        statut: "devis_ligne",
-        vente_id: null
-      }).eq("id", leadToRevert.id).then(({
-        error
-      }) => {
-        if (error) console.error("revert lead:", error.message);
-      });
-    }
     pendingLeadRef.current = null;
+    window._leadToConvert = null;
     goToView("list");
     setEditId(null);
   };
@@ -20468,7 +20457,12 @@ function VentesTab({
   }, "Annuler"), /*#__PURE__*/React.createElement("button", {
     onClick: async () => {
       const id = delConf.id;
-      if (onDeleteVente) await onDeleteVente(id);else await sb.from("ventes").delete().eq("id", id);
+      setDelConfErr(null);
+      const success = onDeleteVente ? await onDeleteVente(id) : false;
+      if (!success) {
+        setDelConfErr("Suppression impossible — vérifiez vos droits ou réessayez.");
+        return;
+      }
       setDelConf(null);
     },
     style: BTN("#EF4444", {
@@ -20512,7 +20506,12 @@ function VentesTab({
       fontSize: 12,
       margin: "0 0 20px"
     }
-  }, "La vente sera supprim\xE9e et le lead correspondant repassera en \"Devis en ligne\" dans l'onglet Offres."), /*#__PURE__*/React.createElement("div", {
+  }, "La vente sera supprim\xE9e. Vous pourrez recr\xE9er une vente depuis l'onglet Offres si besoin."),
+  delConfErr && /*#__PURE__*/React.createElement("div", {
+    style: { background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
+      padding: "8px 12px", fontSize: 12, color: "#991B1B", marginBottom: 14 }
+  }, "\u26A0\uFE0F ", delConfErr),
+  /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -20524,27 +20523,13 @@ function VentesTab({
     })
   }, "Annuler"), /*#__PURE__*/React.createElement("button", {
     onClick: async () => {
-      var _window$_getLeads, _window;
       const v = revertConf;
-      // 1. Supprimer la vente
-      if (onDeleteVente) await onDeleteVente(v.id);else await sb.from("ventes").delete().eq("id", v.id);
-      // 2. Trouver le lead lié par lead_id (stocké à la conversion) ou fallback
-      const allLeads = ((_window$_getLeads = (_window = window)._getLeads) === null || _window$_getLeads === void 0 ? void 0 : _window$_getLeads.call(_window)) || [];
-      const lead = v.lead_id && allLeads.find(l => l.id === v.lead_id) || v.reonic_id && allLeads.find(l => l.reonic_id === v.reonic_id) || allLeads.find(l => l.client === v.client && ["converti", "devis_ligne"].includes(l.statut));
-      if (lead) {
-        if (window._revertLead) window._revertLead(lead.id);
-        await sb.from("leads").update({
-          statut: "devis_ligne",
-          vente_id: null
-        }).eq("id", lead.id);
-      } else {
-        // Fallback Supabase sans lead en mémoire
-        await sb.from("leads").update({
-          statut: "devis_ligne",
-          vente_id: null
-        }).eq("client", v.client).eq("statut", "converti");
+      setDelConfErr(null);
+      const success = onDeleteVente ? await onDeleteVente(v.id) : false;
+      if (!success) {
+        setDelConfErr("Suppression impossible \u2014 v\u00e9rifiez vos droits ou r\u00e9essayez.");
+        return;
       }
-      
       setRevertConf(null);
     },
     style: BTN("linear-gradient(135deg,#3B82F6,#1D4ED8)", {
@@ -20829,7 +20814,7 @@ function VentesTab({
         fontSize: 12
       })
     }, "\u270F\uFE0F Modifier"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => setRevertConf(v),
+      onClick: () => { setDelConfErr(null); setRevertConf(v); },
       style: {
         background: "#EFF6FF",
         border: "1px solid #BFDBFE",
@@ -20841,7 +20826,7 @@ function VentesTab({
         fontWeight: 700
       }
     }, "\u21A9\uFE0F Offre"), /*#__PURE__*/React.createElement("button", {
-      onClick: () => setDelConf(v),
+      onClick: () => { setDelConfErr(null); setDelConf(v); },
       style: {
         background: "#EF444415",
         border: "1px solid #EF444430",
@@ -25410,31 +25395,19 @@ function App() {
       await run("chantiers", nc);
       await run("acomptes", na);
       await run("sav_tickets", nsav);
-      // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour Supabase
+      // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour le RPC
       if (nobj) {
         const rows = Object.entries(nobj).map(([k, v]) => ({
-          id: genId(),
           key: k,
           ca: v.ca || 0,
           marge: v.marge || 0
         }));
         if (rows.length) {
-          // Pas de contrainte UNIQUE sur key → delete toutes les lignes puis insert
-          const {
-            error: delErr
-          } = await sb.from("objectifs").delete().neq("key", "__never__");
-          if (delErr) {
-            console.error("objectifs delete:", delErr.message);
+          const { error: rpcErr } = await sb.rpc("upsert_objectifs", { p_rows: rows });
+          if (rpcErr) {
+            console.error("upsert_objectifs:", rpcErr.message);
             setSync("error");
-            throw delErr;
-          }
-          const {
-            error: insErr
-          } = await sb.from("objectifs").insert(rows);
-          if (insErr) {
-            console.error("objectifs insert:", insErr.message);
-            setSync("error");
-            throw insErr;
+            throw rpcErr;
           }
         }
       }
@@ -27668,16 +27641,19 @@ function App() {
       }, ...p]);
     },
     onDeleteVente: async id => {
-      await sb.from("ventes").delete().eq("id", id);
+      const { error } = await sb.rpc("delete_vente_cascade", { p_vente_id: id });
+      if (error) {
+        console.error("[delete_vente_cascade]", error.message);
+        return false;
+      }
       setVentes(prev => {
         const filtered = prev.filter(v => v.id !== id);
         saveDB(null, null, null, filtered, null, null, null, null, null, null);
         return filtered;
       });
       SA(p => p.filter(a => a.vente_id !== id));
-      await sb.from("acomptes").delete().eq("vente_id", id);
       SC2(p => p.filter(c => c.vente_id !== id));
-      await sb.from("chantiers").delete().eq("vente_id", id);
+      return true;
     }
   }), view === "administratif" && /*#__PURE__*/React.createElement(AdminTab, {
     isMobile: isMobile,
