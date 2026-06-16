@@ -8005,1938 +8005,1016 @@ function ChartFullPage({
 }
 
 // ── StatsTab ───────────────────────────────────────────────────────────────
+// Refonte complète : pilotage commercial & opérationnel.
+// React.createElement (pas de JSX). Chart.js 4 + Leaflet (déjà chargés).
+// Dépendances PDF (html2canvas + jsPDF) chargées à la volée depuis cdnjs.
 function StatsTab({
   isMobile,
   ventes,
-  leads,
   chantiers,
   acomptes,
   stock,
+  orders,
   savTickets,
   fmt,
   objectifs,
   setObjectifs,
+  profile,
   role,
-  addNotif
+  addNotif,
+  supabaseUrl,
+  allProfiles
 }) {
-  const {
-    useState,
-    useMemo,
-    useCallback
-  } = React;
+  const { useState, useMemo, useCallback, useRef, useEffect } = React;
+  const h = React.createElement;
 
-  /* ── STATE ── */
-  const [section, setSection] = useState("global");
-  const [viewMode, setViewMode] = useState("3m"); // "mois" | "3m" | "6m" | "12m" | "tout"
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  /* ══ THEME (aligné sur le reste de l'app) ══ */
+  const T = {
+    bg: "#FFFFFF", line: "#E2E8F0", ink: "#0F172A", ink2: "#1E293B",
+    sub: "#64748B", faint: "#94A3B8", track: "#F1F5F9", soft: "#F8FAFC",
+    accent: "#3B82F6", green: "#10B981", amber: "#F59E0B", red: "#EF4444",
+    violet: "#8B5CF6", cyan: "#06B6D4", indigo: "#6366F1", pink: "#EC4899"
+  };
+  const SERIES = [T.accent, T.green, T.violet, T.amber, T.cyan, T.indigo, T.pink, T.red];
+  const BRAND_COLORS = {
+    "Easee": "#1A73E8", "Ohme": "#00897B", "Zaptec": "#7B1FA2",
+    "V2C": "#E53935", "Tesla": "#E31937", "Smappee": "#FF6B35", "Autre": "#94A3B8"
+  };
+  const FONT = '"Outfit",sans-serif';
+
+  const CARD = { background: T.bg, borderRadius: 14, border: `1px solid ${T.line}`, padding: 16 };
+  const CARD_SM = { background: T.bg, borderRadius: 12, border: `1px solid ${T.line}`, padding: 12 };
+  const SEC_TITLE = { margin: "0 0 14px", fontSize: 14, fontWeight: 800, color: T.ink2 };
+  const SUBTLE = { fontSize: 11, color: T.faint };
+  const GRID = (n) => ({
+    display: "grid",
+    gridTemplateColumns: isMobile ? "repeat(2,1fr)" : `repeat(${n},1fr)`,
+    gap: 10, marginBottom: 14
   });
-  const [chartModal, setChartModal] = useState(null);
-  const canEdit = role === "administrateur";
+  const GRID4 = GRID(4), GRID3 = GRID(3);
+  const GRID2 = { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 10, marginBottom: 14 };
+  const empty = (txt) => h("div", { style: { color: "#CBD5E1", fontSize: 12, textAlign: "center", padding: "22px 0" } }, txt);
 
-  /* ── HELPERS ── */
-  const now = new Date();
-  const coutVente = v => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5 : (v.materiels || []).reduce((s, m) => s + Number(m.qty || 0) * (m.prix_achat != null ? Number(m.prix_achat) : Number(m.prix_unit || 0)), 0) + (v.cables || []).reduce((s, m) => s + Number(m.qty || 0) * Number(m.prix_unit || 0), 0);
-  const txColor = t => t >= 40 ? "#10B981" : t >= 20 ? "#3B82F6" : t >= 0 ? "#F59E0B" : "#EF4444";
-  const pct = (m, ca) => ca > 0 ? Math.round(m / ca * 100) : 0;
-  const medals = ["🥇", "🥈", "🥉"];
-  const parseVenteDate = v => {
-    if (!v.date) return null;
-    const [d, mo, y] = v.date.split("/");
-    if (!y) return null;
-    return new Date(Number(y), Number(mo) - 1, Number(d));
+  /* ══ FORMATTERS ══ */
+  const fE = (n) => fmt(Number(n || 0));
+  const fK = (n) => {
+    n = Number(n || 0);
+    if (Math.abs(n) >= 1e6) return (n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M€";
+    if (Math.abs(n) >= 1e3) return Math.round(n / 1e3) + " k€";
+    return Math.round(n) + " €";
   };
-  const venteMonthKey = v => {
-    const dt = parseVenteDate(v);
-    if (!dt) return null;
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
-  };
+  const fPct = (n) => (n == null ? "—" : Math.round(n) + " %");
+  const fNb = (n) => Number(n || 0).toLocaleString("fr-FR");
 
-  // Build a list of month keys to display based on viewMode / selectedMonth
-  const monthKeys = useMemo(() => {
-    if (viewMode === "mois") return [selectedMonth];
-    const n = viewMode === "3m" ? 3 : viewMode === "6m" ? 6 : viewMode === "12m" ? 12 : 24;
-    const keys = [];
-    for (let i = n - 1; i >= 0; i--) {
-      const d2 = new Date();
-      d2.setDate(1);
-      d2.setMonth(d2.getMonth() - i);
-      keys.push(`${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`);
-    }
-    return keys;
-  }, [viewMode, selectedMonth]);
-  const monthLabel = key => {
+  /* ══ DATES ══ */
+  const parseFr = (s) => {
+    if (!s) return null;
+    const p = String(s).split("/");
+    if (p.length < 3 || !p[2]) return null;
+    const d = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+    return isNaN(d) ? null : d;
+  };
+  const parseAny = (s) => {
+    if (!s) return null;
+    if (String(s).includes("/")) return parseFr(s);
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  };
+  const mKeyOf = (d) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : null;
+  const mLabel = (key, withYear) => {
     if (!key) return "";
     const [y, m] = key.split("-");
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("fr-FR", {
-      month: "short",
-      year: "2-digit"
-    });
+    return new Date(Number(y), Number(m) - 1, 1)
+      .toLocaleDateString("fr-FR", { month: "short", year: withYear ? "2-digit" : undefined });
   };
-  const prevMonthKey = key => {
-    const [y, m] = key.split("-").map(Number);
-    const d = new Date(y, m - 2, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const daysBetween = (a, b) => (a && b) ? Math.round((b - a) / 86400000) : null;
+
+  /* ══ MARGE ══ */
+  const coutVente = (v) => v.marge_forfait
+    ? Number(v.prix_ht || 0) * 0.5
+    : (v.materiels || []).reduce((s, m) => s + Number(m.qty || 0) * (m.prix_achat != null ? Number(m.prix_achat) : Number(m.prix_unit || 0)), 0)
+      + (v.cables || []).reduce((s, c) => s + Number(c.qty || 0) * Number(c.prix_unit || 0), 0);
+  const margeVente = (v) => Number(v.prix_ht || 0) - coutVente(v);
+  const tauxMarge = (v) => { const ca = Number(v.prix_ht || 0); return ca > 0 ? margeVente(v) / ca * 100 : 0; };
+  const pct = (part, tot) => tot > 0 ? Math.round(part / tot * 100) : 0;
+  const delta = (cur, prev) => (prev == null || prev === 0) ? null : Math.round((cur - prev) / Math.abs(prev) * 100);
+  const txColor = (t) => t >= 40 ? T.green : t >= 25 ? T.accent : t >= 10 ? T.amber : T.red;
+
+  // Type d'installation déduit des matériels / marque borne
+  const typeInstall = (v) => {
+    const mats = v.materiels || [];
+    const txt = (mats.map(m => `${m.cat || ""} ${m.brand || ""} ${m.article || ""}`).join(" ") + " " + (v.marque_borne || "")).toLowerCase();
+    const solar = /solar|solaire|panneau|pv|photovolt|onduleur|batter/.test(txt);
+    const borne = /borne|charge|charger|wallbox|\bev\b|easee|ohme|zaptec|v2c/.test(txt) || !!v.marque_borne;
+    if (solar && borne) return "Combiné";
+    if (solar) return "Solaire";
+    if (borne) return "Borne";
+    return "Autre";
   };
+  const TYPE_COLOR = { "Borne": T.accent, "Solaire": T.green, "Combiné": T.violet, "Autre": T.faint };
 
-  // Ventes par mois clé
-  const ventesByMonth = useMemo(() => {
-    const map = {};
-    (ventes || []).forEach(v => {
-      const k = venteMonthKey(v);
-      if (!k) return;
-      if (!map[k]) map[k] = [];
-      map[k].push(v);
+  /* ══ RÔLE / SCOPE ══ */
+  const isAdmin = role === "administrateur";
+  const myName = (profile && profile.nom) || "";
+  const scopedVentes = useMemo(
+    () => isAdmin ? (ventes || []) : (ventes || []).filter(v => (v.par || "") === myName),
+    [ventes, isAdmin, myName]
+  );
+
+  /* ══ COMMERCIAUX (liste) ══ */
+  const commerciaux = useMemo(() => {
+    const set = new Set();
+    (ventes || []).forEach(v => { if (v.par) set.add(v.par); });
+    (allProfiles || []).forEach(p => { if (p.role === "commercial" && p.nom) set.add(p.nom); });
+    Object.keys(objectifs || {}).forEach(k => { const n = k.split("__")[1]; if (n) set.add(n); });
+    return Array.from(set).sort();
+  }, [ventes, allProfiles, objectifs]);
+
+  /* ══ MOTEUR DE PÉRIODE ══ */
+  const today = new Date();
+  const curMonthKey = mKeyOf(today);
+  const [section, setSection] = useState("global");
+  const [viewMode, setViewMode] = useState("month"); // month|quarter|year|r12|all|custom
+  const [anchor, setAnchor] = useState(curMonthKey);   // "YYYY-MM"
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [compare, setCompare] = useState(true);
+  const [reportMonth, setReportMonth] = useState(curMonthKey);
+  const [showReport, setShowReport] = useState(false);
+
+  const period = useMemo(() => {
+    const [ay, am] = anchor.split("-").map(Number);
+    let start, end, label, prevStart, prevEnd, prevLabel;
+    if (viewMode === "month") {
+      start = new Date(ay, am - 1, 1); end = new Date(ay, am, 0, 23, 59, 59);
+      label = start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+      prevStart = new Date(ay - 1, am - 1, 1); prevEnd = new Date(ay - 1, am, 0, 23, 59, 59);
+      prevLabel = String(ay - 1);
+    } else if (viewMode === "quarter") {
+      const q = Math.floor((am - 1) / 3); start = new Date(ay, q * 3, 1); end = new Date(ay, q * 3 + 3, 0, 23, 59, 59);
+      label = `T${q + 1} ${ay}`;
+      prevStart = new Date(ay - 1, q * 3, 1); prevEnd = new Date(ay - 1, q * 3 + 3, 0, 23, 59, 59); prevLabel = `T${q + 1} ${ay - 1}`;
+    } else if (viewMode === "year") {
+      start = new Date(ay, 0, 1); end = new Date(ay, 11, 31, 23, 59, 59); label = String(ay);
+      prevStart = new Date(ay - 1, 0, 1); prevEnd = new Date(ay - 1, 11, 31, 23, 59, 59); prevLabel = String(ay - 1);
+    } else if (viewMode === "r12") {
+      end = new Date(ay, am, 0, 23, 59, 59); start = new Date(ay, am - 12, 1); label = "12 mois glissants";
+      prevEnd = new Date(ay, am - 12, 0, 23, 59, 59); prevStart = new Date(ay, am - 24, 1); prevLabel = "12 mois préc.";
+    } else if (viewMode === "custom") {
+      start = customStart ? new Date(customStart) : new Date(2000, 0, 1);
+      end = customEnd ? new Date(customEnd + "T23:59:59") : new Date();
+      const span = end - start;
+      label = `${start.toLocaleDateString("fr-FR")} → ${end.toLocaleDateString("fr-FR")}`;
+      prevEnd = new Date(start - 1); prevStart = new Date(start - 1 - span); prevLabel = "période préc.";
+    } else { // all
+      start = new Date(2000, 0, 1); end = new Date(2999, 0, 1); label = "Depuis le début";
+      prevStart = null; prevEnd = null; prevLabel = "";
+    }
+    // Mois à tracer sur les courbes : 12 mois finissant à la fin de période (sauf year=12, r12=12, all=24)
+    const lastMonthEnd = new Date(end.getFullYear(), end.getMonth(), 1);
+    const nMonths = viewMode === "all" ? 24 : 12;
+    const seriesMonths = [];
+    for (let i = nMonths - 1; i >= 0; i--) {
+      const d = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth() - i, 1);
+      seriesMonths.push(mKeyOf(d));
+    }
+    return { start, end, label, prevStart, prevEnd, prevLabel, seriesMonths };
+  }, [viewMode, anchor, customStart, customEnd]);
+
+  const inPeriod = (d, p) => d && d >= p.start && d <= p.end;
+  const inPrev = (d) => period.prevStart && d && d >= period.prevStart && d <= period.prevEnd;
+
+  // Ventes de la période courante / précédente (scopées au rôle)
+  const vCur = useMemo(() => scopedVentes.filter(v => inPeriod(parseFr(v.date), period)), [scopedVentes, period]);
+  const vPrev = useMemo(() => scopedVentes.filter(v => inPrev(parseFr(v.date))), [scopedVentes, period]);
+
+  // Agrégat ventes par mois (toutes périodes) pour les courbes
+  const byMonth = useMemo(() => {
+    const m = {};
+    scopedVentes.forEach(v => {
+      const k = mKeyOf(parseFr(v.date)); if (!k) return;
+      if (!m[k]) m[k] = { ca: 0, cout: 0, nb: 0 };
+      m[k].ca += Number(v.prix_ht || 0); m[k].cout += coutVente(v); m[k].nb++;
     });
-    return map;
-  }, [ventes]);
+    return m;
+  }, [scopedVentes]);
 
-  // Leads par mois de création
-  const leadsByMonth = useMemo(() => {
-    const map = {};
-    (leads || []).forEach(l => {
-      if (!l.date_creation) return;
-      const [d, m, y] = l.date_creation.split("/");
-      if (!y) return;
-      const k = `${y}-${m.padStart(2, "0")}`;
-      if (!map[k]) map[k] = [];
-      map[k].push(l);
-    });
-    return map;
-  }, [leads]);
-
-  // Stats for a single month key
-  const statsForMonth = useCallback(key => {
-    const vv = ventesByMonth[key] || [];
-    const ll = leadsByMonth[key] || [];
-    const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-    const cout = vv.reduce((s, v) => s + coutVente(v), 0);
+  /* ══ KPIs SYNTHÈSE PÉRIODE ══ */
+  const KPIS = useMemo(() => {
+    const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+    const ca = sum(vCur, v => Number(v.prix_ht || 0));
+    const cout = sum(vCur, coutVente);
     const marge = ca - cout;
-    const allLeadsArr = leads || [];
-    // Conversion leads→ventes
-    const convertis = ll.filter(l => l.statut === "converti").length;
-    const nbLeads = ll.length;
-    const txConv = nbLeads > 0 ? Math.round(convertis / nbLeads * 100) : 0;
-    const perdus = ll.filter(l => l.statut === "perdu").length;
-    const rdvFixe = ll.filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length;
-    const txRdv = nbLeads > 0 ? Math.round(rdvFixe / nbLeads * 100) : 0;
-    // Canal breakdown
-    const canaux = {};
-    ll.forEach(l => {
-      const c = l.canal || "Inconnu";
-      canaux[c] = (canaux[c] || 0) + 1;
-    });
-    // Appels moy
-    const avgAppels = nbLeads > 0 ? Math.round(ll.reduce((s, l) => s + Number(l.nb_appels || 0), 0) / nbLeads * 10) / 10 : 0;
-    // Marque
-    const marques = {};
-    vv.forEach(v => {
-      const k = v.marque_borne || "Autre";
-      if (!marques[k]) marques[k] = {
-        ca: 0,
-        nb: 0,
-        cout: 0
-      };
-      marques[k].ca += Number(v.prix_ht || 0);
-      marques[k].cout += coutVente(v);
-      marques[k].nb++;
-    });
-    // Commerciaux
-    const comms = {};
-    vv.forEach(v => {
-      const k = v.par || "—";
-      if (!comms[k]) comms[k] = {
-        ca: 0,
-        nb: 0,
-        marge: 0
-      };
-      comms[k].ca += Number(v.prix_ht || 0);
-      comms[k].marge += Number(v.prix_ht || 0) - coutVente(v);
-      comms[k].nb++;
-    });
-    // Puissance
-    const puissances = {};
-    vv.forEach(v => {
-      const k = v.puissance_install || "N/A";
-      puissances[k] = (puissances[k] || 0) + 1;
-    });
-    // Logement
-    const logements = {};
-    ll.forEach(l => {
-      if (l.logement) {
-        logements[l.logement] = (logements[l.logement] || 0) + 1;
+    const caP = sum(vPrev, v => Number(v.prix_ht || 0));
+    const margeP = sum(vPrev, v => Number(v.prix_ht || 0) - coutVente(v));
+    return {
+      ca, marge, cout, nb: vCur.length, txMarge: pct(marge, ca),
+      panier: vCur.length ? ca / vCur.length : 0,
+      caP, margeP, nbP: vPrev.length, txMargeP: pct(margeP, caP),
+      panierP: vPrev.length ? caP / vPrev.length : 0
+    };
+  }, [vCur, vPrev]);
+
+  /* ══ OBJECTIFS (somme des objectifs commerciaux du mois courant) ══ */
+  const objForMonth = (key) => {
+    let oca = 0, omarge = 0;
+    const names = isAdmin ? commerciaux : [myName];
+    names.forEach(n => { const o = objectifs[`${key}__${n}`] || {}; oca += Number(o.ca || 0); omarge += Number(o.marge || 0); });
+    return { ca: oca, marge: omarge };
+  };
+
+  /* ══ CHART.JS — défauts esthétiques ══ */
+  useEffect(() => {
+    if (window.Chart) {
+      window.Chart.defaults.font.family = FONT;
+      window.Chart.defaults.font.size = 11;
+      window.Chart.defaults.color = T.sub;
+      window.Chart.defaults.plugins.legend.labels.boxWidth = 10;
+      window.Chart.defaults.plugins.legend.labels.boxHeight = 10;
+      window.Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      window.Chart.defaults.plugins.legend.labels.padding = 14;
+    }
+  }, []);
+
+  const Chart = ({ type, data, options, height }) => {
+    const cv = useRef(null), inst = useRef(null);
+    const sig = JSON.stringify({ type, data, options });
+    useEffect(() => {
+      if (!cv.current || !window.Chart) return;
+      try { inst.current && inst.current.destroy(); } catch (e) {}
+      inst.current = new window.Chart(cv.current.getContext("2d"), { type, data, options });
+      return () => { try { inst.current && inst.current.destroy(); } catch (e) {} };
+    }, [sig]);
+    return h("div", { style: { position: "relative", height: height || 240 } }, h("canvas", { ref: cv }));
+  };
+
+  // Construit un dégradé vertical pour les aires
+  const grad = (ctx, color) => {
+    const c = ctx.chart.ctx, g = c.createLinearGradient(0, 0, 0, ctx.chart.height || 240);
+    g.addColorStop(0, color + "44"); g.addColorStop(1, color + "00"); return g;
+  };
+  const baseGrid = { color: "#F1F5F9", drawBorder: false };
+  const eurTicks = { callback: (v) => fK(v) };
+  const noLegend = { legend: { display: false } };
+
+  const lineCfg = (labels, datasets, money) => ({
+    type: "line",
+    data: {
+      labels,
+      datasets: datasets.map(d => ({
+        label: d.label, data: d.data, borderColor: d.color,
+        backgroundColor: d.fill === false ? "transparent" : ((c) => grad(c, d.color)),
+        borderWidth: d.dashed ? 2 : 2.5, borderDash: d.dashed ? [5, 4] : [],
+        fill: d.fill === false ? false : true, tension: 0.35,
+        pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: d.color,
+        pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: datasets.length > 1, position: "top", align: "end" },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${money ? fE(c.raw) : fNb(c.raw)}` } }
+      },
+      scales: { x: { grid: { display: false } }, y: { grid: baseGrid, ticks: money ? eurTicks : {} } }
+    }
+  });
+
+  const barCfg = (labels, data, colors, money, horizontal) => ({
+    type: "bar",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 6, maxBarThickness: 46 }] },
+    options: {
+      indexAxis: horizontal ? "y" : "x",
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => money ? fE(c.raw) : fNb(c.raw) } } },
+      scales: horizontal
+        ? { x: { grid: baseGrid, ticks: money ? eurTicks : {} }, y: { grid: { display: false } } }
+        : { x: { grid: { display: false } }, y: { grid: baseGrid, ticks: money ? eurTicks : {} } }
+    }
+  });
+
+  const stackCfg = (labels, datasets, money) => ({
+    type: "bar",
+    data: { labels, datasets: datasets.map(d => ({ label: d.label, data: d.data, backgroundColor: d.color, borderRadius: 4, maxBarThickness: 46 })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "top", align: "end" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${money ? fE(c.raw) : fNb(c.raw)}` } } },
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, grid: baseGrid, ticks: money ? eurTicks : {} } }
+    }
+  });
+
+  const donutCfg = (labels, data, colors, money) => ({
+    type: "doughnut",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2, hoverOffset: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: "62%",
+      plugins: {
+        legend: { position: isMobile ? "bottom" : "right" },
+        tooltip: { callbacks: { label: (c) => `${c.label}: ${money ? fE(c.raw) : fNb(c.raw)}` } }
       }
-    });
-    // Canal leads Reonic vs autre
-    const nbReonic = ll.filter(l => l.reonic_id).length;
-    const nbReonicConv = ll.filter(l => l.reonic_id && l.statut === "converti").length;
-    // SAV
-    const savMois = (savTickets || []).filter(t => {
-      if (!t.created_at) return false;
-      const d = new Date(t.created_at);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === key;
-    });
-    const savActifs = savMois.filter(t => ["ouvert", "marque_contactee"].includes(t.statut)).length;
-    const savResolus = savMois.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
-    const savCoutMarque = savMois.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
-    // Chantiers terminés ce mois (approx par date)
-    const chanterTermines = (chantiers || []).filter(ch => ch.statut === "termine").length;
-    return {
-      ca,
-      cout,
-      marge,
-      nb: vv.length,
-      txMarge: pct(marge, ca),
-      nbLeads,
-      convertis,
-      txConv,
-      perdus,
-      rdvFixe,
-      txRdv,
-      canaux,
-      avgAppels,
-      marques: Object.entries(marques).map(([k, v]) => ({
-        marque: k,
-        ...v,
-        tx: pct(v.ca - v.cout, v.ca)
-      })).sort((a, b) => b.ca - a.ca),
-      comms: Object.entries(comms).map(([k, v]) => ({
-        nom: k,
-        ...v
-      })).sort((a, b) => b.ca - a.ca),
-      puissances,
-      logements,
-      nbReonic,
-      nbReonicConv,
-      savActifs,
-      savResolus,
-      savCoutMarque,
-      chanterTermines
-    };
-  }, [ventesByMonth, leadsByMonth, leads, savTickets, chantiers]);
+    }
+  });
 
-  // Période agrégée (pour tous les modes sauf "mois")
-  const periodStats = useMemo(() => {
-    const vv = monthKeys.flatMap(k => ventesByMonth[k] || []);
-    const ll = monthKeys.flatMap(k => leadsByMonth[k] || []);
-    const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-    const cout = vv.reduce((s, v) => s + coutVente(v), 0);
-    const marge = ca - cout;
-    const convertis = ll.filter(l => l.statut === "converti").length;
-    const perdus = ll.filter(l => l.statut === "perdu").length;
-    const nbLeads = ll.length;
-    const txConv = nbLeads > 0 ? Math.round(convertis / nbLeads * 100) : 0;
-    const nbReonic = ll.filter(l => l.reonic_id).length;
-    const savPeriode = (savTickets || []).filter(t => {
-      if (!t.created_at) return false;
-      const d = new Date(t.created_at);
-      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      return monthKeys.includes(k);
-    });
-    const savCout = savPeriode.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
-    const totalAcomptes = acomptes.reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
-    const totalPaye = acomptes.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
-    return {
-      ca,
-      cout,
-      marge,
-      nb: vv.length,
-      txMarge: pct(marge, ca),
-      nbLeads,
-      convertis,
-      perdus,
-      txConv,
-      nbReonic,
-      savCout,
-      totalAcomptes,
-      totalPaye,
-      tauxEnc: totalAcomptes > 0 ? Math.round(totalPaye / totalAcomptes * 100) : 0
-    };
-  }, [monthKeys, ventesByMonth, leadsByMonth, acomptes, savTickets]);
-
-  // Comparaison mois courant vs mois précédent (mode "mois")
-  const currentStats = useMemo(() => statsForMonth(selectedMonth), [selectedMonth, statsForMonth]);
-  const prevStats = useMemo(() => statsForMonth(prevMonthKey(selectedMonth)), [selectedMonth, statsForMonth]);
-  const delta = (cur, prev) => {
-    if (prev === 0) return null;
-    return Math.round((cur - prev) / prev * 100);
-  };
-  const DeltaBadge = ({
-    cur,
-    prev,
-    suffix = ""
-  }) => {
+  /* ══ ATOMES UI ══ */
+  const DeltaBadge = ({ cur, prev, money }) => {
     const d = delta(cur, prev);
     if (d === null) return null;
     const up = d >= 0;
-    return React.createElement("span", {
+    return h("span", {
       style: {
-        fontSize: 10,
-        fontWeight: 700,
-        color: up ? "#10B981" : "#EF4444",
-        background: up ? "#10B98115" : "#EF444415",
-        borderRadius: 10,
-        padding: "1px 6px",
-        marginLeft: 4
+        fontSize: 10, fontWeight: 700, color: up ? T.green : T.red,
+        background: (up ? T.green : T.red) + "15", borderRadius: 10, padding: "1px 6px", marginLeft: 6
       }
-    }, up ? "↑" : "↓", Math.abs(d) + "%" + (suffix ? " " + suffix : ""));
+    }, (up ? "↑ " : "↓ ") + Math.abs(d) + " %");
   };
 
-  // Données pour graphique barres mensuel
-  const chartMonths = useMemo(() => {
-    const n = viewMode === "mois" ? 6 : viewMode === "3m" ? 3 : viewMode === "6m" ? 6 : 12;
-    return Array.from({
-      length: n
-    }, (_, i) => {
-      const d2 = new Date();
-      d2.setDate(1);
-      d2.setMonth(d2.getMonth() - (n - 1 - i));
-      const key = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`;
-      const vv = ventesByMonth[key] || [];
-      const ca = vv.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-      const cout = vv.reduce((s, v) => s + coutVente(v), 0);
-      return {
-        label: monthLabel(key),
-        ca,
-        marge: ca - cout,
-        nb: vv.length,
-        mo: String(d2.getMonth() + 1).padStart(2, "0"),
-        y: String(d2.getFullYear())
-      };
+  const KPI = ({ icon, label, value, sub, color, cur, prev }) => h("div",
+    { style: { ...CARD_SM, borderLeft: `3px solid ${color}` } },
+    h("div", { style: { fontSize: 18, marginBottom: 4 } }, icon),
+    h("div", { style: { display: "flex", alignItems: "center", flexWrap: "wrap" } },
+      h("span", { style: { fontSize: isMobile ? 16 : 21, fontWeight: 800, color } }, value),
+      (cur != null && compare && period.prevStart) ? h(DeltaBadge, { cur, prev }) : null
+    ),
+    h("div", { style: { fontSize: 11, color: T.faint, marginTop: 1 } }, label),
+    sub ? h("div", { style: { fontSize: 10, color: T.sub, marginTop: 2 } }, sub) : null
+  );
+
+  const Bar = ({ w, color, ht = 8 }) => h("div",
+    { style: { background: T.track, borderRadius: ht / 2, height: ht, overflow: "hidden" } },
+    h("div", { style: { height: ht, borderRadius: ht / 2, width: Math.max(0, Math.min(100, w)) + "%", background: color, transition: "width .4s" } })
+  );
+
+  const Gauge = ({ value, target, color, label }) => {
+    const p = target > 0 ? Math.min(100, value / target * 100) : 0;
+    const R = 54, C = 2 * Math.PI * R, off = C * (1 - p / 100);
+    const col = target <= 0 ? T.faint : p >= 100 ? T.green : p >= 70 ? T.accent : p >= 40 ? T.amber : T.red;
+    return h("div", { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+      h("svg", { width: 140, height: 140, viewBox: "0 0 140 140" },
+        h("circle", { cx: 70, cy: 70, r: R, fill: "none", stroke: T.track, strokeWidth: 13 }),
+        h("circle", {
+          cx: 70, cy: 70, r: R, fill: "none", stroke: col, strokeWidth: 13, strokeLinecap: "round",
+          strokeDasharray: C, strokeDashoffset: off, transform: "rotate(-90 70 70)", style: { transition: "stroke-dashoffset .6s" }
+        }),
+        h("text", { x: 70, y: 66, textAnchor: "middle", fontSize: 26, fontWeight: 800, fill: col }, target > 0 ? Math.round(p) + "%" : "—"),
+        h("text", { x: 70, y: 88, textAnchor: "middle", fontSize: 10, fill: T.faint }, label || "objectif")
+      ),
+      h("div", { style: { fontSize: 11, color: T.sub, marginTop: 2, textAlign: "center" } },
+        target > 0 ? `${fK(value)} / ${fK(target)}` : "Aucun objectif défini")
+    );
+  };
+
+  const Section = ({ title, right, children, style }) => h("div", { style: { ...CARD, marginBottom: 14, ...style } },
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 } },
+      h("h3", { style: { ...SEC_TITLE, margin: 0 } }, title), right || null),
+    children
+  );
+
+  /* ══ OFFRES REONIC (pipeline) ══ */
+  const [offers, setOffers] = useState(null); // null=non chargé, []=vide
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [offersErr, setOffersErr] = useState(null);
+  const fetchOffers = useCallback(async () => {
+    const edge = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
+    if (!edge || typeof callReonicProxy !== "function") { setOffersErr("Connexion Reonic indisponible"); return; }
+    setOffersLoading(true); setOffersErr(null);
+    try {
+      let all = [], page = 1, hasMore = true;
+      while (hasMore && page <= 20) {
+        const d = await callReonicProxy(edge, "get_projects", { page, itemsPerPage: 200, sort: "-projectCreatedAt" });
+        if (!d || !d.ok) { if (page === 1) throw new Error((d && d.error) || "Erreur Reonic"); break; }
+        all = all.concat(d.data || []);
+        const pag = d.pagination || {};
+        hasMore = page < (pag.totalPages || 1);
+        page++;
+      }
+      setOffers(all);
+    } catch (e) { setOffersErr(e.message || "Erreur de chargement"); setOffers([]); }
+    finally { setOffersLoading(false); }
+  }, [supabaseUrl]);
+  useEffect(() => { if (section === "pipeline" && offers === null && !offersLoading) fetchOffers(); }, [section]);
+
+  const offerPrice = (o) => {
+    const v = o.primaryOfferVariant; if (!v) return 0;
+    return v.totalPriceOverride != null ? Number(v.totalPriceOverride) : Number(v.componentsTotalPrice || 0);
+  };
+  const offerDate = (o) => parseAny(o.offerCreatedAt || o.requestCreatedAt || o.projectCreatedAt);
+  const offerState = (o) => {
+    if (o.archivedAt) return "archive";
+    if (o.deal && o.deal.state === "Won") return "won";
+    if (o.deal && o.deal.state === "Lost") return "lost";
+    return "open";
+  };
+
+  /* ══ SVG MINI-CHARTS (rapport PDF — vectoriel) ══ */
+  const svgLine = (series, w, hh, money) => {
+    const pad = 26, vals = series.flatMap(s => s.data);
+    const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+    const X = (i, n) => pad + (w - pad - 8) * (n <= 1 ? 0.5 : i / (n - 1));
+    const Y = (v) => hh - 18 - (hh - 30) * ((v - min) / (max - min || 1));
+    return h("svg", { width: w, height: hh, viewBox: `0 0 ${w} ${hh}` },
+      [0, .5, 1].map((t, k) => h("line", { key: "g" + k, x1: pad, x2: w - 8, y1: 6 + (hh - 30) * t, y2: 6 + (hh - 30) * t, stroke: "#EEF2F7", strokeWidth: 1 })),
+      ...series.map((s, si) => {
+        const d = s.data.map((v, i) => `${i === 0 ? "M" : "L"}${X(i, s.data.length).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+        return h("path", { key: "p" + si, d, fill: "none", stroke: s.color, strokeWidth: 2.4, strokeLinejoin: "round", strokeDasharray: s.dashed ? "5,4" : "" });
+      })
+    );
+  };
+  const svgDonut = (segs, size) => {
+    const tot = segs.reduce((s, x) => s + x.value, 0) || 1, R = size / 2 - 6, cx = size / 2, cy = size / 2;
+    let acc = 0;
+    return h("svg", { width: size, height: size, viewBox: `0 0 ${size} ${size}` },
+      segs.map((sg, i) => {
+        const a0 = acc / tot * 2 * Math.PI - Math.PI / 2; acc += sg.value;
+        const a1 = acc / tot * 2 * Math.PI - Math.PI / 2;
+        const large = (a1 - a0) > Math.PI ? 1 : 0;
+        const x0 = cx + R * Math.cos(a0), y0 = cy + R * Math.sin(a0), x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
+        return h("path", { key: i, d: `M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 ${large} 1 ${x1.toFixed(1)},${y1.toFixed(1)} Z`, fill: sg.color, stroke: "#fff", strokeWidth: 2 });
+      }),
+      h("circle", { cx, cy, r: R * 0.6, fill: "#fff" })
+    );
+  };
+
+  /* ══════════ SECTION : VUE GLOBALE ══════════ */
+  const renderGlobal = () => {
+    const k = KPIS;
+    // Évolution CA N vs N-1
+    const labels = period.seriesMonths.map(x => mLabel(x, true));
+    const caCur = period.seriesMonths.map(x => (byMonth[x] || {}).ca || 0);
+    const caN1 = period.seriesMonths.map(x => {
+      const [y, m] = x.split("-").map(Number); return (byMonth[`${y - 1}-${String(m).padStart(2, "0")}`] || {}).ca || 0;
     });
-  }, [viewMode, ventesByMonth]);
+    // Type d'install
+    const byType = {}; vCur.forEach(v => { const t = typeInstall(v); byType[t] = (byType[t] || 0) + Number(v.prix_ht || 0); });
+    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    // Marque borne
+    const byMarque = {}; vCur.forEach(v => { const m = v.marque_borne || "Autre"; byMarque[m] = (byMarque[m] || 0) + Number(v.prix_ht || 0); });
+    const marqueEntries = Object.entries(byMarque).sort((a, b) => b[1] - a[1]);
+    const objM = objForMonth(viewMode === "month" ? anchor : curMonthKey);
+    const caMonthForGauge = (byMonth[viewMode === "month" ? anchor : curMonthKey] || {}).ca || 0;
 
-  /* ── STYLE ATOMS ── */
-  const CARD = {
-    background: "#FFFFFF",
-    borderRadius: 14,
-    border: "1px solid #E2E8F0",
-    padding: "16px"
-  };
-  const CARD_SM = {
-    background: "#FFFFFF",
-    borderRadius: 12,
-    border: "1px solid #E2E8F0",
-    padding: "12px"
-  };
-  const SEC_TITLE = {
-    margin: "0 0 14px",
-    fontSize: 14,
-    fontWeight: 800,
-    color: "#1E293B"
-  };
-  const GRID4 = {
-    display: "grid",
-    gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
-    gap: 10,
-    marginBottom: 14
-  };
-  const GRID3 = {
-    display: "grid",
-    gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)",
-    gap: 10,
-    marginBottom: 14
-  };
-  const GRID2 = {
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)",
-    gap: 10,
-    marginBottom: 14
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "💶", label: "CA HT", value: fE(k.ca), color: T.accent, sub: period.label, cur: k.ca, prev: k.caP }),
+        h(KPI, { icon: "📈", label: "Marge brute", value: fE(k.marge), color: T.green, sub: fPct(k.txMarge) + " de taux", cur: k.marge, prev: k.margeP }),
+        h(KPI, { icon: "✍️", label: "Ventes signées", value: fNb(k.nb), color: T.violet, sub: "sur la période", cur: k.nb, prev: k.nbP }),
+        h(KPI, { icon: "🧺", label: "Panier moyen", value: fE(k.panier), color: T.cyan, sub: "CA / vente", cur: k.panier, prev: k.panierP })
+      ),
+      h("div", { key: "ca", style: GRID2 },
+        h(Section, { title: "📊 Évolution du chiffre d'affaires", right: h("span", SUBTLE, "N vs N-1"), style: { gridColumn: isMobile ? "auto" : "span 2", marginBottom: 0 } },
+          (() => { const c = lineCfg(labels, [
+            { label: "CA " + (period.seriesMonths.length ? period.seriesMonths[period.seriesMonths.length - 1].split("-")[0] : ""), data: caCur, color: T.accent },
+            { label: "N-1", data: caN1, color: T.faint, dashed: true, fill: false }
+          ], true); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 260 }); })()
+        )
+      ),
+      h("div", { key: "row2", style: GRID3 },
+        h(Section, { title: "🎯 Objectif du mois", style: { marginBottom: 0 } },
+          h(Gauge, { value: caMonthForGauge, target: objM.ca, label: "CA mensuel" }),
+          h("div", { style: { ...SUBTLE, textAlign: "center", marginTop: 8 } }, isAdmin ? "Somme des objectifs commerciaux" : "Votre objectif")
+        ),
+        h(Section, { title: "🔌 Répartition par type", style: { marginBottom: 0 } },
+          typeEntries.length ? h(Chart, donutCfg(typeEntries.map(e => e[0]), typeEntries.map(e => e[1]), typeEntries.map(e => TYPE_COLOR[e[0]] || T.faint), true)) : empty("Aucune vente sur la période")
+        ),
+        h(Section, { title: "🏷️ CA par marque de borne", style: { marginBottom: 0 } },
+          marqueEntries.length ? h(Chart, { ...barCfg(marqueEntries.map(e => e[0]), marqueEntries.map(e => e[1]), marqueEntries.map(e => BRAND_COLORS[e[0]] || T.accent), true, true) }) : empty("Aucune borne sur la période")
+        )
+      )
+    ];
   };
 
-  /* ── COMPONENTS ── */
-  const KPI = ({
-    icon,
-    label,
-    value,
-    sub,
-    color,
-    evo,
-    prevVal,
-    curVal
-  }) => React.createElement("div", {
-    style: {
-      ...CARD_SM,
-      borderLeft: `3px solid ${color}`
-    }
-  }, React.createElement("div", {
-    style: {
-      fontSize: 18,
-      marginBottom: 4
-    }
-  }, icon), React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      flexWrap: "wrap",
-      gap: 4
-    }
-  }, React.createElement("span", {
-    style: {
-      fontSize: isMobile ? 15 : 20,
-      fontWeight: 800,
-      color
-    }
-  }, value), evo !== null && evo !== undefined ? React.createElement(DeltaBadge, {
-    cur: curVal || 0,
-    prev: prevVal || 0
-  }) : null), React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#94A3B8",
-      marginTop: 1
-    }
-  }, label), sub && React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#64748B",
-      marginTop: 2
-    }
-  }, sub));
-  const Bar = ({
-    w,
-    color,
-    h = 8
-  }) => React.createElement("div", {
-    style: {
-      background: "#F1F5F9",
-      borderRadius: h / 2,
-      height: h,
-      overflow: "hidden"
-    }
-  }, React.createElement("div", {
-    style: {
-      height: h,
-      borderRadius: h / 2,
-      width: Math.max(0, Math.min(100, w)) + "%",
-      background: color,
-      transition: "width 0.4s"
-    }
-  }));
-  const SectionBtn = ({
-    k,
-    ic,
-    lbl
-  }) => React.createElement("button", {
-    onClick: () => setSection(k),
-    style: {
-      padding: "7px 13px",
-      borderRadius: 20,
-      border: `1px solid ${section === k ? "#3B82F6" : "#E2E8F0"}`,
-      background: section === k ? "#3B82F6" : "transparent",
-      color: section === k ? "#FFF" : "#64748B",
-      fontSize: 11,
-      fontWeight: 700,
-      cursor: "pointer",
-      flexShrink: 0,
-      whiteSpace: "nowrap",
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, ic, " ", lbl);
-  const CompareTable = ({
-    rows
-  }) => React.createElement("div", {
-    style: {
-      overflowX: "auto"
-    }
-  }, React.createElement("table", {
-    style: {
-      width: "100%",
-      borderCollapse: "collapse",
-      fontSize: 12
-    }
-  }, React.createElement("thead", null, React.createElement("tr", null, React.createElement("th", {
-    style: {
-      textAlign: "left",
-      padding: "6px 8px",
-      color: "#94A3B8",
-      fontWeight: 600,
-      borderBottom: "1px solid #E2E8F0"
-    }
-  }, "Indicateur"), ...monthKeys.map((k, i) => React.createElement("th", {
-    key: k,
-    style: {
-      textAlign: "right",
-      padding: "6px 8px",
-      color: i === monthKeys.length - 1 ? "#1E293B" : "#94A3B8",
-      fontWeight: i === monthKeys.length - 1 ? 800 : 600,
-      borderBottom: "1px solid #E2E8F0"
-    }
-  }, monthLabel(k))), React.createElement("th", {
-    style: {
-      textAlign: "right",
-      padding: "6px 8px",
-      color: "#94A3B8",
-      fontWeight: 600,
-      borderBottom: "1px solid #E2E8F0"
-    }
-  }, "Évol."))), React.createElement("tbody", null, rows.map((row, ri) => {
-    const vals = monthKeys.map(k => row.getValue(statsForMonth(k)));
-    const last = vals[vals.length - 1];
-    const prev = vals[vals.length - 2];
-    const d = delta(last, prev);
-    return React.createElement("tr", {
-      key: ri,
-      style: {
-        borderBottom: "1px solid #F1F5F9"
-      }
-    }, React.createElement("td", {
-      style: {
-        padding: "7px 8px",
-        color: "#475569",
-        fontWeight: 500
-      }
-    }, row.label), ...vals.map((v, i) => React.createElement("td", {
-      key: i,
-      style: {
-        textAlign: "right",
-        padding: "7px 8px",
-        fontWeight: i === vals.length - 1 ? 700 : 400,
-        color: i === vals.length - 1 ? "#1E293B" : "#64748B"
-      }
-    }, row.format ? row.format(v) : v)), React.createElement("td", {
-      style: {
-        textAlign: "right",
-        padding: "7px 8px"
-      }
-    }, d !== null ? React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        color: d >= 0 ? "#10B981" : "#EF4444",
-        background: d >= 0 ? "#10B98115" : "#EF444415",
-        borderRadius: 8,
-        padding: "2px 6px"
-      }
-    }, d >= 0 ? "↑" : "↓", Math.abs(d) + "%") : React.createElement("span", {
-      style: {
-        color: "#CBD5E1"
-      }
-    }, "—")));
-  }))));
-
-  // Inline SVG bar chart
-  const InlineChart = ({
-    data
-  }) => {
-    const maxV = Math.max(...data.map(d => d.ca), 1);
-    const maxM = Math.max(...data.map(d => Math.max(d.marge, 0)), 1);
-    const W = 100,
-      H = 70,
-      n = data.length,
-      bw = Math.max(4, Math.floor(W / n) - 4);
-    return React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 2,
-        alignItems: "flex-end",
-        height: H + 30,
-        paddingTop: 4
-      }
-    }, data.map((d, i) => {
-      const hCA = d.ca > 0 ? Math.max(4, Math.round(d.ca / maxV * H)) : 2;
-      const hM = d.marge > 0 ? Math.max(2, Math.round(d.marge / maxV * H)) : 0;
-      const isLast = i === data.length - 1;
-      return React.createElement("div", {
-        key: i,
-        style: {
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1
-        }
-      }, React.createElement("div", {
-        style: {
-          width: "100%",
-          display: "flex",
-          gap: 1,
-          alignItems: "flex-end",
-          height: H
-        }
-      }, React.createElement("div", {
-        style: {
-          flex: 1,
-          height: hCA,
-          background: isLast ? "#3B82F6" : "#3B82F640",
-          borderRadius: "2px 2px 0 0",
-          transition: "height 0.4s"
-        }
-      }), React.createElement("div", {
-        style: {
-          flex: 1,
-          height: hM,
-          background: isLast ? "#10B981" : "#10B98140",
-          borderRadius: "2px 2px 0 0",
-          transition: "height 0.4s"
-        }
-      })), React.createElement("div", {
-        style: {
-          fontSize: 9,
-          color: isLast ? "#1E293B" : "#94A3B8",
-          marginTop: 2,
-          textAlign: "center",
-          whiteSpace: "nowrap",
-          fontWeight: isLast ? 700 : 400
-        }
-      }, d.label));
-    }));
-  };
-  const SECTIONS = [["global", "📊", "Vue globale"], ["ca_marges", "💰", "CA & Marges"], ["commerciaux", "👤", "Commerciaux"], ["pipeline", "🔄", "Pipeline leads"], ["reonic", "🔌", "Reonic"], ["chantiers", "🏗️", "Chantiers"], ["sav", "🛠️", "SAV"]];
-
-  // Navigation mois (mode "mois")
-  const goMonth = dir => {
-    const [y, m] = selectedMonth.split("-").map(Number);
-    const d2 = new Date(y, m - 1 + dir, 1);
-    setSelectedMonth(`${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`);
-  };
-  const isCurrentMonth = selectedMonth === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  /* ── RENDER ── */
-  return React.createElement("div", null,
-  // Header + sélecteurs
-  React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, React.createElement("div", null, React.createElement("h2", {
-    style: {
-      margin: "0 0 2px",
-      fontSize: 17,
-      fontWeight: 800
-    }
-  }, "📊 Statistiques"), React.createElement("p", {
-    style: {
-      margin: 0,
-      fontSize: 11,
-      color: "#64748B"
-    }
-  }, viewMode === "mois" ? `${new Date(selectedMonth + "-01T12:00:00").toLocaleDateString("fr-FR", {
-    month: "long",
-    year: "numeric"
-  })} vs mois précédent` : `${monthKeys.length} mois · ${(ventes || []).length} ventes au total`)), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4,
-      flexWrap: "wrap"
-    }
-  }, [["mois", "Mois"], ["3m", "3 mois"], ["6m", "6 mois"], ["12m", "12 mois"]].map(([v, l]) => React.createElement("button", {
-    key: v,
-    onClick: () => setViewMode(v),
-    style: {
-      padding: "5px 11px",
-      borderRadius: 20,
-      border: `1px solid ${viewMode === v ? "#3B82F6" : "#E2E8F0"}`,
-      background: viewMode === v ? "#3B82F625" : "transparent",
-      color: viewMode === v ? "#3B82F6" : "#64748B",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer",
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, l)))),
-  // Nav mois (mode mois uniquement)
-  viewMode === "mois" && React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 12,
-      background: "#F8FAFC",
-      borderRadius: 10,
-      padding: "6px 10px",
-      border: "1px solid #E2E8F0"
-    }
-  }, React.createElement("button", {
-    onClick: () => goMonth(-1),
-    style: {
-      border: "none",
-      background: "transparent",
-      cursor: "pointer",
-      fontSize: 16,
-      color: "#64748B",
-      padding: "0 4px"
-    }
-  }, "‹"), React.createElement("span", {
-    style: {
-      flex: 1,
-      textAlign: "center",
-      fontSize: 13,
-      fontWeight: 700,
-      color: "#1E293B"
-    }
-  }, new Date(selectedMonth + "-01T12:00:00").toLocaleDateString("fr-FR", {
-    month: "long",
-    year: "numeric"
-  })), React.createElement("button", {
-    onClick: () => goMonth(1),
-    disabled: isCurrentMonth,
-    style: {
-      border: "none",
-      background: "transparent",
-      cursor: isCurrentMonth ? "default" : "pointer",
-      fontSize: 16,
-      color: isCurrentMonth ? "#CBD5E1" : "#64748B",
-      padding: "0 4px"
-    }
-  }, "›"), React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#94A3B8",
-      paddingLeft: 8,
-      borderLeft: "1px solid #E2E8F0"
-    }
-  }, "vs ", new Date(prevMonthKey(selectedMonth) + "-01T12:00:00").toLocaleDateString("fr-FR", {
-    month: "short",
-    year: "2-digit"
-  }))),
-  // Onglets sections
-  React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4,
-      marginBottom: 14,
-      overflowX: "auto",
-      paddingBottom: 2,
-      scrollbarWidth: "none"
-    }
-  }, SECTIONS.map(([k, ic, lbl]) => React.createElement(SectionBtn, {
-    key: k,
-    k,
-    ic,
-    lbl
-  }))),
-  // ── VUE GLOBALE ──
-  section === "global" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, React.createElement(KPI, {
-    icon: "💶",
-    label: "CA période",
-    value: fmt(viewMode === "mois" ? currentStats.ca : periodStats.ca),
-    color: "#10B981",
-    curVal: viewMode === "mois" ? currentStats.ca : null,
-    prevVal: viewMode === "mois" ? prevStats.ca : null,
-    evo: viewMode === "mois" ? true : null,
-    sub: `${viewMode === "mois" ? currentStats.nb : periodStats.nb} ventes`
-  }), React.createElement(KPI, {
-    icon: "📈",
-    label: "Marge brute",
-    value: (viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge) + "%",
-    color: txColor(viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge),
-    curVal: viewMode === "mois" ? currentStats.txMarge : null,
-    prevVal: viewMode === "mois" ? prevStats.txMarge : null,
-    evo: viewMode === "mois" ? true : null,
-    sub: fmt(viewMode === "mois" ? currentStats.marge : periodStats.marge)
-  }), React.createElement(KPI, {
-    icon: "🎯",
-    label: "Taux conversion",
-    value: (viewMode === "mois" ? currentStats.txConv : periodStats.txConv) + "%",
-    color: "#3B82F6",
-    curVal: viewMode === "mois" ? currentStats.txConv : null,
-    prevVal: viewMode === "mois" ? prevStats.txConv : null,
-    evo: viewMode === "mois" ? true : null,
-    sub: `${viewMode === "mois" ? currentStats.convertis : periodStats.convertis} leads convertis`
-  }), React.createElement(KPI, {
-    icon: "📋",
-    label: "Leads entrants",
-    value: viewMode === "mois" ? currentStats.nbLeads : periodStats.nbLeads,
-    color: "#A855F7",
-    curVal: viewMode === "mois" ? currentStats.nbLeads : null,
-    prevVal: viewMode === "mois" ? prevStats.nbLeads : null,
-    evo: viewMode === "mois" ? true : null,
-    sub: `${viewMode === "mois" ? currentStats.perdus : periodStats.perdus} perdus`
-  })), React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "💰 Évolution CA & Marge"), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 12,
-      fontSize: 10,
-      color: "#64748B"
-    }
-  }, React.createElement("span", null, React.createElement("span", {
-    style: {
-      display: "inline-block",
-      width: 8,
-      height: 8,
-      borderRadius: 1,
-      background: "#3B82F6",
-      marginRight: 4
-    }
-  }), "CA"), React.createElement("span", null, React.createElement("span", {
-    style: {
-      display: "inline-block",
-      width: 8,
-      height: 8,
-      borderRadius: 1,
-      background: "#10B981",
-      marginRight: 4
-    }
-  }), "Marge"))), React.createElement(InlineChart, {
-    data: chartMonths
-  })),
-  // Pipeline chantiers
-  React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "⚡ Pipeline de conversion"), React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 6,
-      flexWrap: isMobile ? "wrap" : "nowrap"
-    }
-  }, [["Leads", periodStats.nbLeads, "#3B82F6"], ["RDV", (leads || []).filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length, "#8B5CF6"], ["Offres", (leads || []).filter(l => l.statut === "devis_ligne").length, "#F59E0B"], ["Convertis", periodStats.convertis, "#10B981"]].map(([lbl, nb, col], i, arr) => React.createElement(React.Fragment, {
-    key: lbl
-  }, React.createElement("div", {
-    style: {
-      background: col + "20",
-      border: `1px solid ${col}40`,
-      borderRadius: 10,
-      padding: "10px 12px",
-      textAlign: "center",
-      flex: 1,
-      minWidth: 60
-    }
-  }, React.createElement("div", {
-    style: {
-      fontWeight: 900,
-      fontSize: 16,
-      color: col
-    }
-  }, nb), React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#64748B",
-      marginTop: 2
-    }
-  }, lbl)), i < arr.length - 1 && React.createElement("div", {
-    style: {
-      color: "#CBD5E1",
-      fontSize: 14,
-      flexShrink: 0
-    }
-  }, "→")))))),
-  // ── CA & MARGES ──
-  section === "ca_marges" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, React.createElement(KPI, {
-    icon: "💶",
-    label: "CA total",
-    value: fmt(viewMode === "mois" ? currentStats.ca : periodStats.ca),
-    color: "#3B82F6",
-    curVal: currentStats.ca,
-    prevVal: prevStats.ca,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "🏭",
-    label: "Coût matériaux",
-    value: fmt(viewMode === "mois" ? currentStats.cout : periodStats.cout),
-    color: "#F59E0B",
-    curVal: currentStats.cout,
-    prevVal: prevStats.cout,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "📊",
-    label: "Marge brute",
-    value: fmt(viewMode === "mois" ? currentStats.marge : periodStats.marge),
-    color: viewMode === "mois" ? txColor(currentStats.txMarge) : txColor(periodStats.txMarge),
-    curVal: currentStats.marge,
-    prevVal: prevStats.marge,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "🎯",
-    label: "Taux de marge",
-    value: (viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge) + "%",
-    color: txColor(viewMode === "mois" ? currentStats.txMarge : periodStats.txMarge),
-    sub: `Panier moy: ${fmt(viewMode === "mois" ? currentStats.nb > 0 ? currentStats.ca / currentStats.nb : 0 : periodStats.nb > 0 ? periodStats.ca / periodStats.nb : 0)}`
-  })), viewMode !== "mois" && React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "📅 Comparatif mensuel — CA & Marges"), React.createElement(CompareTable, {
-    rows: [{
-      label: "CA (€)",
-      getValue: s => s.ca,
-      format: v => fmt(v)
-    }, {
-      label: "Marge (€)",
-      getValue: s => s.marge,
-      format: v => fmt(v)
-    }, {
-      label: "Taux marge",
-      getValue: s => s.txMarge,
-      format: v => v + "%"
-    }, {
-      label: "Nb ventes",
-      getValue: s => s.nb
-    }, {
-      label: "Panier moyen",
-      getValue: s => s.nb > 0 ? Math.round(s.ca / s.nb) : 0,
-      format: v => fmt(v)
-    }]
-  })), React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "⚡ Marges par marque de borne"), (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.length === 0 ? React.createElement("div", {
-    style: {
-      color: "#CBD5E1",
-      fontSize: 12,
-      textAlign: "center",
-      padding: "16px 0"
-    }
-  }, "Renseignez la marque dans vos ventes") : (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.map((r, i) => {
-    const BRAND_COLORS = {
-      "Easee": "#1A73E8",
-      "Ohme": "#00897B",
-      "Zaptec": "#7B1FA2",
-      "V2C": "#E53935",
-      "Tesla": "#E31937",
-      "Smappee": "#FF6B35"
-    };
-    const col = BRAND_COLORS[r.marque] || "#3B82F6";
-    const maxM = Math.max(...(viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).marques.map(x => x.ca), 1);
-    return React.createElement("div", {
-      key: r.marque,
-      style: {
-        marginBottom: 10
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 4
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 800
-      }
-    }, r.marque), React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 10
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#64748B"
-      }
-    }, r.nb, " vente(s)"), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 800,
-        color: txColor(r.tx)
-      }
-    }, r.tx, "%"), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 800,
-        color: col
-      }
-    }, fmt(r.marge)))), React.createElement("div", {
-      style: {
-        height: 12,
-        background: "#E2E8F0",
-        borderRadius: 6,
-        overflow: "hidden",
-        position: "relative"
-      }
-    }, React.createElement("div", {
-      style: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        height: "100%",
-        width: r.ca / maxM * 100 + "%",
-        background: col + "40",
-        borderRadius: 6
-      }
-    }), React.createElement("div", {
-      style: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        height: "100%",
-        width: Math.max(0, r.marge / maxM * 100) + "%",
-        background: col,
-        borderRadius: 6
-      }
-    })));
-  })), React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "💸 Acomptes & facturation"), React.createElement("div", {
-    style: GRID3
-  }, React.createElement(KPI, {
-    icon: "✅",
-    label: "Acomptes encaissés",
-    value: periodStats.tauxEnc + "%",
-    color: "#10B981",
-    sub: fmt(periodStats.totalPaye)
-  }), React.createElement(KPI, {
-    icon: "🏗️",
-    label: "Chantiers facturés",
-    value: (chantiers || []).filter(c => {
-      const f = c.facture;
-      return c.statut === "termine" && f && ["facture", "paye"].includes(f.statut);
-    }).length,
-    color: "#3B82F6",
-    sub: "sur " + (chantiers || []).filter(c => c.statut === "termine").length + " terminés"
-  }), React.createElement(KPI, {
-    icon: "💰",
-    label: "Chantiers payés",
-    value: (chantiers || []).filter(c => {
-      const f = c.facture;
-      return c.statut === "termine" && (f === null || f === void 0 ? void 0 : f.statut) === "paye";
-    }).length,
-    color: "#A855F7",
-    sub: "intégralement réglés"
-  })))),
-  // ── COMMERCIAUX ──
-  section === "commerciaux" && React.createElement(React.Fragment, null, viewMode !== "mois" && React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "📅 Comparatif commerciaux — CA mensuel"), (() => {
-    const allComms = [...new Set((ventes || []).map(v => v.par || "—"))].sort();
-    return React.createElement(CompareTable, {
-      rows: allComms.map(nom => ({
-        label: nom,
-        getValue: s => {
-          var _s$comms$find;
-          return ((_s$comms$find = s.comms.find(c => c.nom === nom)) === null || _s$comms$find === void 0 ? void 0 : _s$comms$find.ca) || 0;
-        },
-        format: v => fmt(v)
-      }))
-    });
-  })()), React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "🏆 Performance individuelle"), (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.length === 0 ? React.createElement("div", {
-    style: {
-      color: "#CBD5E1",
-      fontSize: 12,
-      textAlign: "center",
-      padding: "16px 0"
-    }
-  }, "Aucune vente") : (viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.map((v, i) => {
-    const cols = ["#F59E0B", "#94A3B8", "#C07850", "#3B82F6", "#10B981", "#A855F7"];
-    const col = cols[i % cols.length];
-    const maxC = Math.max(...(viewMode === "mois" ? currentStats : statsForMonth(monthKeys[monthKeys.length - 1])).comms.map(x => x.ca), 1);
-    return React.createElement("div", {
-      key: v.nom,
-      style: {
-        marginBottom: 14
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 5
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 18
-      }
-    }, medals[i] || "💼"), React.createElement("span", {
-      style: {
-        fontSize: 13,
-        fontWeight: 800
-      }
-    }, v.nom), React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#64748B"
-      }
-    }, v.nb, " vente(s)")), React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 10
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 13,
-        fontWeight: 800,
-        color: col
-      }
-    }, fmt(v.ca)), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: "#10B981"
-      }
-    }, pct(v.marge, v.ca), "%"))), React.createElement(Bar, {
-      w: v.ca / maxC * 100,
-      color: col,
-      h: 14
-    }));
-  })),
-  // Objectifs
-  (() => {
-    const mM_now = String(now.getMonth() + 1).padStart(2, "0"),
-      mY_now = String(now.getFullYear());
-    const mKey = `${mY_now}-${mM_now}`;
-    const vendeurs = [...new Set((ventes || []).map(v => v.par || "Inconnu"))].sort();
-    return React.createElement("div", {
-      style: CARD
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 14,
-        flexWrap: "wrap",
-        gap: 8
-      }
-    }, React.createElement("h3", {
-      style: SEC_TITLE
-    }, "🎯 Objectifs — " + new Date().toLocaleDateString("fr-FR", {
-      month: "long",
-      year: "numeric"
-    })), canEdit && React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#CBD5E1"
-      }
-    }, "✏️ pour modifier")), vendeurs.length === 0 ? React.createElement("div", {
-      style: {
-        textAlign: "center",
-        padding: "20px 0",
-        color: "#CBD5E1",
-        fontSize: 12
-      }
-    }, "Aucun commercial") : React.createElement("div", {
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        gap: 10
-      }
-    }, vendeurs.map(nom => React.createElement(VendeurRow, {
-      key: nom,
-      nom,
-      mKey,
-      mM_now,
-      mY_now,
-      ventes,
-      objectifs,
-      setObjectifs,
-      canEdit,
-      isMobile,
-      fmt
-    }))));
-  })()),
-  // ── PIPELINE LEADS ──
-  section === "pipeline" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, React.createElement(KPI, {
-    icon: "📋",
-    label: "Leads entrants",
-    value: viewMode === "mois" ? currentStats.nbLeads : periodStats.nbLeads,
-    color: "#3B82F6",
-    curVal: currentStats.nbLeads,
-    prevVal: prevStats.nbLeads,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "🎯",
-    label: "Taux conversion",
-    value: (viewMode === "mois" ? currentStats.txConv : periodStats.txConv) + "%",
-    color: "#10B981",
-    curVal: currentStats.txConv,
-    prevVal: prevStats.txConv,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "📅",
-    label: "Taux prise RDV",
-    value: (viewMode === "mois" ? currentStats.txRdv : Math.round((leads || []).filter(l => ["rdv_fixe", "rdv_fait", "relance", "devis_ligne", "converti"].includes(l.statut)).length / Math.max((leads || []).length, 1) * 100)) + "%",
-    color: "#8B5CF6",
-    curVal: currentStats.txRdv,
-    prevVal: prevStats.txRdv,
-    evo: viewMode === "mois" ? true : null
-  }), React.createElement(KPI, {
-    icon: "❌",
-    label: "Leads perdus",
-    value: viewMode === "mois" ? currentStats.perdus : periodStats.perdus,
-    color: "#EF4444",
-    curVal: currentStats.perdus,
-    prevVal: prevStats.perdus,
-    evo: viewMode === "mois" ? true : null,
-    sub: "ce mois / période"
-  })), viewMode !== "mois" && React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "📅 Comparatif mensuel — Leads"), React.createElement(CompareTable, {
-    rows: [{
-      label: "Leads entrants",
-      getValue: s => s.nbLeads
-    }, {
-      label: "RDV fixés",
-      getValue: s => s.rdvFixe
-    }, {
-      label: "Convertis",
-      getValue: s => s.convertis
-    }, {
-      label: "Taux conversion",
-      getValue: s => s.txConv,
-      format: v => v + "%"
-    }, {
-      label: "Perdus",
-      getValue: s => s.perdus
-    }, {
-      label: "Appels moy/lead",
-      getValue: s => s.avgAppels
-    }]
-  })), React.createElement("div", {
-    style: GRID2
-  },
-  // Canal
-  React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "📡 Canaux d'acquisition"), (() => {
-    const canaux = {};
-    (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).forEach(l => {
-      const c = l.canal || "Inconnu";
-      canaux[c] = (canaux[c] || 0) + 1;
-    });
-    const total = Object.values(canaux).reduce((a, b) => a + b, 0) || 1;
-    const colors = ["#3B82F6", "#10B981", "#A855F7", "#F59E0B", "#EF4444", "#06B6D4"];
-    return Object.entries(canaux).sort((a, b) => b[1] - a[1]).map(([c, n], i) => React.createElement("div", {
-      key: c,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, c), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: colors[i % colors.length]
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: colors[i % colors.length],
-      h: 6
-    })));
-  })()),
-  // Logement
-  React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "🏠 Type de logement"), (() => {
-    const logements = {};
-    (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).forEach(l => {
-      if (l.logement) {
-        logements[l.logement] = (logements[l.logement] || 0) + 1;
-      }
-    });
-    logements["Non renseigné"] = (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).filter(l => !l.logement).length;
-    const total = Object.values(logements).reduce((a, b) => a + b, 0) || 1;
-    const colors = {
-      "Maison individuelle": "#10B981",
-      "Copropriété": "#3B82F6",
-      "Non renseigné": "#CBD5E1"
-    };
-    return Object.entries(logements).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([c, n]) => React.createElement("div", {
-      key: c,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, c), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: colors[c] || "#94A3B8"
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: colors[c] || "#94A3B8",
-      h: 6
-    })));
-  })())), React.createElement("div", {
-    style: GRID2
-  },
-  // Perdu raisons
-  React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "❌ Raisons de perte"), (() => {
-    const OFFRE_PERDU_KEYS = ["Prix trop élevé", "Concurrent choisi", "Projet abandonné", "Projet reporté", "Pas de réponse / injoignable", "Contraintes techniques"];
-    const counts = {};
-    OFFRE_PERDU_KEYS.forEach(k => {
-      counts[k] = 0;
-    });
-    const perdus = (viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || [])).filter(l => l.statut === "perdu");
-    perdus.forEach(l => {
-      OFFRE_PERDU_KEYS.forEach(k => {
-        if ((l.notes || "").includes(k)) counts[k]++;
+  /* ══════════ SECTION : CA & MARGES ══════════ */
+  const renderCaMarges = () => {
+    const k = KPIS;
+    // Courbe taux de marge
+    const labels = period.seriesMonths.map(x => mLabel(x, true));
+    const txSerie = period.seriesMonths.map(x => { const b = byMonth[x] || {}; return b.ca > 0 ? Math.round((b.ca - b.cout) / b.ca * 100) : 0; });
+    // Marge par catégorie de composant
+    const byCat = {};
+    vCur.forEach(v => {
+      if (v.marge_forfait) return;
+      (v.materiels || []).forEach(m => {
+        const cat = m.cat || m.brand || "Autre";
+        const lineMarge = Number(m.qty || 0) * (Number(m.prix_unit || 0) - Number(m.prix_achat != null ? m.prix_achat : (m.prix_reonic || 0)));
+        byCat[cat] = (byCat[cat] || 0) + lineMarge;
       });
     });
-    const total = perdus.length || 1;
-    return Object.entries(counts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([r, n], i) => React.createElement("div", {
-      key: r,
-      style: {
-        marginBottom: 7
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 2
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 500,
-        color: "#475569"
-      }
-    }, r), React.createElement("span", {
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        color: "#EF4444"
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: "#EF444460",
-      h: 5
-    }))).concat(Object.values(counts).every(n => n === 0) ? [React.createElement("div", {
-      key: "none",
-      style: {
-        color: "#CBD5E1",
-        fontSize: 12,
-        textAlign: "center",
-        paddingTop: 8
-      }
-    }, "Aucun lead perdu")] : []);
-  })()),
-  // Particulier / Entreprise
-  React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "👥 Particulier vs Entreprise"), (() => {
-    const ll = viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || []);
-    const part = ll.filter(l => l.client_type === "Particulier").length;
-    const entr = ll.filter(l => l.client_type === "Entreprise").length;
-    const nr = ll.filter(l => !l.client_type).length;
-    const total = ll.length || 1;
-    return [["Particulier", part, "#3B82F6"], ["Entreprise", entr, "#A855F7"], ["Non renseigné", nr, "#CBD5E1"]].filter(([, n]) => n > 0).map(([lbl, n, col]) => React.createElement("div", {
-      key: lbl,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, lbl), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: col
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: col,
-      h: 6
-    })));
-  })()))),
-  // ── REONIC ──
-  section === "reonic" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, (() => {
-    const allLeads = leads || [];
-    const reonicLeads = allLeads.filter(l => l.reonic_id);
-    const signedLeads = reonicLeads.filter(l => l.reonic_status === "Signed");
-    const txSign = reonicLeads.length > 0 ? Math.round(signedLeads.length / reonicLeads.length * 100) : 0;
-    const pipelineVal = reonicLeads.filter(l => l.statut === "devis_ligne").reduce((s, l) => s + Number(l.prix_reonic || 0), 0);
-    const avgReonic = reonicLeads.filter(l => Number(l.prix_reonic || 0) > 0).length > 0 ? pipelineVal / reonicLeads.filter(l => Number(l.prix_reonic || 0) > 0).length : 0;
-    const txConvReonic = reonicLeads.length > 0 ? Math.round(reonicLeads.filter(l => l.statut === "converti").length / reonicLeads.length * 100) : 0;
-    return React.createElement(React.Fragment, null, React.createElement(KPI, {
-      icon: "🔌",
-      label: "Leads Reonic total",
-      value: reonicLeads.length,
-      color: "#3B82F6",
-      sub: `${txConvReonic}% convertis`
-    }), React.createElement(KPI, {
-      icon: "✍️",
-      label: "Taux de signature",
-      value: txSign + "%",
-      color: txSign >= 30 ? "#10B981" : "#F59E0B",
-      sub: `${signedLeads.length} signés`
-    }), React.createElement(KPI, {
-      icon: "💰",
-      label: "Pipeline actif",
-      value: fmt(pipelineVal),
-      color: "#A855F7",
-      sub: "offres en cours"
-    }), React.createElement(KPI, {
-      icon: "📊",
-      label: "Panier moyen Reonic",
-      value: fmt(avgReonic),
-      color: "#06B6D4",
-      sub: "par devis"
+    const catEntries = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    // Top / Bottom ventes
+    const ranked = vCur.map(v => ({ v, tx: tauxMarge(v), mg: margeVente(v) })).sort((a, b) => b.tx - a.tx);
+    const top = ranked.slice(0, 8), bottom = ranked.slice(-8).reverse();
+    // Réel vs forfait
+    const forfait = vCur.filter(v => v.marge_forfait), reel = vCur.filter(v => !v.marge_forfait);
+    // Impact ajustement prix (vente vs prix Reonic catalogue)
+    let ecart = 0;
+    vCur.forEach(v => (v.materiels || []).forEach(m => {
+      if (m.prix_reonic != null) ecart += Number(m.qty || 0) * (Number(m.prix_unit || 0) - Number(m.prix_reonic || 0));
     }));
-  })()), React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "❌ Raisons de perte des offres"), (() => {
-    const KEYS = ["Prix trop élevé", "Concurrent choisi", "Projet abandonné", "Projet reporté", "Pas de réponse / injoignable", "Contraintes techniques"];
-    const perdus = (leads || []).filter(l => l.statut === "perdu" && l.reonic_id);
-    const total = perdus.length || 1;
-    const counts = Object.fromEntries(KEYS.map(k => [k, 0]));
-    perdus.forEach(l => KEYS.forEach(k => {
-      if ((l.notes || "").includes(k)) counts[k]++;
+    const rowVente = (r, i, color) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: i < 7 ? `1px solid ${T.track}` : "none" } },
+      h("div", { style: { overflow: "hidden" } },
+        h("div", { style: { fontSize: 12, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, r.v.client || "—"),
+        h("div", { style: { fontSize: 10, color: T.faint } }, fE(r.v.prix_ht) + " · " + (r.v.par || "—"))
+      ),
+      h("span", { style: { fontSize: 13, fontWeight: 800, color } }, fPct(r.tx))
+    );
+
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "📈", label: "Marge brute", value: fE(k.marge), color: T.green, cur: k.marge, prev: k.margeP }),
+        h(KPI, { icon: "％", label: "Taux de marge", value: fPct(k.txMarge), color: txColor(k.txMarge), cur: k.txMarge, prev: k.txMargeP }),
+        h(KPI, { icon: "🧮", label: "Coût matériel", value: fE(k.cout), color: T.amber, sub: "achat + câbles" }),
+        h(KPI, { icon: "🎚️", label: "Ajustement prix", value: (ecart >= 0 ? "+" : "") + fE(ecart), color: ecart >= 0 ? T.green : T.red, sub: "vs prix Reonic catalogue" })
+      ),
+      h("div", { key: "tx", style: { ...GRID2 } },
+        h(Section, { title: "📉 Évolution du taux de marge", style: { gridColumn: isMobile ? "auto" : "span 2", marginBottom: 0 } },
+          (() => { const c = lineCfg(labels, [{ label: "Taux de marge %", data: txSerie, color: T.green }], false);
+            c.options.scales.y.ticks = { callback: (v) => v + " %" }; c.options.scales.y.suggestedMax = 60;
+            return h(Chart, { type: c.type, data: c.data, options: c.options, height: 240 }); })()
+        )
+      ),
+      h("div", { key: "cat", style: GRID2 },
+        h(Section, { title: "🧱 Marge par catégorie de composant", style: { marginBottom: 0 } },
+          catEntries.length ? h(Chart, { ...barCfg(catEntries.map(e => e[0]), catEntries.map(e => e[1]), catEntries.map((_, i) => SERIES[i % SERIES.length]), true, true), height: 260 }) : empty("Données matériel indisponibles")
+        ),
+        h(Section, { title: "⚖️ Marge réelle vs forfait", style: { marginBottom: 0 } },
+          (reel.length + forfait.length) ? [
+            h(Chart, { key: "d", ...donutCfg(["Marge réelle", "Forfait 50 %"], [reel.length, forfait.length], [T.accent, T.amber], false), height: 200 }),
+            h("div", { key: "t", style: { ...SUBTLE, textAlign: "center", marginTop: 8 } }, `${forfait.length} vente(s) en forfait sur ${reel.length + forfait.length}`)
+          ] : empty("Aucune vente sur la période")
+        )
+      ),
+      h("div", { key: "tb", style: GRID2 },
+        h(Section, { title: "🏆 Top ventes (taux de marge)", style: { marginBottom: 0 } }, top.length ? top.map((r, i) => rowVente(r, i, txColor(r.tx))) : empty("—")),
+        h(Section, { title: "⚠️ Ventes les moins margées", style: { marginBottom: 0 } }, bottom.length ? bottom.map((r, i) => rowVente(r, i, txColor(r.tx))) : empty("—"))
+      )
+    ];
+  };
+
+  /* ══════════ SECTION : COMMERCIAUX (admin) ══════════ */
+  const renderCommerciaux = () => {
+    const agg = {};
+    commerciaux.forEach(n => agg[n] = { ca: 0, nb: 0, marge: 0 });
+    vCur.forEach(v => { const n = v.par || "—"; if (!agg[n]) agg[n] = { ca: 0, nb: 0, marge: 0 }; agg[n].ca += Number(v.prix_ht || 0); agg[n].nb++; agg[n].marge += margeVente(v); });
+    const rows = Object.entries(agg).filter(([, d]) => d.nb > 0)
+      .map(([n, d]) => ({ n, ...d, tx: pct(d.marge, d.ca), panier: d.nb ? d.ca / d.nb : 0 }))
+      .sort((a, b) => b.ca - a.ca);
+    const maxCA = Math.max(...rows.map(r => r.ca), 1);
+    const medals = ["🥇", "🥈", "🥉"];
+    // Tendances : top 5 commerciaux sur la série
+    const top5 = rows.slice(0, 5).map(r => r.n);
+    const trendLabels = period.seriesMonths.map(x => mLabel(x, true));
+    const trendDS = top5.map((n, i) => ({
+      label: n, color: SERIES[i % SERIES.length], fill: false,
+      data: period.seriesMonths.map(mk => scopedVentes.filter(v => (v.par || "") === n && mKeyOf(parseFr(v.date)) === mk).reduce((s, v) => s + Number(v.prix_ht || 0), 0))
     }));
-    return React.createElement("div", null, Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([r, n]) => React.createElement("div", {
-      key: r,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 500
-      }
-    }, r), React.createElement("div", null, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: "#EF4444"
-      }
-    }, n), React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#94A3B8",
-        marginLeft: 4
-      }
-    }, "(", Math.round(n / total * 100), "%)"))), React.createElement(Bar, {
-      w: n / total * 100,
-      color: "#EF444455",
-      h: 6
-    }))), perdus.length === 0 && React.createElement("div", {
-      style: {
-        color: "#CBD5E1",
-        fontSize: 12,
-        textAlign: "center",
-        padding: "12px 0"
-      }
-    }, "Aucune offre perdue enregistrée"));
-  })()), viewMode !== "mois" && React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "📅 Leads Reonic par mois"), React.createElement(CompareTable, {
-    rows: [{
-      label: "Leads Reonic",
-      getValue: s => s.nbReonic
-    }, {
-      label: "Convertis Reonic",
-      getValue: s => s.nbReonicConv
-    }, {
-      label: "Taux conversion",
-      getValue: s => s.nbReonic > 0 ? Math.round(s.nbReonicConv / s.nbReonic * 100) : 0,
-      format: v => v + "%"
-    }]
-  }))),
-  // ── CHANTIERS ──
-  section === "chantiers" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, (() => {
+    // Objectifs du mois courant
+    const ok = curMonthKey;
+    const objRows = rows.map(r => {
+      const o = objectifs[`${ok}__${r.n}`] || {};
+      const caMois = scopedVentes.filter(v => (v.par || "") === r.n && mKeyOf(parseFr(v.date)) === ok).reduce((s, v) => s + Number(v.prix_ht || 0), 0);
+      return { n: r.n, caMois, obj: Number(o.ca || 0) };
+    });
+
+    return [
+      h("div", { key: "cls", style: GRID2 },
+        h(Section, { title: "🏆 Classement par CA", style: { marginBottom: 0 } },
+          rows.length ? rows.map((r, i) => h("div", { key: r.n, style: { marginBottom: 11 } },
+            h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 3 } },
+              h("span", { style: { fontSize: 12, fontWeight: 700 } }, (i < 3 ? medals[i] + " " : `${i + 1}. `) + r.n),
+              h("span", { style: { fontSize: 12, fontWeight: 800, color: T.accent } }, fE(r.ca))),
+            h(Bar, { w: r.ca / maxCA * 100, color: SERIES[i % SERIES.length] }),
+            h("div", { style: { ...SUBTLE, marginTop: 3 } }, `${r.nb} vente(s) · ${fPct(r.tx)} marge · panier ${fK(r.panier)}`)
+          )) : empty("Aucune vente sur la période")
+        ),
+        h(Section, { title: "🎯 Réalisation des objectifs (mois en cours)", style: { marginBottom: 0 } },
+          objRows.some(o => o.obj > 0) ? objRows.filter(o => o.obj > 0 || o.caMois > 0).map((o, i) => {
+            const p = o.obj > 0 ? Math.min(100, Math.round(o.caMois / o.obj * 100)) : null;
+            const col = p == null ? T.faint : p >= 100 ? T.green : p >= 70 ? T.accent : p >= 40 ? T.amber : T.red;
+            return h("div", { key: o.n, style: { marginBottom: 11 } },
+              h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 3 } },
+                h("span", { style: { fontSize: 12, fontWeight: 700 } }, o.n),
+                h("span", { style: { fontSize: 12, fontWeight: 800, color: col } }, p == null ? fK(o.caMois) : p + " %")),
+              h(Bar, { w: p || 0, color: col }),
+              h("div", { style: { ...SUBTLE, marginTop: 3 } }, `${fK(o.caMois)} / ${o.obj > 0 ? fK(o.obj) : "—"}`)
+            );
+          }) : empty("Aucun objectif défini ce mois")
+        )
+      ),
+      h(Section, { key: "trend", title: "📈 Tendance des 5 meilleurs commerciaux" },
+        top5.length ? (() => { const c = lineCfg(trendLabels, trendDS, true); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 280 }); })() : empty("—")
+      )
+    ];
+  };
+
+  /* ══════════ SECTION : PIPELINE (offres Reonic) ══════════ */
+  const renderPipeline = () => {
+    if (offersLoading) return [h("div", { key: "l", style: { ...CARD, textAlign: "center", color: T.sub, padding: 40 } }, "⏳ Chargement des offres Reonic…")];
+    if (offersErr) return [h("div", { key: "e", style: { ...CARD, textAlign: "center", padding: 30 } },
+      h("div", { style: { color: T.red, fontWeight: 700, marginBottom: 8 } }, "⚠️ " + offersErr),
+      h("button", { onClick: fetchOffers, style: { padding: "8px 16px", borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, "Réessayer"))];
+    const list = offers || [];
+    const open = list.filter(o => offerState(o) === "open");
+    const won = list.filter(o => offerState(o) === "won");
+    const lost = list.filter(o => offerState(o) === "lost");
+    const decided = won.length + lost.length;
+    const txConv = decided > 0 ? Math.round(won.length / decided * 100) : 0;
+    const pipeVal = open.reduce((s, o) => s + offerPrice(o), 0);
+    const wonVal = won.reduce((s, o) => s + offerPrice(o), 0);
+    // Délai offre → signature
+    const byId = {}; list.forEach(o => byId[String(o.id)] = o);
+    const delais = [];
+    (ventes || []).forEach(v => {
+      if (!v.reonic_id) return; const o = byId[String(v.reonic_id)]; if (!o) return;
+      const dO = offerDate(o), dV = parseFr(v.date); const dd = daysBetween(dO, dV);
+      if (dd != null && dd >= 0 && dd < 400) delais.push(dd);
+    });
+    const delaiMoy = delais.length ? Math.round(delais.reduce((a, b) => a + b, 0) / delais.length) : null;
+    // Évolution offres créées / mois
+    const offMonth = {}; list.forEach(o => { const k = mKeyOf(offerDate(o)); if (k) offMonth[k] = (offMonth[k] || 0) + 1; });
+    const labels = period.seriesMonths.map(x => mLabel(x, true));
+
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "📂", label: "Offres en cours", value: fNb(open.length), color: T.accent, sub: "non closes" }),
+        h(KPI, { icon: "✅", label: "Gagnées", value: fNb(won.length), color: T.green, sub: fE(wonVal) }),
+        h(KPI, { icon: "❌", label: "Perdues", value: fNb(lost.length), color: T.red, sub: "deals fermés" }),
+        h(KPI, { icon: "🔁", label: "Taux conversion", value: fPct(txConv), color: txColor(txConv), sub: "gagnées / décidées" })
+      ),
+      h("div", { key: "kpi2", style: GRID3 },
+        h(KPI, { icon: "💼", label: "Valeur du pipeline", value: fE(pipeVal), color: T.violet, sub: `${open.length} offre(s)` }),
+        h(KPI, { icon: "⏱️", label: "Délai offre → signature", value: delaiMoy == null ? "—" : delaiMoy + " j", color: T.cyan, sub: `${delais.length} vente(s) tracée(s)` }),
+        h(KPI, { icon: "📊", label: "Total offres", value: fNb(list.length), color: T.indigo, sub: "tous statuts" })
+      ),
+      h("div", { key: "row", style: GRID2 },
+        h(Section, { title: "🔄 Entonnoir de conversion", style: { marginBottom: 0 } },
+          decided + open.length ? h(Chart, donutCfg(["En cours", "Gagnées", "Perdues"], [open.length, won.length, lost.length], [T.accent, T.green, T.red], false)) : empty("Aucune offre")),
+        h(Section, { title: "📅 Offres créées par mois", style: { marginBottom: 0 } },
+          h(Chart, { ...barCfg(labels, period.seriesMonths.map(x => offMonth[x] || 0), period.seriesMonths.map(() => T.accent), false, false), height: 240 }))
+      )
+    ];
+  };
+
+  /* ══════════ SECTION : CHANTIERS (admin) ══════════ */
+  const venteById = useMemo(() => { const m = {}; (ventes || []).forEach(v => m[String(v.id)] = v); return m; }, [ventes]);
+  const renderChantiers = () => {
     const ch = chantiers || [];
-    const planifie = ch.filter(c => c.statut === "planifie").length;
-    const termine = ch.filter(c => c.statut === "termine").length;
-    const facture = ch.filter(c => {
-      const f = c.facture;
-      return c.statut === "termine" && f && ["facture", "paye"].includes(f.statut);
-    }).length;
-    const paye = ch.filter(c => {
-      const f = c.facture;
-      return c.statut === "termine" && (f === null || f === void 0 ? void 0 : f.statut) === "paye";
-    }).length;
-    return React.createElement(React.Fragment, null, React.createElement(KPI, {
-      icon: "📅",
-      label: "Planifiés",
-      value: planifie,
-      color: "#A855F7",
-      sub: "en attente de pose"
-    }), React.createElement(KPI, {
-      icon: "✅",
-      label: "Terminés",
-      value: termine,
-      color: "#10B981",
-      sub: "installations réalisées"
-    }), React.createElement(KPI, {
-      icon: "🧾",
-      label: "Facturés",
-      value: facture,
-      color: "#3B82F6",
-      sub: `${termine > 0 ? Math.round(facture / termine * 100) : 0}% du total`
-    }), React.createElement(KPI, {
-      icon: "💰",
-      label: "Payés",
-      value: paye,
-      color: "#06B6D4",
-      sub: "intégralement réglés"
-    }));
-  })()),
-  // Puissance installée
-  React.createElement("div", {
-    style: GRID2
-  }, React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "⚡ Puissance installée"), (() => {
-    const puissances = {};
-    (viewMode === "mois" ? ventesByMonth[selectedMonth] || [] : monthKeys.flatMap(k => ventesByMonth[k] || [])).forEach(v => {
-      const k = v.puissance_install || "Non renseigné";
-      puissances[k] = (puissances[k] || 0) + 1;
+    const ST = { a_planifier: 0, planifie: 0, en_cours: 0, termine: 0, bloque: 0 };
+    ch.forEach(c => {
+      const blocked = c.statut === "bloque" || (c.facture && c.facture.statut === "bloque");
+      const s = blocked ? "bloque" : (c.statut in ST ? c.statut : "a_planifier");
+      ST[s] = (ST[s] || 0) + 1;
     });
-    const total = Object.values(puissances).reduce((a, b) => a + b, 0) || 1;
-    const colors = ["#3B82F6", "#10B981", "#A855F7", "#F59E0B", "#94A3B8"];
-    return Object.entries(puissances).sort((a, b) => b[1] - a[1]).map(([k, n], i) => React.createElement("div", {
-      key: k,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, k), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: colors[i % colors.length]
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: colors[i % colors.length],
-      h: 6
-    }))).concat(Object.keys(puissances).length === 0 ? [React.createElement("div", {
-      key: "none",
-      style: {
-        color: "#CBD5E1",
-        fontSize: 12,
-        textAlign: "center",
-        paddingTop: 8
-      }
-    }, "Renseignez la puissance dans vos ventes")] : []);
-  })()), React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "🔌 Type de tableau électrique"), (() => {
-    const ll = viewMode === "mois" ? leadsByMonth[selectedMonth] || [] : monthKeys.flatMap(k => leadsByMonth[k] || []);
-    const rapports = ll.filter(l => l.rapport_rdv && l.rapport_rdv.tableau);
-    const counts = {};
-    rapports.forEach(l => {
-      const t = l.rapport_rdv.tableau;
-      counts[t] = (counts[t] || 0) + 1;
+    const stLabels = { a_planifier: "À planifier", planifie: "Planifiés", en_cours: "En cours", termine: "Terminés", bloque: "Bloqués" };
+    const stColors = { a_planifier: T.amber, planifie: T.violet, en_cours: T.accent, termine: T.green, bloque: T.red };
+    const stEntries = Object.entries(ST).filter(([, n]) => n > 0);
+    // Charge par installateur (chantiers non terminés)
+    const charge = {};
+    ch.filter(c => c.statut !== "termine").forEach(c => { const t = c.technicien || "Non assigné"; charge[t] = (charge[t] || 0) + 1; });
+    const chargeEntries = Object.entries(charge).sort((a, b) => b[1] - a[1]);
+    // Délai signature → facturation
+    const dels = [];
+    ch.forEach(c => {
+      const v = venteById[String(c.vente_id)]; const dS = v ? parseFr(v.date) : null;
+      const dF = c.facture && parseFr(c.facture.date_envoi_facture);
+      const dd = daysBetween(dS, dF); if (dd != null && dd >= 0 && dd < 730) dels.push(dd);
     });
-    const total = rapports.length || 1;
-    const colors = {
-      "Monophasé": "#3B82F6",
-      "Triphasé": "#A855F7",
-      "Non renseigné": "#CBD5E1"
-    };
-    return Object.entries(counts).length === 0 ? React.createElement("div", {
-      style: {
-        color: "#CBD5E1",
-        fontSize: 12,
-        textAlign: "center",
-        paddingTop: 8
-      }
-    }, "Données issues des rapports RDV") : Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([c, n]) => React.createElement("div", {
-      key: c,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 600
-      }
-    }, c), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: colors[c] || "#94A3B8"
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: colors[c] || "#94A3B8",
-      h: 6
-    })));
-  })())), viewMode !== "mois" && React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "📅 Comparatif mensuel — Ventes & chantiers"), React.createElement(CompareTable, {
-    rows: [{
-      label: "Ventes",
-      getValue: s => s.nb
-    }, {
-      label: "CA (€)",
-      getValue: s => s.ca,
-      format: v => fmt(v)
-    }, {
-      label: "Marge (€)",
-      getValue: s => s.marge,
-      format: v => fmt(v)
-    }, {
-      label: "Taux marge",
-      getValue: s => s.txMarge,
-      format: v => v + "%"
-    }]
-  }))),
-  // ── SAV ──
-  section === "sav" && React.createElement(React.Fragment, null, React.createElement("div", {
-    style: GRID4
-  }, (() => {
-    const allTickets = savTickets || [];
-    const actifs = allTickets.filter(t => ["ouvert", "marque_contactee"].includes(t.statut)).length;
-    const resolus = allTickets.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
-    const changes = allTickets.filter(t => t.statut === "borne_changee").length;
-    const coutTotal = allTickets.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
-    const nbVentes = (ventes || []).length;
-    const txSAV = nbVentes > 0 ? Math.round(allTickets.length / nbVentes * 100) : 0;
-    return React.createElement(React.Fragment, null, React.createElement(KPI, {
-      icon: "🛠️",
-      label: "Tickets actifs",
-      value: actifs,
-      color: "#F59E0B",
-      sub: "en attente de résolution"
-    }), React.createElement(KPI, {
-      icon: "✅",
-      label: "Tickets résolus",
-      value: resolus,
-      color: "#10B981",
-      sub: `${allTickets.length} total`
-    }), React.createElement(KPI, {
-      icon: "🔄",
-      label: "Bornes remplacées",
-      value: changes,
-      color: "#EF4444",
-      sub: "remplacement complet"
-    }), React.createElement(KPI, {
-      icon: "💸",
-      label: "CA récupéré marque",
-      value: fmt(coutTotal),
-      color: "#3B82F6",
-      sub: "facturé en garantie"
-    }));
-  })()),
-  // SAV par marque
-  React.createElement("div", {
-    style: {
-      ...CARD,
-      marginBottom: 14
-    }
-  }, React.createElement("h3", {
-    style: SEC_TITLE
-  }, "⚡ SAV par marque de borne"), (() => {
+    const delMoy = dels.length ? Math.round(dels.reduce((a, b) => a + b, 0) / dels.length) : null;
+    // Raisons de blocage
+    const raisons = {};
+    ch.forEach(c => { if ((c.statut === "bloque" || (c.facture && c.facture.statut === "bloque"))) { const r = (c.facture && c.facture.raison) || "Non précisée"; raisons[r] = (raisons[r] || 0) + 1; } });
+    const raisonEntries = Object.entries(raisons).sort((a, b) => b[1] - a[1]);
+    const totalCh = ch.length || 1;
+
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "📋", label: "Chantiers", value: fNb(ch.length), color: T.indigo, sub: "au total" }),
+        h(KPI, { icon: "🔧", label: "En cours", value: fNb(ST.en_cours), color: T.accent }),
+        h(KPI, { icon: "⏱️", label: "Délai signature → facture", value: delMoy == null ? "—" : delMoy + " j", color: T.cyan }),
+        h(KPI, { icon: "🚧", label: "Taux bloqués", value: fPct(pct(ST.bloque, totalCh)), color: ST.bloque ? T.red : T.green, sub: `${ST.bloque} chantier(s)` })
+      ),
+      h("div", { key: "row", style: GRID2 },
+        h(Section, { title: "🏗️ Répartition par statut", style: { marginBottom: 0 } },
+          stEntries.length ? h(Chart, donutCfg(stEntries.map(e => stLabels[e[0]]), stEntries.map(e => e[1]), stEntries.map(e => stColors[e[0]]), false)) : empty("Aucun chantier")),
+        h(Section, { title: "👷 Charge par installateur", style: { marginBottom: 0 } },
+          chargeEntries.length ? h(Chart, { ...barCfg(chargeEntries.map(e => e[0]), chargeEntries.map(e => e[1]), chargeEntries.map(() => T.accent), false, true), height: 240 }) : empty("Aucun chantier actif"))
+      ),
+      raisonEntries.length ? h(Section, { key: "rz", title: "🚧 Raisons de blocage" },
+        raisonEntries.map(([r, n], i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < raisonEntries.length - 1 ? `1px solid ${T.track}` : "none" } },
+          h("span", { style: { fontSize: 12, color: T.ink } }, r), h("span", { style: { fontSize: 12, fontWeight: 800, color: T.red } }, n)))
+      ) : null
+    ];
+  };
+
+  /* ══════════ SECTION : FACTURATION & TRÉSORERIE (admin) ══════════ */
+  const getMontant = (ch) => {
+    if (ch.facture && ch.facture.montant) return Number(ch.facture.montant);
+    const v = venteById[String(ch.vente_id)]; return v ? Number(v.prix_ttc || v.prix_ht || 0) : 0;
+  };
+  const renderTreso = () => {
+    const ch = chantiers || [];
+    let facture = 0, paye = 0, attente = 0; const impayes = [];
+    ch.forEach(c => {
+      const f = c.facture || {}; const m = getMontant(c); const st = f.statut || "a_facturer";
+      if (st === "paye") paye += m;
+      else if (st === "facture") { facture += m; const j = daysBetween(parseFr(f.date_envoi_facture), today); if (j != null && j > 30) impayes.push({ c, j, m }); }
+      else if (st === "a_facturer" && c.statut === "termine") attente += m;
+    });
+    // Délai moyen de paiement
+    const dels = [];
+    ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseFr(f.date_envoi_facture), parseFr(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) dels.push(dd); });
+    const delMoy = dels.length ? Math.round(dels.reduce((a, b) => a + b, 0) / dels.length) : null;
+    // Acomptes
+    const ac = acomptes || [];
+    const acEnvoyer = ac.filter(a => a.statut === "a_envoyer").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const acEnvoye = ac.filter(a => a.statut === "envoye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const acPaye = ac.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const previs = acEnvoyer + acEnvoye + facture + attente;
+
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "🧾", label: "Facturé (non payé)", value: fE(facture), color: T.accent, sub: "en attente de règlement" }),
+        h(KPI, { icon: "💰", label: "Encaissé", value: fE(paye), color: T.green }),
+        h(KPI, { icon: "⌛", label: "À facturer", value: fE(attente), color: T.amber, sub: "chantiers terminés" }),
+        h(KPI, { icon: "⏱️", label: "Délai moyen paiement", value: delMoy == null ? "—" : delMoy + " j", color: T.cyan })
+      ),
+      h("div", { key: "row", style: GRID2 },
+        h(Section, { title: "💧 Prévisionnel de trésorerie attendu", style: { marginBottom: 0 } },
+          h(Chart, { ...barCfg(["Acomptes à envoyer", "Acomptes envoyés", "Factures émises", "À facturer"], [acEnvoyer, acEnvoye, facture, attente], [T.amber, T.violet, T.accent, T.faint], true, true), height: 220 }),
+          h("div", { style: { ...SUBTLE, textAlign: "center", marginTop: 8, fontWeight: 700, color: T.ink } }, "Total attendu : " + fE(previs))
+        ),
+        h(Section, { title: "📨 Acomptes", style: { marginBottom: 0 } },
+          h(Chart, donutCfg(["À envoyer", "Envoyés", "Encaissés"], [acEnvoyer, acEnvoye, acPaye], [T.amber, T.violet, T.green], true))
+        )
+      ),
+      impayes.length ? h(Section, { key: "imp", title: `🔴 Impayés > 30 jours (${impayes.length})` },
+        impayes.sort((a, b) => b.j - a.j).slice(0, 10).map((x, i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < Math.min(impayes.length, 10) - 1 ? `1px solid ${T.track}` : "none" } },
+          h("span", { style: { fontSize: 12, fontWeight: 600 } }, x.c.client || "—"),
+          h("span", { style: { fontSize: 12 } }, h("b", { style: { color: T.red } }, x.j + " j"), " · ", fE(x.m))))
+      ) : null
+    ];
+  };
+
+  /* ══════════ SECTION : SAV & QUALITÉ (admin) ══════════ */
+  const renderSav = () => {
+    const all = (savTickets || []);
+    const inP = all.filter(t => inPeriod(parseAny(t.created_at || t.date_creation), period));
+    const resolved = ["regle_nous", "regle_marque", "borne_changee"];
+    const resolus = inP.filter(t => resolved.includes(t.statut)).length;
+    const coutMarque = inP.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
+    const txSav = vCur.length ? Math.round(inP.length / vCur.length * 100) : 0;
+    // Par marque
     const byMarque = {};
-    (savTickets || []).forEach(t => {
-      const vente = (ventes || []).find(v => v.id === t.vente_id || String(v.id) === String(t.vente_id));
-      const marque = (vente === null || vente === void 0 ? void 0 : vente.marque_borne) || "Inconnue";
-      if (!byMarque[marque]) byMarque[marque] = {
-        nb: 0,
-        resolus: 0,
-        cout: 0,
-        changes: 0
-      };
-      byMarque[marque].nb++;
-      if (["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)) byMarque[marque].resolus++;
-      byMarque[marque].cout += Number(t.montant_facture_marque || 0);
-      if (t.statut === "borne_changee") byMarque[marque].changes++;
+    inP.forEach(t => {
+      let mq = t.marque; if (!mq) { const v = venteById[String(t.vente_id)]; mq = v && v.marque_borne; } mq = mq || "Inconnue";
+      byMarque[mq] = (byMarque[mq] || 0) + 1;
     });
-    const entries = Object.entries(byMarque).sort((a, b) => b[1].nb - a[1].nb);
-    if (entries.length === 0) return React.createElement("div", {
-      style: {
-        color: "#CBD5E1",
-        fontSize: 12,
-        textAlign: "center",
-        padding: "16px 0"
+    const marqueEntries = Object.entries(byMarque).sort((a, b) => b[1] - a[1]);
+
+    return [
+      h("div", { key: "kpi", style: GRID4 },
+        h(KPI, { icon: "🛠️", label: "Tickets SAV", value: fNb(inP.length), color: T.amber, sub: period.label }),
+        h(KPI, { icon: "✅", label: "Résolus", value: fNb(resolus), color: T.green, sub: `sur ${inP.length}` }),
+        h(KPI, { icon: "📉", label: "Taux SAV", value: fPct(txSav), color: txSav <= 5 ? T.green : txSav <= 15 ? T.amber : T.red, sub: "tickets / ventes" }),
+        h(KPI, { icon: "💸", label: "Récupéré marque", value: fE(coutMarque), color: T.accent, sub: "garantie" })
+      ),
+      h(Section, { key: "mq", title: "⚡ SAV par marque de borne" },
+        marqueEntries.length ? h(Chart, { ...barCfg(marqueEntries.map(e => e[0]), marqueEntries.map(e => e[1]), marqueEntries.map(e => BRAND_COLORS[e[0]] || T.faint), false, true), height: 240 }) : empty("Aucun ticket SAV sur la période")
+      )
+    ];
+  };
+
+  /* ══════════ SECTION : GÉOGRAPHIE ══════════ */
+  const GeoMap = ({ data }) => {
+    const ref = useRef(null), map = useRef(null), layer = useRef(null);
+    useEffect(() => {
+      if (!ref.current || !window.L) return;
+      if (!map.current) {
+        map.current = window.L.map(ref.current, { scrollWheelZoom: false }).setView([48.08, 7.36], 9);
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 18 }).addTo(map.current);
       }
-    }, "Aucun ticket SAV");
-    const maxNb = Math.max(...entries.map(([, v]) => v.nb), 1);
-    const BRAND_COLORS = {
-      "Easee": "#1A73E8",
-      "Ohme": "#00897B",
-      "Zaptec": "#7B1FA2",
-      "V2C": "#E53935",
-      "Tesla": "#E31937",
-      "Smappee": "#FF6B35"
-    };
-    return entries.map(([marque, d]) => React.createElement("div", {
-      key: marque,
-      style: {
-        marginBottom: 10
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 800
-      }
-    }, marque), React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 8
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#64748B"
-      }
-    }, d.nb, " ticket(s)"), d.changes > 0 && React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#EF4444",
-        fontWeight: 700
-      }
-    }, d.changes, " rempls."), d.cout > 0 && React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: "#3B82F6",
-        fontWeight: 700
-      }
-    }, fmt(d.cout)))), React.createElement("div", {
-      style: {
-        height: 8,
-        background: "#F1F5F9",
-        borderRadius: 4,
-        overflow: "hidden"
-      }
-    }, React.createElement("div", {
-      style: {
-        height: "100%",
-        width: d.nb / maxNb * 100 + "%",
-        background: (BRAND_COLORS[marque] || "#94A3B8") + "80",
-        borderRadius: 4
-      }
-    }))));
-  })()),
-  // Résolution nous vs marque
-  React.createElement("div", {
-    style: GRID2
-  }, React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "⚖️ Résolution : nous vs marque"), (() => {
-    const tt = savTickets || [];
-    const nous = tt.filter(t => t.statut === "regle_nous").length;
-    const marque = tt.filter(t => t.statut === "regle_marque").length;
-    const change = tt.filter(t => t.statut === "borne_changee").length;
-    const total = nous + marque + change || 1;
-    return [["Réglé par nous", nous, "#F59E0B"], ["Réglé par marque", marque, "#3B82F6"], ["Borne remplacée", change, "#EF4444"]].map(([lbl, n, col]) => React.createElement("div", {
-      key: lbl,
-      style: {
-        marginBottom: 8
-      }
-    }, React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        marginBottom: 3
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 500
-      }
-    }, lbl), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        fontWeight: 700,
-        color: col
-      }
-    }, n, " (", Math.round(n / total * 100), "%)")), React.createElement(Bar, {
-      w: n / total * 100,
-      color: col,
-      h: 6
-    })));
-  })()), React.createElement("div", {
-    style: CARD_SM
-  }, React.createElement("h3", {
-    style: {
-      ...SEC_TITLE,
-      marginBottom: 10
-    }
-  }, "📊 Taux SAV / installations"), (() => {
-    const nbVentes = (ventes || []).length;
-    const nbTickets = (savTickets || []).length;
-    const txSAV = nbVentes > 0 ? Math.round(nbTickets / nbVentes * 100) : 0;
-    return React.createElement("div", null, React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "baseline",
-        gap: 8,
-        marginBottom: 8
-      }
-    }, React.createElement("span", {
-      style: {
-        fontSize: 32,
-        fontWeight: 800,
-        color: txSAV < 10 ? "#10B981" : txSAV < 20 ? "#F59E0B" : "#EF4444"
-      }
-    }, txSAV, "%"), React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: "#94A3B8"
-      }
-    }, "des installations ont généré un ticket")), React.createElement(Bar, {
-      w: txSAV,
-      color: txSAV < 10 ? "#10B981" : txSAV < 20 ? "#F59E0B" : "#EF4444",
-      h: 10
-    }), React.createElement("div", {
-      style: {
-        fontSize: 11,
-        color: "#64748B",
-        marginTop: 8
-      }
-    }, nbTickets, " ticket(s) pour ", nbVentes, " installation(s)"));
-  })()))));
+      if (layer.current) layer.current.remove();
+      layer.current = window.L.layerGroup().addTo(map.current);
+      const pts = [];
+      data.forEach(d => {
+        if (!d.lat || !d.lng) return;
+        const r = 6 + Math.min(26, Math.sqrt(d.ca) / 40);
+        window.L.circleMarker([d.lat, d.lng], { radius: r, color: d.color, fillColor: d.color, fillOpacity: 0.55, weight: 1.5 })
+          .bindPopup(`<b>${d.client || ""}</b><br>${fE(d.ca)}`).addTo(layer.current);
+        pts.push([d.lat, d.lng]);
+      });
+      if (pts.length) { try { map.current.fitBounds(pts, { padding: [30, 30], maxZoom: 12 }); } catch (e) {} }
+      setTimeout(() => { try { map.current.invalidateSize(); } catch (e) {} }, 150);
+    }, [JSON.stringify(data.map(d => [d.lat, d.lng, d.ca]))]);
+    return h("div", { ref, style: { height: 380, borderRadius: 12, overflow: "hidden", border: `1px solid ${T.line}` } });
+  };
+  const renderGeo = () => {
+    const pts = vCur.filter(v => v.coords && v.coords.lat && v.coords.lng)
+      .map(v => ({ lat: Number(v.coords.lat), lng: Number(v.coords.lng), ca: Number(v.prix_ht || 0), client: v.client, color: TYPE_COLOR[typeInstall(v)] || T.accent }));
+    // Concentration par ville
+    const byCity = {};
+    vCur.forEach(v => { const m = String(v.adresse || "").match(/\d{5}\s+([A-Za-zÀ-ÿ'’ \-]+)/); const city = m ? m[1].trim().split(/[,\n]/)[0] : "Autre"; byCity[city] = (byCity[city] || 0) + Number(v.prix_ht || 0); });
+    const cityEntries = Object.entries(byCity).filter(e => e[0] !== "Autre").sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return [
+      h(Section, { key: "map", title: "🗺️ Répartition géographique du CA" },
+        pts.length ? h(GeoMap, { data: pts }) : empty("Aucune coordonnée disponible sur la période"),
+        h("div", { style: { display: "flex", gap: 14, marginTop: 10, flexWrap: "wrap" } },
+          Object.entries(TYPE_COLOR).map(([t, c]) => h("span", { key: t, style: { fontSize: 11, color: T.sub, display: "flex", alignItems: "center", gap: 5 } },
+            h("span", { style: { width: 10, height: 10, borderRadius: 5, background: c, display: "inline-block" } }), t)))
+      ),
+      cityEntries.length ? h(Section, { key: "city", title: "🏙️ Top zones (CA)" },
+        h(Chart, { ...barCfg(cityEntries.map(e => e[0]), cityEntries.map(e => e[1]), cityEntries.map((_, i) => SERIES[i % SERIES.length]), true, true), height: 280 })
+      ) : null
+    ];
+  };
+
+  /* ══ CHARGEMENT À LA VOLÉE (PDF) ══ */
+  const loadScript = (src) => new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("CDN")); document.head.appendChild(s);
+  });
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const reportRef = useRef(null);
+
+  const downloadPDF = async () => {
+    setPdfBusy(true);
+    try {
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+      const node = reportRef.current; if (!node) throw new Error("Rapport introuvable");
+      const canvas = await window.html2canvas(node, { scale: 2, backgroundColor: "#FFFFFF", useCORS: true });
+      const jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      const pdf = new jsPDF("p", "pt", "a4");
+      const pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      const imgW = pw, imgH = canvas.height * pw / canvas.width;
+      let left = imgH, pos = 0; const img = canvas.toDataURL("image/png");
+      pdf.addImage(img, "PNG", 0, pos, imgW, imgH); left -= ph;
+      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, "PNG", 0, pos, imgW, imgH); left -= ph; }
+      pdf.save(`MBLR-Colmar_rapport_${reportMonth}.pdf`);
+      addNotif && addNotif("PDF généré ✓", "success");
+    } catch (e) {
+      addNotif && addNotif("Téléchargement impossible — utilisez l'impression", "error");
+      try { window.print(); } catch (_) {}
+    } finally { setPdfBusy(false); }
+  };
+
+  /* ══ RAPPORT MENSUEL (poster A4) ══ */
+  const MonthlyReport = () => {
+    const key = reportMonth;
+    const [y, m] = key.split("-").map(Number);
+    const inMonth = (v) => { const d = parseFr(v.date); return d && d.getFullYear() === y && d.getMonth() === m - 1; };
+    const vs = scopedVentes.filter(inMonth);
+    const prevKey = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
+    const n1Key = `${y - 1}-${String(m).padStart(2, "0")}`;
+    const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+    const ca = sum(vs, v => Number(v.prix_ht || 0)), marge = sum(vs, margeVente), tx = pct(marge, ca);
+    const obj = objForMonth(key);
+    // 12 mois de CA finissant à key
+    const months = []; for (let i = 11; i >= 0; i--) { const d = new Date(y, m - 1 - i, 1); months.push(mKeyOf(d)); }
+    const caSerie = months.map(k => (byMonth[k] || {}).ca || 0);
+    const caN1Serie = months.map(k => { const [yy, mm] = k.split("-").map(Number); return (byMonth[`${yy - 1}-${String(mm).padStart(2, "0")}`] || {}).ca || 0; });
+    // Type
+    const byType = {}; vs.forEach(v => { const t = typeInstall(v); byType[t] = (byType[t] || 0) + Number(v.prix_ht || 0); });
+    const typeSegs = Object.entries(byType).map(([t, val]) => ({ label: t, value: val, color: TYPE_COLOR[t] || T.faint }));
+    // Commerciaux
+    const comm = {}; vs.forEach(v => { const n = v.par || "—"; comm[n] = (comm[n] || 0) + Number(v.prix_ht || 0); });
+    const commTop = Object.entries(comm).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const maxComm = Math.max(...commTop.map(c => c[1]), 1);
+    // Ops & tréso
+    const ch = chantiers || [];
+    const chTermines = ch.filter(c => c.statut === "termine").length;
+    const chCours = ch.filter(c => c.statut === "en_cours").length;
+    const encaisse = ch.reduce((s, c) => s + (c.facture && c.facture.statut === "paye" ? getMontant(c) : 0), 0);
+    const savMonth = (savTickets || []).filter(t => { const d = parseAny(t.created_at || t.date_creation); return d && d.getFullYear() === y && d.getMonth() === m - 1; }).length;
+    const monthName = new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    const tile = (label, val, sub, col) => h("div", { style: { flex: 1, background: "#fff", borderRadius: 12, padding: "14px 16px", border: `1px solid ${T.line}`, borderTop: `4px solid ${col}` } },
+      h("div", { style: { fontSize: 22, fontWeight: 800, color: col } }, val),
+      h("div", { style: { fontSize: 12, color: T.ink2, fontWeight: 700, marginTop: 2 } }, label),
+      sub ? h("div", { style: { fontSize: 10, color: T.faint, marginTop: 1 } }, sub) : null);
+    const mini = (label, val, col) => h("div", { style: { flex: 1, textAlign: "center", padding: "8px 4px" } },
+      h("div", { style: { fontSize: 18, fontWeight: 800, color: col } }, val),
+      h("div", { style: { fontSize: 10, color: T.sub, marginTop: 1 } }, label));
+
+    return h("div", {
+      style: { position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", zIndex: 9999, overflow: "auto", padding: isMobile ? 8 : 24, display: "flex", flexDirection: "column", alignItems: "center" }
+    },
+      h("div", { style: { display: "flex", gap: 8, marginBottom: 12, position: "sticky", top: 0, zIndex: 2 } },
+        h("button", { onClick: downloadPDF, disabled: pdfBusy, style: { padding: "10px 18px", borderRadius: 10, border: "none", background: pdfBusy ? T.faint : T.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, pdfBusy ? "⏳ Génération…" : "⬇️ Télécharger le PDF"),
+        h("button", { onClick: () => window.print(), style: { padding: "10px 18px", borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "🖨️ Imprimer"),
+        h("button", { onClick: () => setShowReport(false), style: { padding: "10px 18px", borderRadius: 10, border: `1px solid ${T.line}`, background: "#fff", color: T.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "✕ Fermer")
+      ),
+      // POSTER A4
+      h("div", { ref: reportRef, id: "mblr-report", style: { width: isMobile ? "100%" : 794, maxWidth: 794, background: "#F8FAFC", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.3)" } },
+        h("div", { style: { background: `linear-gradient(135deg, ${T.ink} 0%, #1E3A8A 100%)`, color: "#fff", padding: "26px 30px" } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 8 } },
+            h("div", null,
+              h("div", { style: { fontSize: 13, opacity: .8, letterSpacing: 2, textTransform: "uppercase" } }, "MBLR · Colmar"),
+              h("div", { style: { fontSize: 30, fontWeight: 800, textTransform: "capitalize", lineHeight: 1.1 } }, monthName),
+              h("div", { style: { fontSize: 12, opacity: .75, marginTop: 4 } }, "Rapport mensuel d'activité" + (isAdmin ? "" : " · " + myName))),
+            h("div", { style: { textAlign: "right" } },
+              h("div", { style: { fontSize: 34, fontWeight: 800 } }, fK(ca)),
+              h("div", { style: { fontSize: 11, opacity: .8 } }, "Chiffre d'affaires HT")))
+        ),
+        h("div", { style: { padding: 22 } },
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" } },
+            tile("CA HT", fK(ca), `${vs.length} vente(s)`, T.accent),
+            tile("Marge brute", fK(marge), fPct(tx) + " de taux", T.green),
+            tile("Panier moyen", fK(vs.length ? ca / vs.length : 0), null, T.violet),
+            tile("Objectif", obj.ca > 0 ? Math.round(ca / obj.ca * 100) + " %" : "—", obj.ca > 0 ? "de " + fK(obj.ca) : "non défini", T.amber)),
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 2, minWidth: 300, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Évolution du CA (12 mois)"),
+              svgLine([{ data: caSerie, color: T.accent }, { data: caN1Serie, color: T.faint, dashed: true }], isMobile ? 320 : 470, 150, true),
+              h("div", { style: { display: "flex", gap: 16, marginTop: 6, fontSize: 10, color: T.sub } },
+                h("span", null, "● ", h("b", { style: { color: T.accent } }, key.split("-")[0])), h("span", null, "┄ N-1"))),
+            h("div", { style: { flex: 1, minWidth: 180, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16, display: "flex", flexDirection: "column", alignItems: "center" } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 6, alignSelf: "flex-start" } }, "Objectif"),
+              h(Gauge, { value: ca, target: obj.ca, label: "du mois" }))),
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 1, minWidth: 220, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Répartition par type"),
+              typeSegs.length ? h("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+                svgDonut(typeSegs, 120),
+                h("div", null, typeSegs.map((s, i) => h("div", { key: i, style: { fontSize: 11, color: T.sub, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 } },
+                  h("span", { style: { width: 9, height: 9, borderRadius: 5, background: s.color, display: "inline-block" } }), `${s.label} · ${fK(s.value)}`)))) : empty("—")),
+            h("div", { style: { flex: 1, minWidth: 220, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Meilleurs commerciaux"),
+              commTop.length ? commTop.map((c, i) => h("div", { key: i, style: { marginBottom: 9 } },
+                h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 } },
+                  h("span", { style: { fontWeight: 700 } }, (i < 3 ? ["🥇", "🥈", "🥉"][i] + " " : "") + c[0]), h("span", { style: { fontWeight: 800, color: T.accent } }, fK(c[1]))),
+                h(Bar, { w: c[1] / maxComm * 100, color: SERIES[i % SERIES.length], ht: 6 }))) : empty("—"))),
+          h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, display: "flex", marginBottom: 6 } },
+            mini("Chantiers terminés", fNb(chTermines), T.green), mini("En cours", fNb(chCours), T.accent),
+            mini("Encaissé", fK(encaisse), T.cyan), mini("Tickets SAV", fNb(savMonth), savMonth ? T.amber : T.green)),
+          h("div", { style: { textAlign: "center", fontSize: 9, color: T.faint, marginTop: 10 } }, "Généré le " + new Date().toLocaleDateString("fr-FR") + " · MBLR-Colmar"))
+      )
+    );
+  };
+
+  /* ══ SÉLECTEUR DE PÉRIODE ══ */
+  const modeBtn = (k, lbl) => h("button", {
+    key: k, onClick: () => setViewMode(k),
+    style: { padding: "6px 12px", borderRadius: 18, border: `1px solid ${viewMode === k ? T.accent : T.line}`, background: viewMode === k ? T.accent : "#fff", color: viewMode === k ? "#fff" : T.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }
+  }, lbl);
+  const inputStyle = { padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.line}`, fontSize: 12, fontFamily: FONT, color: T.ink };
+  const PeriodSelector = () => h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 14 } },
+    modeBtn("month", "Mois"), modeBtn("quarter", "Trimestre"), modeBtn("year", "Année"), modeBtn("r12", "12 mois"), modeBtn("all", "Tout"), modeBtn("custom", "Perso"),
+    viewMode === "custom"
+      ? h("span", { style: { display: "flex", gap: 6, alignItems: "center" } },
+        h("input", { type: "date", value: customStart, onChange: e => setCustomStart(e.target.value), style: inputStyle }),
+        h("span", { style: { color: T.faint } }, "→"),
+        h("input", { type: "date", value: customEnd, onChange: e => setCustomEnd(e.target.value), style: inputStyle }))
+      : viewMode !== "all"
+        ? h("input", { type: "month", value: anchor, onChange: e => setAnchor(e.target.value || curMonthKey), style: inputStyle })
+        : null,
+    h("label", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.sub, cursor: "pointer", marginLeft: "auto" } },
+      h("input", { type: "checkbox", checked: compare, onChange: e => setCompare(e.target.checked) }), "Comparer N-1"),
+    h("span", { style: { fontSize: 12, fontWeight: 800, color: T.ink, background: T.soft, padding: "5px 12px", borderRadius: 8, textTransform: "capitalize" } }, period.label)
+  );
+
+  /* ══ NAVIGATION SECTIONS ══ */
+  const SECTIONS = [
+    ["global", "📊", "Vue globale", false],
+    ["ca_marges", "💰", "CA & Marges", false],
+    ["commerciaux", "👥", "Commerciaux", true],
+    ["pipeline", "🔄", "Pipeline", false],
+    ["chantiers", "🏗️", "Chantiers", true],
+    ["treso", "💧", "Trésorerie", true],
+    ["sav", "🛠️", "SAV", true],
+    ["geo", "🗺️", "Géographie", false]
+  ].filter(s => isAdmin || !s[3]);
+  useEffect(() => { if (!SECTIONS.some(s => s[0] === section)) setSection("global"); }, [isAdmin]);
+  const SectionNav = () => h("div", { style: { display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 16 } },
+    SECTIONS.map(([k, ic, lbl]) => h("button", {
+      key: k, onClick: () => setSection(k),
+      style: { padding: "7px 13px", borderRadius: 20, border: `1px solid ${section === k ? T.accent : T.line}`, background: section === k ? T.accent : "transparent", color: section === k ? "#fff" : T.sub, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap" }
+    }, ic + " " + lbl))
+  );
+
+  const body = section === "global" ? renderGlobal()
+    : section === "ca_marges" ? renderCaMarges()
+    : section === "commerciaux" ? renderCommerciaux()
+    : section === "pipeline" ? renderPipeline()
+    : section === "chantiers" ? renderChantiers()
+    : section === "treso" ? renderTreso()
+    : section === "sav" ? renderSav()
+    : section === "geo" ? renderGeo()
+    : null;
+
+  /* ══ RENDER ══ */
+  return h("div", { style: { fontFamily: FONT, color: T.ink, paddingBottom: 40 } },
+    // En-tête
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 } },
+      h("div", null,
+        h("h2", { style: { margin: 0, fontSize: 20, fontWeight: 800, color: T.ink } }, "📊 Statistiques"),
+        h("div", { style: SUBTLE }, isAdmin ? "Pilotage commercial & opérationnel" : "Vos performances")),
+      h("div", { style: { display: "flex", gap: 8, alignItems: "center" } },
+        h("input", { type: "month", value: reportMonth, onChange: e => setReportMonth(e.target.value || curMonthKey), style: inputStyle, title: "Mois du rapport" }),
+        h("button", { onClick: () => setShowReport(true), style: { padding: "9px 16px", borderRadius: 10, border: "none", background: T.ink, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "📄 Rapport PDF"))
+    ),
+    h(SectionNav),
+    h(PeriodSelector),
+    h("div", null, body),
+    showReport ? h(MonthlyReport) : null
+  );
 }
 
 // ══════════════════════════════════════
@@ -28466,7 +27544,6 @@ function App() {
   })(), view === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
     isMobile: isMobile,
     ventes: ventes,
-    leads: [],
     chantiers: chantiersPipeline,
     stock: stock,
     orders: orders,
@@ -28480,7 +27557,9 @@ function App() {
       maximumFractionDigits: 2
     }) + "\u202f€",
     role: role,
-    addNotif: addNotif
+    addNotif: addNotif,
+    supabaseUrl: SUPABASE_URL,
+    allProfiles: allProfiles
   }), view === "sav" && /*#__PURE__*/React.createElement(SavTab, {
     isMobile: isMobile,
     tickets: savTickets,
