@@ -25367,15 +25367,20 @@ function App() {
     try {
       const run = async (table, data) => {
         if (!data) return;
-        // Retirer les colonnes qui n'existent pas encore en base selon la table
         let payload = data;
-        const {
-          error
-        } = await sb.from(table).upsert(payload);
+        const expectedCount = Array.isArray(payload) ? payload.length : 1;
+        const { data: written, error } = await sb.from(table).upsert(payload).select();
         if (error) {
           console.error(table + ":", error.message, error.details, error.hint);
           setSync("error");
           throw error;
+        }
+        // Détecte un échec silencieux des RLS : upsert "réussi" mais 0 ligne réellement écrite
+        if (!written || written.length < expectedCount) {
+          const msg = `Écriture partielle ou bloquée sur "${table}" (${written ? written.length : 0}/${expectedCount} ligne(s) — vérifiez vos droits)`;
+          console.error(msg);
+          setSync("error");
+          setSyncErr(msg);
         }
       };
       await run("stock", ns);
@@ -27448,9 +27453,11 @@ function App() {
       animation: "spin 0.8s linear infinite"
     }
   }), sync === "error" && /*#__PURE__*/React.createElement("span", {
+    title: syncErr || "Erreur de synchronisation",
     style: {
       fontSize: 11,
-      color: "#EF4444"
+      color: "#EF4444",
+      cursor: "help"
     }
   }, "\u26A0\uFE0F"), /*#__PURE__*/React.createElement("button", {
     onClick: () => window.location.reload(),
