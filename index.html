@@ -4224,6 +4224,22 @@ function MesObjectifsTab({
     };
   };
 
+  /* ── Type d'installation + palettes + constructeurs Chart ── */
+  const typeInstall = (v) => {
+    const mats = v.materiels || [];
+    const txt = (mats.map(m => `${m.cat || ""} ${m.brand || ""} ${m.article || ""}`).join(" ") + " " + (v.marque_borne || "")).toLowerCase();
+    const solar = /solar|solaire|panneau|pv|photovolt|onduleur|batter/.test(txt);
+    const borne = /borne|charge|charger|wallbox|\bev\b|easee|ohme|zaptec|v2c/.test(txt) || !!v.marque_borne;
+    if (solar && borne) return "Combiné"; if (solar) return "Solaire"; if (borne) return "Borne"; return "Autre";
+  };
+  const TYPE_COLOR = { "Borne": T.accent, "Solaire": T.green, "Combiné": T.violet, "Autre": T.faint };
+  const BRAND_COLORS = { "Easee": "#1A73E8", "Ohme": "#00897B", "Zaptec": "#7B1FA2", "V2C": "#E53935", "Tesla": "#E31937", "Smappee": "#FF6B35", "Autre": T.faint };
+  const fmtVal = (v, kind) => kind === "money" ? fE(v) : kind === "pct" ? Math.round(v) + " %" : fNb(v);
+  const tickFmt = (kind) => kind === "money" ? { callback: (v) => fK(v) } : kind === "pct" ? { callback: (v) => v + " %" } : {};
+  const donutCfg = (labels, data, colors, money) => ({ type: "doughnut", data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2, hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: "62%", plugins: { legend: { position: isMobile ? "bottom" : "right" }, tooltip: { callbacks: { label: (c) => `${c.label}: ${money ? fE(c.raw) : fNb(c.raw)}` } } } } });
+  const lineCfg = (labels, datasets, kind) => ({ type: "line", data: { labels, datasets: datasets.map(d => ({ label: d.label, data: d.data, borderColor: d.color, backgroundColor: d.color + "22", borderWidth: 2.5, borderDash: d.dashed ? [5, 4] : [], fill: d.fill !== false && !d.dashed, tension: 0.35, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: d.color, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 })) }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { display: datasets.length > 1, position: "top", align: "end" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtVal(c.raw, kind)}` } } }, scales: { x: { grid: { display: false } }, y: { grid: { color: "#F1F5F9" }, ticks: tickFmt(kind), suggestedMin: 0 } } } });
+  const barCfg = (labels, data, colors, kind, horizontal) => ({ type: "bar", data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 6, maxBarThickness: 44 }] }, options: { indexAxis: horizontal ? "y" : "x", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtVal(c.raw, kind) } } }, scales: horizontal ? { x: { grid: { color: "#F1F5F9" }, ticks: tickFmt(kind) }, y: { grid: { display: false } } } : { x: { grid: { display: false } }, y: { grid: { color: "#F1F5F9" }, ticks: tickFmt(kind) } } } });
+
   const Gauge = ({ value, target, color, label }) => {
     const p = target > 0 ? Math.min(100, value / target * 100) : 0;
     const R = 50, C = 2 * Math.PI * R, off = C * (1 - p / 100), col = target <= 0 ? T.faint : pctC(p);
@@ -4343,32 +4359,139 @@ function MesObjectifsTab({
   /* ══════════ VUE COMMERCIAL (lecture seule) ══════════ */
   const renderCommercial = () => {
     const o = objFor(myName, selMonth), r = realizedFor(myName, selMonth);
-    const pCA = o.ca > 0 ? Math.round(r.ca / o.ca * 100) : null, pMarge = o.marge > 0 ? Math.round(r.marge / o.marge * 100) : null;
-    // classement du mois
-    const ranking = commerciaux.map(n => ({ n, ca: realizedFor(n, selMonth).ca })).sort((a, b) => b.ca - a.ca);
+    const pCA = o.ca > 0 ? Math.round(r.ca / o.ca * 100) : null;
+    const txMarge = r.ca > 0 ? Math.round(r.marge / r.ca * 100) : 0;
+    const panier = r.nb ? r.ca / r.nb : 0;
+    const prevKey = shift(selMonth, -1), rPrev = realizedFor(myName, prevKey);
+    const dMoM = rPrev.ca > 0 ? Math.round((r.ca - rPrev.ca) / rPrev.ca * 100) : null;
+    const ranking = commerciaux.map(n => { const rr = realizedFor(n, selMonth); return { n, ca: rr.ca, marge: rr.marge, nb: rr.nb }; }).sort((a, b) => b.ca - a.ca);
     const myRank = ranking.findIndex(x => x.n === myName) + 1;
-    // top clients (tous mois) & produits du mois
+    const leader = ranking[0] || null;
+    const gapLeader = leader && leader.n !== myName ? leader.ca - r.ca : 0;
     const mesV = (ventes || []).filter(v => (v.par || "") === myName);
     const monthV = mesV.filter(v => venteInMonth(v, selMonth));
+    const months = []; for (let i = 11; i >= 0; i--) months.push(shift(selMonth, -i));
+    const labels12 = months.map(shortLabel);
+    const caSerie = months.map(k => realizedFor(myName, k).ca);
+    const txSerie = months.map(k => { const rr = realizedFor(myName, k); return rr.ca > 0 ? Math.round(rr.marge / rr.ca * 100) : 0; });
+    const nbSerie = months.map(k => realizedFor(myName, k).nb);
+    const bestVal = Math.max(...caSerie, 0);
+    const bestKey = months[caSerie.indexOf(bestVal)] || selMonth;
+    const [sy, sm] = selMonth.split("-").map(Number);
+    const ytdKeys = []; for (let mo = 1; mo <= sm; mo++) ytdKeys.push(`${sy}-${String(mo).padStart(2, "0")}`);
+    const ytdCA = ytdKeys.reduce((s, k) => s + realizedFor(myName, k).ca, 0);
+    const ytdObj = ytdKeys.reduce((s, k) => s + objFor(myName, k).ca, 0);
+    const ytdMarge = ytdKeys.reduce((s, k) => s + realizedFor(myName, k).marge, 0);
+    const ytdNb = ytdKeys.reduce((s, k) => s + realizedFor(myName, k).nb, 0);
+    const byType = {}; monthV.forEach(v => { const t = typeInstall(v); byType[t] = (byType[t] || 0) + Number(v.prix_ht || 0); });
+    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    const byMarque = {}; monthV.forEach(v => { const m = v.marque_borne || "Autre"; byMarque[m] = (byMarque[m] || 0) + Number(v.prix_ht || 0); });
+    const marqueEntries = Object.entries(byMarque).sort((a, b) => b[1] - a[1]);
     const cMap = {}; monthV.forEach(v => { const c = v.client || "Inconnu"; cMap[c] = (cMap[c] || 0) + Number(v.prix_ht || 0); });
     const topClients = Object.entries(cMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const pMap = {}; monthV.forEach(v => (v.materiels || []).forEach(m => { const a = m.article || m.cat || "Article"; pMap[a] = (pMap[a] || 0) + Number(m.qty || 1); }));
+    const topProd = Object.entries(pMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    const panel = (title, children, extra) => h("div", { style: { ...CARD, ...(extra || {}) } }, title ? h("h3", { style: SEC_TITLE }, title) : null, children);
+    const chip = (txt, col) => h("span", { style: { fontSize: 10, fontWeight: 700, color: col, background: col + "18", borderRadius: 20, padding: "2px 9px" } }, txt);
+    const dBadge = (d) => d == null ? null : h("span", { style: { fontSize: 11, fontWeight: 700, color: d >= 0 ? T.green : T.red, marginLeft: 6 } }, (d >= 0 ? "▲ " : "▼ ") + Math.abs(d) + " %");
+    const GRID = (n) => ({ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : `repeat(${n},1fr)`, gap: 10, marginBottom: 14 });
+    const ROW2 = { display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,1fr)", gap: 10, marginBottom: 14 };
+
     return [
-      h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 10, marginBottom: 14 } },
-        h(KPI, { icon: "💶", label: "Mon CA", value: fK(r.ca), color: T.accent, sub: `${r.nb} vente(s)` }),
-        h(KPI, { icon: "📈", label: "Ma marge", value: fK(r.marge), color: T.green }),
-        h(KPI, { icon: "🏅", label: "Mon classement", value: myRank ? `#${myRank}` : "—", color: T.amber, sub: `sur ${ranking.length}` }),
-        h(KPI, { icon: "🎯", label: "Atteinte CA", value: pCA == null ? "—" : pCA + " %", color: pctC(pCA) })),
+      // ── HERO ──
+      h("div", { key: "hero", style: { borderRadius: 18, padding: isMobile ? 18 : 26, marginBottom: 14, background: `linear-gradient(135deg, ${T.ink} 0%, #1E3A8A 55%, ${T.accent} 125%)`, color: "#fff", boxShadow: "0 10px 30px rgba(30,58,138,.25)" } },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 } },
+          h("div", null,
+            h("div", { style: { fontSize: 12, opacity: .8, letterSpacing: 1, textTransform: "uppercase" } }, "Mon chiffre d'affaires"),
+            h("div", { style: { fontSize: isMobile ? 32 : 42, fontWeight: 800, lineHeight: 1.05, marginTop: 2 } }, fE(r.ca)),
+            h("div", { style: { fontSize: 13, opacity: .9, marginTop: 4 } }, `${r.nb} vente(s)`, dMoM != null ? h("span", { style: { marginLeft: 8 } }, "· vs mois préc. ", dBadge(dMoM)) : null)),
+          h("div", { style: { textAlign: "center", minWidth: 120 } },
+            h("div", { style: { fontSize: isMobile ? 34 : 44, fontWeight: 800 } }, pCA == null ? "—" : pCA + "%"),
+            h("div", { style: { fontSize: 11, opacity: .85 } }, o.ca > 0 ? "objectif " + fK(o.ca) : "objectif non défini"))),
+        h("div", { style: { marginTop: 16 } },
+          h("div", { style: { height: 10, borderRadius: 6, background: "rgba(255,255,255,.22)", overflow: "hidden" } },
+            h("div", { style: { height: 10, borderRadius: 6, width: Math.min(100, pCA || 0) + "%", background: pCA >= 100 ? "#34D399" : "#fff", transition: "width .6s" } })),
+          o.ca > 0 ? h("div", { style: { fontSize: 11, opacity: .85, marginTop: 5 } }, pCA >= 100 ? "🎉 Objectif atteint, bravo !" : `Encore ${fK(Math.max(0, o.ca - r.ca))} pour atteindre l'objectif`) : null),
+        h("div", { style: { display: "flex", gap: isMobile ? 14 : 28, marginTop: 16, flexWrap: "wrap" } },
+          [["Marge", fK(r.marge)], ["Taux marge", txMarge + " %"], ["Panier moyen", fK(panier)], ["Classement", myRank ? `#${myRank} / ${ranking.length}` : "—"]].map((s, i) =>
+            h("div", { key: i }, h("div", { style: { fontSize: 17, fontWeight: 800 } }, s[1]), h("div", { style: { fontSize: 10, opacity: .8 } }, s[0]))))),
+
+      // ── KPIs ──
+      h("div", { key: "kpi", style: GRID(3) },
+        h(KPI, { icon: "💶", label: "Mon CA du mois", value: fK(r.ca), color: T.accent, sub: dMoM == null ? `${r.nb} vente(s)` : `${dMoM >= 0 ? "+" : ""}${dMoM}% vs mois préc.` }),
+        h(KPI, { icon: "📈", label: "Ma marge", value: fK(r.marge), color: T.green, sub: txMarge + " % de taux" }),
+        h(KPI, { icon: "🧺", label: "Panier moyen", value: fK(panier), color: T.cyan, sub: "CA / vente" }),
+        h(KPI, { icon: "🎯", label: "Atteinte objectif", value: pCA == null ? "—" : pCA + " %", color: pctC(pCA), sub: o.ca > 0 ? "de " + fK(o.ca) : "non défini" }),
+        h(KPI, { icon: "🏅", label: "Classement", value: myRank ? `#${myRank}` : "—", color: T.amber, sub: `sur ${ranking.length} commerciaux` }),
+        h(KPI, { icon: "📅", label: `Cumul ${sy}`, value: fK(ytdCA), color: T.violet, sub: `${ytdNb} vente(s) cumulées` })),
+
+      // ── Jauges ──
       h("div", { key: "g", style: { ...CARD, display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 12 } },
         h(Gauge, { value: r.ca, target: o.ca, label: "objectif CA" }),
         h(Gauge, { value: r.marge, target: o.marge, label: "objectif marge" })),
-      o.ca <= 0 ? h("div", { key: "noobj", style: { ...CARD, textAlign: "center", color: T.sub, fontSize: 12 } }, "Aucun objectif défini pour ce mois. Vos objectifs sont fixés par l'administrateur.") : null,
-      h("div", { key: "hist", style: CARD },
-        h("h3", { style: SEC_TITLE }, "📊 Mon évolution — 12 mois"),
-        (() => { const c = realObjChart(myName, selMonth); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 260 }); })()),
-      h("div", { key: "cli", style: CARD },
-        h("h3", { style: SEC_TITLE }, "👥 Mes meilleurs clients du mois"),
-        topClients.length ? topClients.map(([c, v], i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: i < topClients.length - 1 ? `1px solid ${T.track}` : "none" } },
-          h("span", { style: { fontSize: 12, fontWeight: 600 } }, c), h("span", { style: { fontSize: 12, fontWeight: 800, color: T.accent } }, fE(v)))) : empty("Aucune vente ce mois"))
+
+      o.ca <= 0 ? h("div", { key: "noobj", style: { ...CARD, textAlign: "center", color: T.sub, fontSize: 12 } }, "Aucun objectif n'a encore été défini pour ce mois par l'administrateur.") : null,
+
+      // ── Évolution 12 mois ──
+      h("div", { key: "evo" }, panel("📊 Mon évolution sur 12 mois (CA vs objectif)", (() => { const c = realObjChart(myName, selMonth); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 280 }); })())),
+
+      // ── Taux marge + nb ventes ──
+      h("div", { key: "row-mt", style: ROW2 },
+        panel("📐 Mon taux de marge (12 mois)", h(Chart, lineCfg(labels12, [{ label: "Taux de marge", data: txSerie, color: T.green }], "pct"))),
+        panel("🧾 Mes ventes par mois (12 mois)", h(Chart, barCfg(labels12, nbSerie, months.map(k => k === selMonth ? T.accent : T.accent + "99"), "nb", false)))),
+
+      // ── Type + marque ──
+      h("div", { key: "row-tm", style: ROW2 },
+        panel("🔌 Répartition de mon CA par type", typeEntries.length ? h(Chart, donutCfg(typeEntries.map(e => e[0]), typeEntries.map(e => e[1]), typeEntries.map(e => TYPE_COLOR[e[0]] || T.faint), true)) : empty("Aucune vente ce mois")),
+        panel("🏷️ Mon CA par marque de borne", marqueEntries.length ? h(Chart, barCfg(marqueEntries.map(e => e[0]), marqueEntries.map(e => e[1]), marqueEntries.map(e => BRAND_COLORS[e[0]] || T.accent), "money", true)) : empty("Aucune borne ce mois"))),
+
+      // ── Cumul annuel ──
+      h("div", { key: "ytd" }, panel(`📅 Mon cumul annuel ${sy}`, [
+        h("div", { key: "ca", style: { marginBottom: 14 } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4 } },
+            h("span", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "CA cumulé"),
+            h("span", { style: { fontSize: 13, fontWeight: 800, color: T.accent } }, `${fK(ytdCA)}${ytdObj > 0 ? " / " + fK(ytdObj) : ""}`)),
+          h(Bar, { w: ytdObj > 0 ? ytdCA / ytdObj * 100 : 0, color: ytdObj > 0 ? pctC(Math.round(ytdCA / ytdObj * 100)) : T.accent, ht: 10 })),
+        h("div", { key: "mg" },
+          h("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 4 } },
+            h("span", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "Marge cumulée"),
+            h("span", { style: { fontSize: 13, fontWeight: 800, color: T.green } }, fK(ytdMarge))),
+          h(Bar, { w: ytdCA > 0 ? ytdMarge / ytdCA * 100 : 0, color: T.green, ht: 10 }),
+          h("div", { style: { ...SUBTLE, marginTop: 4 } }, ytdCA > 0 ? Math.round(ytdMarge / ytdCA * 100) + " % de taux de marge sur l'année" : "")),
+        bestVal > 0 ? h("div", { key: "rec", style: { ...SUBTLE, marginTop: 10 } }, `🏆 Meilleur mois : ${keyLabel(bestKey, true)} avec ${fK(bestVal)}`) : null
+      ])),
+
+      // ── Classement équipe ──
+      h("div", { key: "rank" }, panel("🏆 Classement de l'équipe ce mois", ranking.length ? ranking.slice(0, 8).map((rk, i) => {
+        const me = rk.n === myName;
+        return h("div", { key: rk.n, style: { display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 10, marginBottom: 4, background: me ? T.accent + "12" : "transparent", border: me ? `1px solid ${T.accent}40` : "1px solid transparent" } },
+          h("span", { style: { fontSize: 14, fontWeight: 800, width: 26, textAlign: "center", color: i < 3 ? [T.amber, "#94A3B8", "#B45309"][i] : T.faint } }, i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1),
+          h("span", { style: { flex: 1, fontSize: 13, fontWeight: me ? 800 : 600, color: me ? T.accent : T.ink } }, rk.n + (me ? " (moi)" : "")),
+          h("span", { style: { fontSize: 11, color: T.faint } }, `${rk.nb} vte`),
+          h("span", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, minWidth: 70, textAlign: "right" } }, fK(rk.ca)));
+      }).concat(gapLeader > 0 ? [h("div", { key: "gap", style: { ...SUBTLE, marginTop: 8, textAlign: "center" } }, `Il te manque ${fK(gapLeader)} pour prendre la tête 🔝`)] : []) : empty("Aucune vente ce mois"))),
+
+      // ── Top clients + produits ──
+      h("div", { key: "row-cp", style: ROW2 },
+        panel("👥 Mes meilleurs clients du mois", topClients.length ? topClients.map(([c, v], i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < topClients.length - 1 ? `1px solid ${T.track}` : "none" } },
+          h("span", { style: { fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "62%" } }, `${i + 1}. ${c}`),
+          h("span", { style: { fontSize: 12, fontWeight: 800, color: T.accent } }, fE(v)))) : empty("Aucune vente ce mois")),
+        panel("📦 Mes produits les plus posés", topProd.length ? topProd.map(([p, q], i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < topProd.length - 1 ? `1px solid ${T.track}` : "none" } },
+          h("span", { style: { fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "70%" } }, p),
+          h("span", { style: { fontSize: 12, fontWeight: 800, color: T.violet } }, fNb(q) + "×"))) : empty("Aucun produit ce mois"))),
+
+      // ── Détail des ventes ──
+      h("div", { key: "det" }, panel(`🧾 Le détail de mes ventes — ${keyLabel(selMonth, true)}`, monthV.length ? monthV.slice().sort((a, b) => Number(b.prix_ht || 0) - Number(a.prix_ht || 0)).map((v, i) => {
+        const mg = Number(v.prix_ht || 0) - coutVente(v); const tx = Number(v.prix_ht || 0) > 0 ? Math.round(mg / Number(v.prix_ht) * 100) : 0; const t = typeInstall(v);
+        return h("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderBottom: i < monthV.length - 1 ? `1px solid ${T.track}` : "none" } },
+          h("div", { style: { flex: 1, minWidth: 0 } },
+            h("div", { style: { fontSize: 12, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, v.client || "Client"),
+            h("div", { style: { marginTop: 3 } }, chip(t, TYPE_COLOR[t] || T.faint))),
+          h("div", { style: { textAlign: "right" } },
+            h("div", { style: { fontSize: 13, fontWeight: 800, color: T.accent } }, fE(v.prix_ht)),
+            h("div", { style: { fontSize: 10, fontWeight: 700, color: pctC(tx >= 40 ? 100 : tx >= 25 ? 80 : tx >= 10 ? 50 : 20) } }, "marge " + tx + " %")));
+      }) : empty("Aucune vente enregistrée ce mois")))
     ];
   };
 
