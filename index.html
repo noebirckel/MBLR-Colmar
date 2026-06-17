@@ -1429,7 +1429,8 @@ function OffresTab({
   reonicClientId,
   supabaseUrl,
   reonicCatalog,
-  onLeadConverted
+  onLeadConverted,
+  packageComponents
 }) {
   const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
   const canEdit = r => ["administrateur", "commercial", "secretaire"].includes(r);
@@ -1504,6 +1505,29 @@ function OffresTab({
     const materiels = [];
     const failedPkgs = [];
     for (const pkgId of selectedPkgs) {
+      // Priorité au mapping manuel défini dans les Paramètres (Packages → composants)
+      const mapped = packageComponents && packageComponents[pkgId];
+      if (mapped && mapped.items && mapped.items.length) {
+        for (const it of mapped.items) {
+          const c = (reonicCatalog || []).find(rc => rc.id === it.id) || {};
+          const effectivePrice = c.salesPriceOverride != null ? Number(c.salesPriceOverride) : Number(c.salesPrice) || 0;
+          const prixAchat = c.prixAchat != null && c.prixAchat !== "" ? Number(c.prixAchat) : null;
+          const marge = prixAchat != null && effectivePrice > 0 ? Math.round((effectivePrice - prixAchat) / effectivePrice * 100) : null;
+          materiels.push({
+            reonic_component_id: it.id,
+            article: c.name || "Composant",
+            cat: c.componentType || "reonic",
+            unite: c.quantityUnit === "meter" ? "ml" : "pce",
+            qty: Number(it.qty) || 1,
+            prix_unit: effectivePrice,
+            prix_reonic: effectivePrice,
+            prix_achat: prixAchat,
+            marge,
+            brand: c.brand || ""
+          });
+        }
+        continue;
+      }
       const data = await callReonicProxy(EDGE_URL, "get_package", { packageId: pkgId });
       if (!data.ok || !data.data) {
         if (!data.ok && data.error) console.error("[get_package]", data.error);
@@ -22655,6 +22679,87 @@ function ChantierTab({
 // APPLICATION PRINCIPALE
 // ══════════════════════════════════════
 
+function PackageMappingConfig({ supabaseUrl, catalog, mapping, saveMapping }) {
+  const h = React.createElement;
+  const { useState, useEffect } = React;
+  const EDGE_URL = supabaseUrl ? `${supabaseUrl}/functions/v1/reonic-proxy-v3` : "";
+  const [packages, setPackages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(null);
+  const [pick, setPick] = useState({});
+  const map = mapping || {};
+  const C = "#0F172A", L = "#E2E8F0", S = "#64748B", AC = "#3B82F6", GR = "#10B981", F = '"Outfit",sans-serif';
+
+  const loadPkgs = async () => {
+    if (!EDGE_URL) { setErr("Configuration Supabase manquante"); return; }
+    setLoading(true); setErr(null);
+    try {
+      const d = await callReonicProxy(EDGE_URL, "get_packages", {});
+      if (!d.ok) throw new Error(d.error || "Erreur Reonic");
+      setPackages((d.data || []).map(p => ({ id: p.id, name: p.name || p.id })));
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  };
+  useEffect(() => { if (open && packages.length === 0 && !loading) loadPkgs(); }, [open]);
+
+  const catById = {}; (catalog || []).forEach(c => { catById[c.id] = c; });
+  const setItems = (pkg, items) => {
+    const next = { ...map };
+    if (items.length === 0) delete next[pkg.id]; else next[pkg.id] = { name: pkg.name, items };
+    saveMapping(next);
+  };
+  const addComp = (pkg) => {
+    const p = pick[pkg.id] || {}; if (!p.compId) return;
+    const cur = (map[pkg.id] && map[pkg.id].items) || [];
+    if (cur.some(it => it.id === p.compId)) return;
+    setItems(pkg, [...cur, { id: p.compId, qty: Number(p.qty) || 1 }]);
+    setPick(s => ({ ...s, [pkg.id]: { compId: "", qty: 1 } }));
+  };
+  const removeComp = (pkg, id) => { const cur = (map[pkg.id] && map[pkg.id].items) || []; setItems(pkg, cur.filter(it => it.id !== id)); };
+  const setQty = (pkg, id, qty) => { const cur = (map[pkg.id] && map[pkg.id].items) || []; setItems(pkg, cur.map(it => it.id === id ? { ...it, qty: Number(qty) || 1 } : it)); };
+
+  const filtered = packages.filter(p => !search.trim() || (p.name || "").toLowerCase().includes(search.toLowerCase()));
+  const mappedCount = Object.keys(map).length;
+  const inp = { border: `1px solid ${L}`, borderRadius: 8, padding: "7px 8px", fontSize: 12, fontFamily: F, outline: "none" };
+
+  return h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${L}`, padding: "14px 18px", marginBottom: 14 } },
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", gap: 10 }, onClick: () => setOpen(o => !o) },
+      h("div", null,
+        h("div", { style: { fontSize: 14, fontWeight: 800, color: C } }, "📦 Packages → composants"),
+        h("div", { style: { fontSize: 11, color: S, marginTop: 2 } }, "Associez chaque package Reonic à des composants du catalogue : ils seront injectés automatiquement dans la vente.")),
+      h("span", { style: { fontSize: 12, color: AC, fontWeight: 700, whiteSpace: "nowrap" } }, (mappedCount ? mappedCount + " configuré(s) · " : "") + (open ? "▲" : "▼"))),
+    open ? h("div", { style: { marginTop: 14 } },
+      err ? h("div", { style: { color: "#EF4444", fontSize: 12, marginBottom: 8 } }, "⚠️ " + err) : null,
+      loading ? h("div", { style: { color: S, fontSize: 12, padding: "10px 0" } }, "⏳ Chargement des packages…")
+        : h("div", null,
+          h("input", { value: search, onChange: e => setSearch(e.target.value), placeholder: "🔍 Rechercher un package…", style: { ...inp, width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 13, marginBottom: 10 } }),
+          h("div", { style: { maxHeight: 480, overflowY: "auto" } }, filtered.length ? filtered.map(pkg => {
+            const items = (map[pkg.id] && map[pkg.id].items) || [];
+            const isOpen = expanded === pkg.id;
+            const p = pick[pkg.id] || { compId: "", qty: 1 };
+            return h("div", { key: pkg.id, style: { border: `1px solid ${L}`, borderRadius: 10, padding: 10, marginBottom: 8 } },
+              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", gap: 8 }, onClick: () => setExpanded(isOpen ? null : pkg.id) },
+                h("span", { style: { fontSize: 13, fontWeight: 700, color: C } }, pkg.name),
+                h("span", { style: { fontSize: 11, fontWeight: 700, color: items.length ? GR : S, whiteSpace: "nowrap" } }, (items.length ? items.length + " composant(s)" : "à configurer") + "  " + (isOpen ? "▲" : "▼"))),
+              isOpen ? h("div", { style: { marginTop: 10 } },
+                items.length ? items.map(it => { const c = catById[it.id] || {}; return h("div", { key: it.id, style: { display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #F1F5F9" } },
+                  h("span", { style: { flex: 1, fontSize: 12, color: C } }, c.name || it.id),
+                  h("input", { type: "number", min: "1", value: it.qty, onChange: e => setQty(pkg, it.id, e.target.value), style: { ...inp, width: 56 } }),
+                  h("button", { onClick: () => removeComp(pkg, it.id), style: { border: "none", background: "#FEE2E2", color: "#EF4444", borderRadius: 6, padding: "5px 9px", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: F } }, "✕")); }) : h("div", { style: { fontSize: 11, color: S, marginBottom: 6 } }, "Aucun composant. Ajoutez-en ci-dessous."),
+                h("div", { style: { display: "flex", gap: 6, marginTop: 8 } },
+                  h("select", { value: p.compId, onChange: e => setPick(s => ({ ...s, [pkg.id]: { compId: e.target.value, qty: p.qty || 1 } })), style: { ...inp, flex: 1 } },
+                    [h("option", { key: "_", value: "" }, "— Choisir un composant du catalogue —")].concat((catalog || []).map(c => h("option", { key: c.id, value: c.id }, c.name)))),
+                  h("input", { type: "number", min: "1", value: p.qty, onChange: e => setPick(s => ({ ...s, [pkg.id]: { compId: p.compId || "", qty: e.target.value } })), style: { ...inp, width: 56 } }),
+                  h("button", { onClick: () => addComp(pkg), style: { border: "none", background: AC, color: "#fff", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: F } }, "+ Ajouter"))
+              ) : null);
+          }) : h("div", { style: { fontSize: 12, color: S, padding: "10px 0" } }, (catalog || []).length === 0 ? "Synchronisez d'abord le catalogue Reonic ci-dessus." : "Aucun package."))
+        )
+    ) : null
+  );
+}
+
 function App() {
   var _profile$nom, _ROLES$role, _ROLES$role2;
   const isMobile = useIsMobile();
@@ -22802,6 +22907,16 @@ function App() {
     setReonicCatalog(items);
     await sb.from("app_configs").upsert(
       { key: "reonic_catalog", value: JSON.stringify(items), updated_at: new Date().toISOString() },
+      { onConflict: "key" }
+    );
+  };
+
+  // ── Mapping package Reonic → composants du catalogue ──
+  const [packageComponents, setPackageComponents] = React.useState({});
+  const savePackageComponents = async (m) => {
+    setPackageComponents(m);
+    await sb.from("app_configs").upsert(
+      { key: "package_components", value: JSON.stringify(m), updated_at: new Date().toISOString() },
       { onConflict: "key" }
     );
   };
@@ -23213,6 +23328,12 @@ function App() {
             if (row.key === "reonic_catalog" && row.value) {
               const cat = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
               setReonicCatalog(Array.isArray(cat) ? cat : []);
+            }
+            if (row.key === "package_components" && row.value) {
+              try {
+                const pc = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+                setPackageComponents(pc && typeof pc === "object" ? pc : {});
+              } catch (e) {}
             }
           });
         }
@@ -25720,6 +25841,7 @@ function App() {
     reonicClientId: localStorage.getItem("reonic_client_id") || "",
     supabaseUrl: SUPABASE_URL,
     reonicCatalog: reonicCatalog,
+    packageComponents: packageComponents,
     onLeadConverted: lead => {
       window._leadToConvert = lead;
       goTo("ventes");
@@ -30623,6 +30745,11 @@ function App() {
     supabaseUrl: SUPABASE_URL,
     catalog: reonicCatalog,
     saveCatalog: saveReonicCatalog
+  }), /*#__PURE__*/React.createElement(PackageMappingConfig, {
+    supabaseUrl: SUPABASE_URL,
+    catalog: reonicCatalog,
+    mapping: packageComponents,
+    saveMapping: savePackageComponents
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#FFFFFF",
