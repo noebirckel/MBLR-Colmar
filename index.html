@@ -4119,6 +4119,10 @@ function FacturesTab({
 // ══════════════════════════════════════════
 // ONGLET MES OBJECTIFS (commercial)
 // ══════════════════════════════════════════
+// ── MesObjectifsTab ────────────────────────────────────────────────────────
+// Refonte : pilotage des objectifs. Admin = définition pour TOUT mois
+// (passé / courant / futur) par commercial, avec report multi-mois.
+// Commercial = tableau de bord personnel (lecture seule sur les objectifs).
 function MesObjectifsTab({
   isMobile,
   ventes,
@@ -4129,1541 +4133,261 @@ function MesObjectifsTab({
   role,
   allProfiles
 }) {
-  const now = new Date();
-  const mM = String(now.getMonth() + 1).padStart(2, "0");
-  const mY = String(now.getFullYear());
-  const mKey = `${mY}-${mM}`;
-  const nom = (profile === null || profile === void 0 ? void 0 : profile.nom) || "";
+  const { useState, useMemo, useRef, useEffect } = React;
+  const h = React.createElement;
 
-  // ── MODE ADMIN : vue d'ensemble ──
-  const [adminView, setAdminView] = useState("ensemble"); // "ensemble" | "perso"
-  const [editCommercial, setEditCommercial] = useState(null); // {nom, key}
-  const [draftCAEdit, setDraftCAEdit] = useState("");
-  const [draftMargeEdit, setDraftMargeEdit] = useState("");
-  const [selectedComm, setSelectedComm] = useState(null); // pour détail
+  const T = {
+    bg: "#FFFFFF", line: "#E2E8F0", ink: "#0F172A", ink2: "#1E293B", sub: "#64748B",
+    faint: "#94A3B8", track: "#F1F5F9", soft: "#F8FAFC", accent: "#3B82F6", green: "#10B981",
+    amber: "#F59E0B", red: "#EF4444", violet: "#8B5CF6", cyan: "#06B6D4", indigo: "#6366F1"
+  };
+  const SERIES = [T.accent, T.green, T.violet, T.amber, T.cyan, T.indigo];
+  const FONT = '"Outfit",sans-serif';
+  const CARD = { background: T.bg, borderRadius: 14, border: `1px solid ${T.line}`, padding: 16, marginBottom: 14 };
+  const SEC_TITLE = { margin: "0 0 14px", fontSize: 14, fontWeight: 800, color: T.ink2 };
+  const SUBTLE = { fontSize: 11, color: T.faint };
+  const INP = (e = {}) => ({ background: T.soft, border: `1px solid ${T.line}`, borderRadius: 9, color: T.ink2, padding: "10px 12px", fontSize: 14, width: "100%", outline: "none", boxSizing: "border-box", fontFamily: FONT, ...e });
+  const empty = (txt) => h("div", { style: { color: "#CBD5E1", fontSize: 12, textAlign: "center", padding: "22px 0" } }, txt);
+
+  const fE = (n) => fmt(Number(n || 0));
+  const fK = (n) => { n = Number(n || 0); if (Math.abs(n) >= 1e6) return (n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M€"; if (Math.abs(n) >= 1e3) return Math.round(n / 1e3) + " k€"; return Math.round(n) + " €"; };
+  const fNb = (n) => Number(n || 0).toLocaleString("fr-FR");
+  const pctC = (p) => p == null ? T.faint : p >= 100 ? T.green : p >= 70 ? T.accent : p >= 40 ? T.amber : T.red;
 
   const isAdmin = role === "administrateur";
+  const myName = (profile && profile.nom) || "";
+  const now = new Date();
+  const mk = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const curKey = mk(now);
+  const shift = (key, n) => { const [y, m] = key.split("-").map(Number); return mk(new Date(y, m - 1 + n, 1)); };
+  const keyLabel = (key, withYear = true) => { const [y, m] = key.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long", year: withYear ? "numeric" : undefined }); };
+  const shortLabel = (key) => { const [y, m] = key.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }); };
 
-  // Tous les commerciaux (from profiles + from ventes)
-  const commerciaux = React.useMemo(() => {
-    const fromProfiles = (allProfiles || []).filter(p => p.role === "commercial").map(p => p.nom);
-    const fromVentes = [...new Set(ventes.map(v => v.par).filter(Boolean))];
-    return [...new Set([...fromProfiles, ...fromVentes])].filter(Boolean).sort();
-  }, [allProfiles, ventes]);
-  const coutVente = v => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5 : (v.materiels || []).reduce((s, m) => s + (m.prix_achat != null ? Number(m.prix_achat) : Number(m.prix_unit || 0)) * Number(m.qty || 0), 0) + (v.cables || []).reduce((s, m) => s + Number(m.prix_unit || 0) * Number(m.qty || 0), 0);
-
-  // Données par commercial pour N mois
-  const getCommData = (commNom, nbMois = 6) => Array.from({
-    length: nbMois
-  }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear());
-    const ok = `${yy}-${mm}__${commNom}`;
-    const o = objectifs[ok] || {};
-    const vs = ventes.filter(v => (v.par || "") === commNom && v.date && v.date.split("/")[1] === mm && v.date.split("/")[2] === yy);
+  const coutVente = (v) => v.marge_forfait ? Number(v.prix_ht || 0) * 0.5
+    : (v.materiels || []).reduce((s, m) => s + (m.prix_achat != null ? Number(m.prix_achat) : Number(m.prix_unit || 0)) * Number(m.qty || 0), 0)
+    + (v.cables || []).reduce((s, c) => s + Number(c.prix_unit || 0) * Number(c.qty || 0), 0);
+  const venteInMonth = (v, key) => { const [y, m] = key.split("-"); const p = (v.date || "").split("/"); return p.length === 3 && p[1] === m && p[2] === y; };
+  const realizedFor = (nom, key) => {
+    const vs = (ventes || []).filter(v => (v.par || "") === nom && venteInMonth(v, key));
     const ca = vs.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
     const marge = vs.reduce((s, v) => s + (Number(v.prix_ht || 0) - coutVente(v)), 0);
+    return { ca, marge, nb: vs.length };
+  };
+  const objFor = (nom, key) => { const o = objectifs[`${key}__${nom}`] || {}; return { ca: Number(o.ca || 0), marge: Number(o.marge || 0) }; };
+
+  const commerciaux = useMemo(() => {
+    const fromProfiles = (allProfiles || []).filter(p => p.role === "commercial").map(p => p.nom);
+    const fromVentes = [...new Set((ventes || []).map(v => v.par).filter(Boolean))];
+    return [...new Set([...fromProfiles, ...fromVentes])].filter(Boolean).sort();
+  }, [allProfiles, ventes]);
+
+  /* ── État ── */
+  const [selMonth, setSelMonth] = useState(curKey);
+  const [adminView, setAdminView] = useState("ensemble"); // ensemble | detail
+  const [selComm, setSelComm] = useState(commerciaux[0] || myName);
+  const [edit, setEdit] = useState(null); // { nom, key }
+  const [dCA, setDCA] = useState(""); const [dMarge, setDMarge] = useState(""); const [repeat, setRepeat] = useState(0);
+
+  const openEdit = (nom, key) => { const o = objFor(nom, key); setDCA(o.ca ? String(o.ca) : ""); setDMarge(o.marge ? String(o.marge) : ""); setRepeat(0); setEdit({ nom, key }); };
+  const saveEdit = () => {
+    if (!edit) return;
+    const ca = Number(dCA) || 0, marge = Number(dMarge) || 0, rep = Number(repeat) || 0;
+    setObjectifs(p => { const next = { ...p }; for (let i = 0; i <= rep; i++) next[`${shift(edit.key, i)}__${edit.nom}`] = { ca, marge }; return next; });
+    setEdit(null);
+  };
+  const clearObj = () => { if (!edit) return; setObjectifs(p => { const next = { ...p }; delete next[`${edit.key}__${edit.nom}`]; return next; }); setEdit(null); };
+
+  /* ── Chart.js ── */
+  const Chart = ({ type, data, options, height }) => {
+    const cv = useRef(null), inst = useRef(null), sig = JSON.stringify({ type, data, options });
+    useEffect(() => {
+      if (!cv.current || !window.Chart) return;
+      try { inst.current && inst.current.destroy(); } catch (e) {}
+      inst.current = new window.Chart(cv.current.getContext("2d"), { type, data, options });
+      return () => { try { inst.current && inst.current.destroy(); } catch (e) {} };
+    }, [sig]);
+    return h("div", { style: { position: "relative", height: height || 240 } }, h("canvas", { ref: cv }));
+  };
+  useEffect(() => { if (window.Chart) { window.Chart.defaults.font.family = FONT; window.Chart.defaults.font.size = 11; window.Chart.defaults.color = T.sub; window.Chart.defaults.plugins.legend.labels.usePointStyle = true; window.Chart.defaults.plugins.legend.labels.boxWidth = 10; } }, []);
+  const realObjChart = (nom, endKey, n = 12) => {
+    const keys = []; for (let i = n - 1; i >= 0; i--) keys.push(shift(endKey, -i));
     return {
-      label: d.toLocaleDateString("fr-FR", {
-        month: "short"
-      }),
-      mois: `${yy}-${mm}`,
-      ca,
-      marge,
-      objCA: Number(o.ca || 0),
-      objMarge: Number(o.marge || 0),
-      nb: vs.length,
-      isCurrent: i === 0
+      type: "bar",
+      data: {
+        labels: keys.map(shortLabel),
+        datasets: [
+          { label: "CA réalisé", data: keys.map(k => realizedFor(nom, k).ca), backgroundColor: keys.map(k => k === selMonth ? T.accent : T.accent + "99"), borderRadius: 5, maxBarThickness: 30, order: 2 },
+          { label: "Objectif", type: "line", data: keys.map(k => objFor(nom, k).ca), borderColor: T.amber, borderWidth: 2.5, borderDash: [5, 4], pointRadius: 3, pointBackgroundColor: T.amber, fill: false, tension: 0, order: 1 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top", align: "end" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fE(c.raw)}` } } }, scales: { x: { grid: { display: false } }, y: { grid: { color: "#F1F5F9" }, ticks: { callback: (v) => fK(v) } } } }
     };
-  }).reverse();
-  const saveObjEdit = () => {
-    if (!editCommercial) return;
-    setObjectifs(p => ({
-      ...p,
-      [editCommercial.key]: {
-        ca: Number(draftCAEdit) || 0,
-        marge: Number(draftMargeEdit) || 0
-      }
-    }));
-    setEditCommercial(null);
   };
 
-  // ── DONNÉES PERSO ──
-  const oKey = `${mKey}__${nom}`;
-  const obj = objectifs[oKey] || {};
-  const objCA = Number(obj.ca || 0);
-  const objMarge = Number(obj.marge || 0);
-  const mesVentes = ventes.filter(v => (v.par || "") === nom);
-  const ventesMonth = mesVentes.filter(v => v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY);
-  const caMonth = ventesMonth.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-  const margeMonth = ventesMonth.reduce((s, v) => s + (Number(v.prix_ht || 0) - coutVente(v)), 0);
-  const pctCA = objCA > 0 ? Math.min(100, Math.round(caMonth / objCA * 100)) : null;
-  const pctMarge = objMarge > 0 ? Math.min(100, Math.round(margeMonth / objMarge * 100)) : null;
-  const colorCA = pctCA === null ? "#3B82F6" : pctCA >= 100 ? "#10B981" : pctCA >= 70 ? "#3B82F6" : pctCA >= 40 ? "#F59E0B" : "#EF4444";
-  const colorMarge = pctMarge === null ? "#8B5CF6" : pctMarge >= 100 ? "#10B981" : pctMarge >= 70 ? "#3B82F6" : pctMarge >= 40 ? "#F59E0B" : "#EF4444";
-  const history6 = Array.from({
-    length: 6
-  }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear());
-    const mk = `${yy}-${mm}`;
-    const ok = `${mk}__${nom}`;
-    const o = objectifs[ok] || {};
-    const vs = mesVentes.filter(v => v.date && v.date.split("/")[1] === mm && v.date.split("/")[2] === yy);
-    const ca = vs.reduce((s, v) => s + Number(v.prix_ht || 0), 0);
-    const objc = Number(o.ca || 0);
-    return {
-      label: d.toLocaleDateString("fr-FR", {
-        month: "short",
-        year: "numeric"
-      }),
-      ca,
-      objCA: objc,
-      nb: vs.length,
-      isCurrentMonth: i === 0
-    };
-  }).reverse();
-  const clientMap = {};
-  mesVentes.forEach(v => {
-    const c = v.client || "Inconnu";
-    clientMap[c] = (clientMap[c] || 0) + Number(v.prix_ht || 0);
-  });
-  const topClients = Object.entries(clientMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const prodMap = {};
-  ventesMonth.forEach(v => {
-    (v.materiels || []).forEach(m => {
-      prodMap[m.article] = (prodMap[m.article] || 0) + Number(m.qty || 1);
-    });
-  });
-  const topProd = Object.entries(prodMap).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const allCommerciaux = [...new Set(ventes.map(v => v.par).filter(Boolean))];
-  const ranking = allCommerciaux.map(n => {
-    const vs2 = ventes.filter(v => (v.par || "") === n && v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY);
-    return {
-      nom: n,
-      ca: vs2.reduce((s, v) => s + Number(v.prix_ht || 0), 0),
-      nb: vs2.length
-    };
-  }).sort((a, b) => b.ca - a.ca);
-  const myRank = ranking.findIndex(r => r.nom === nom) + 1;
-  const [editObjModal, setEditObjModal] = useState(false);
-  const [draftCA, setDraftCA] = useState(String(objCA || ""));
-  const [draftMarge, setDraftMarge] = useState(String(objMarge || ""));
-  const saveObj = () => {
-    setObjectifs(p => ({
-      ...p,
-      [oKey]: {
-        ca: Number(draftCA) || 0,
-        marge: Number(draftMarge) || 0
-      }
-    }));
-    setEditObjModal(false);
+  const Gauge = ({ value, target, color, label }) => {
+    const p = target > 0 ? Math.min(100, value / target * 100) : 0;
+    const R = 50, C = 2 * Math.PI * R, off = C * (1 - p / 100), col = target <= 0 ? T.faint : pctC(p);
+    return h("div", { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+      h("svg", { width: 132, height: 132, viewBox: "0 0 132 132" },
+        h("circle", { cx: 66, cy: 66, r: R, fill: "none", stroke: T.track, strokeWidth: 12 }),
+        h("circle", { cx: 66, cy: 66, r: R, fill: "none", stroke: col, strokeWidth: 12, strokeLinecap: "round", strokeDasharray: C, strokeDashoffset: off, transform: "rotate(-90 66 66)", style: { transition: "stroke-dashoffset .6s" } }),
+        h("text", { x: 66, y: 62, textAnchor: "middle", fontSize: 24, fontWeight: 800, fill: col }, target > 0 ? Math.round(p) + "%" : "—"),
+        h("text", { x: 66, y: 82, textAnchor: "middle", fontSize: 10, fill: T.faint }, label || "")),
+      h("div", { style: { ...SUBTLE, marginTop: 2, textAlign: "center" } }, target > 0 ? `${fK(value)} / ${fK(target)}` : "Objectif non défini"));
   };
-  const maxHistory = Math.max(...history6.map(h => Math.max(h.ca, h.objCA)), 1);
-  const CARD = {
-    background: "#FFFFFF",
-    borderRadius: 14,
-    border: "1px solid #E2E8F0",
-    padding: "16px 18px",
-    marginBottom: 14,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+  const Bar = ({ w, color, ht = 8 }) => h("div", { style: { background: T.track, borderRadius: ht / 2, height: ht, overflow: "hidden" } },
+    h("div", { style: { height: ht, borderRadius: ht / 2, width: Math.max(0, Math.min(100, w)) + "%", background: color, transition: "width .4s" } }));
+  const KPI = ({ icon, label, value, sub, color }) => h("div", { style: { background: T.bg, borderRadius: 12, border: `1px solid ${T.line}`, borderLeft: `3px solid ${color}`, padding: 12 } },
+    h("div", { style: { fontSize: 18, marginBottom: 4 } }, icon),
+    h("div", { style: { fontSize: isMobile ? 16 : 20, fontWeight: 800, color } }, value),
+    h("div", { style: { fontSize: 11, color: T.faint, marginTop: 1 } }, label),
+    sub ? h("div", { style: { fontSize: 10, color: T.sub, marginTop: 2 } }, sub) : null);
+
+  /* ── Sélecteur de mois ── */
+  const navBtn = (lbl, fn) => h("button", { onClick: fn, style: { padding: "7px 12px", borderRadius: 9, border: `1px solid ${T.line}`, background: "#fff", color: T.sub, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, lbl);
+  const MonthNav = () => h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+    navBtn("‹", () => setSelMonth(shift(selMonth, -1))),
+    h("input", { type: "month", value: selMonth, onChange: e => setSelMonth(e.target.value || curKey), style: INP({ width: "auto", fontWeight: 700 }) }),
+    navBtn("›", () => setSelMonth(shift(selMonth, 1))),
+    selMonth !== curKey ? h("button", { onClick: () => setSelMonth(curKey), style: { padding: "7px 12px", borderRadius: 9, border: "none", background: T.soft, color: T.accent, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, "Aujourd'hui") : null,
+    selMonth > curKey ? h("span", { style: { fontSize: 11, fontWeight: 700, color: T.violet, background: T.violet + "15", padding: "4px 10px", borderRadius: 8 } }, "Mois à venir") : null
+  );
+
+  /* ── MODALE D'ÉDITION (admin) ── */
+  const EditModal = () => {
+    if (!edit) return null;
+    return h("div", { style: { position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }, onClick: () => setEdit(null) },
+      h("div", { style: { background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 420, border: `1px solid ${T.line}` }, onClick: e => e.stopPropagation() },
+        h("h3", { style: { margin: "0 0 4px", fontSize: 17, fontWeight: 800, color: T.ink } }, "🎯 Objectif — " + edit.nom),
+        h("div", { style: { ...SUBTLE, marginBottom: 16, textTransform: "capitalize" } }, keyLabel(edit.key)),
+        h("label", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "Objectif CA HT (€)"),
+        h("input", { type: "number", value: dCA, onChange: e => setDCA(e.target.value), placeholder: "ex. 60000", style: INP({ marginTop: 6, marginBottom: 14 }) }),
+        h("label", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "Objectif marge (€)"),
+        h("input", { type: "number", value: dMarge, onChange: e => setDMarge(e.target.value), placeholder: "ex. 22000", style: INP({ marginTop: 6, marginBottom: 14 }) }),
+        h("label", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "Reporter sur les mois suivants"),
+        h("select", { value: repeat, onChange: e => setRepeat(Number(e.target.value)), style: INP({ marginTop: 6, marginBottom: 6 }) },
+          [0, 1, 2, 3, 5, 11].map(n => h("option", { key: n, value: n }, n === 0 ? "Ce mois uniquement" : `Ce mois + ${n} mois suivants`))),
+        repeat > 0 ? h("div", { style: { ...SUBTLE, marginBottom: 8 } }, `Appliqué de ${shortLabel(edit.key)} à ${shortLabel(shift(edit.key, repeat))}`) : null,
+        h("div", { style: { display: "flex", gap: 8, marginTop: 12 } },
+          h("button", { onClick: saveEdit, style: { flex: 1, padding: "11px", borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: FONT } }, "Enregistrer"),
+          h("button", { onClick: clearObj, style: { padding: "11px 14px", borderRadius: 10, border: `1px solid ${T.line}`, background: "#fff", color: T.red, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "Effacer"),
+          h("button", { onClick: () => setEdit(null), style: { padding: "11px 14px", borderRadius: 10, border: `1px solid ${T.line}`, background: "#fff", color: T.sub, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "Annuler"))
+      ));
   };
-  const INP = (e = {}) => ({
-    background: "#F1F5F9",
-    border: "1px solid #E2E8F0",
-    borderRadius: 9,
-    color: "#1E293B",
-    padding: "10px 12px",
-    fontSize: 14,
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: '"Outfit",sans-serif',
-    ...e
-  });
-  const OVL = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(15,23,42,0.7)",
-    zIndex: 999,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
+
+  /* ══════════ VUE ADMIN — ENSEMBLE ══════════ */
+  const renderAdminEnsemble = () => {
+    const rows = commerciaux.map(n => { const o = objFor(n, selMonth), r = realizedFor(n, selMonth); return { n, o, r, pCA: o.ca > 0 ? Math.round(r.ca / o.ca * 100) : null, pMarge: o.marge > 0 ? Math.round(r.marge / o.marge * 100) : null }; });
+    const totObjCA = rows.reduce((s, r) => s + r.o.ca, 0), totObjMarge = rows.reduce((s, r) => s + r.o.marge, 0);
+    const totCA = rows.reduce((s, r) => s + r.r.ca, 0), totMarge = rows.reduce((s, r) => s + r.r.marge, 0);
+    const withObj = rows.filter(r => r.o.ca > 0).length;
+    return [
+      h("div", { key: "tot", style: { display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 10, marginBottom: 14 } },
+        h(KPI, { icon: "🎯", label: "Objectif CA entreprise", value: fK(totObjCA), color: T.accent, sub: `${withObj}/${rows.length} commerciaux fixés` }),
+        h(KPI, { icon: "💶", label: "CA réalisé", value: fK(totCA), color: T.green, sub: totObjCA > 0 ? Math.round(totCA / totObjCA * 100) + " % de l'objectif" : "—" }),
+        h(KPI, { icon: "🎯", label: "Objectif marge", value: fK(totObjMarge), color: T.violet }),
+        h(KPI, { icon: "📈", label: "Marge réalisée", value: fK(totMarge), color: T.cyan, sub: totObjMarge > 0 ? Math.round(totMarge / totObjMarge * 100) + " %" : "—" })),
+      h("div", { key: "g", style: { ...CARD, display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 12 } },
+        h(Gauge, { value: totCA, target: totObjCA, label: "CA entreprise" }),
+        h(Gauge, { value: totMarge, target: totObjMarge, label: "Marge entreprise" })),
+      h("div", { key: "tbl", style: CARD },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+          h("h3", { style: { ...SEC_TITLE, margin: 0 } }, "Objectifs par commercial"),
+          h("span", SUBTLE, "Cliquez pour définir")),
+        rows.length ? rows.map((r, i) => h("div", { key: r.n, onClick: isAdmin ? () => openEdit(r.n, selMonth) : undefined, style: { padding: "11px 0", borderBottom: i < rows.length - 1 ? `1px solid ${T.track}` : "none", cursor: isAdmin ? "pointer" : "default" } },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 } },
+            h("span", { style: { fontSize: 13, fontWeight: 700, color: T.ink } }, r.n),
+            h("span", { style: { fontSize: 12, fontWeight: 800, color: pctC(r.pCA) } }, r.pCA == null ? "Objectif à définir" : r.pCA + " %")),
+          h(Bar, { w: r.pCA || 0, color: pctC(r.pCA) }),
+          h("div", { style: { ...SUBTLE, marginTop: 4, display: "flex", justifyContent: "space-between" } },
+            h("span", null, `CA ${fK(r.r.ca)} / ${r.o.ca > 0 ? fK(r.o.ca) : "—"} · ${r.r.nb} vente(s)`),
+            h("span", null, `Marge ${fK(r.r.marge)} / ${r.o.marge > 0 ? fK(r.o.marge) : "—"}`)),
+          isAdmin ? h("div", { style: { fontSize: 11, color: T.accent, marginTop: 3, fontWeight: 700 } }, "✎ Définir l'objectif") : null
+        )) : empty("Aucun commercial"))
+    ];
   };
-  return /*#__PURE__*/React.createElement("div", null, editCommercial && /*#__PURE__*/React.createElement("div", {
-    style: OVL,
-    onClick: () => setEditCommercial(null)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#FFFFFF",
-      borderRadius: 16,
-      padding: 24,
-      width: "100%",
-      maxWidth: 400,
-      border: "1px solid #E2E8F0",
-      margin: 16
-    },
-    onClick: e => e.stopPropagation()
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 4px",
-      fontWeight: 800,
-      fontSize: 16,
-      color: "#0F172A"
-    }
-  }, "\uD83C\uDFAF Objectifs de ", editCommercial.nom), /*#__PURE__*/React.createElement("p", {
-    style: {
-      margin: "0 0 18px",
-      fontSize: 12,
-      color: "#64748B"
-    }
-  }, now.toLocaleDateString("fr-FR", {
-    month: "long",
-    year: "numeric"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 6,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em"
-    }
-  }, "OBJECTIF CA (\u20AC HT)"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: draftCAEdit,
-    onChange: e => setDraftCAEdit(e.target.value),
-    placeholder: "Ex: 15000",
-    style: INP()
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 20
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 6,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em"
-    }
-  }, "OBJECTIF MARGE (\u20AC)"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: draftMargeEdit,
-    onChange: e => setDraftMargeEdit(e.target.value),
-    placeholder: "Ex: 3000",
-    style: INP()
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setEditCommercial(null),
-    style: {
-      flex: 1,
-      background: "#E2E8F0",
-      border: "none",
-      borderRadius: 9,
-      color: "#94A3B8",
-      padding: "10px",
-      cursor: "pointer",
-      fontWeight: 700,
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, "Annuler"), /*#__PURE__*/React.createElement("button", {
-    onClick: saveObjEdit,
-    style: {
-      flex: 2,
-      background: "linear-gradient(135deg,#3B82F6,#1D4ED8)",
-      border: "none",
-      borderRadius: 9,
-      color: "#FFF",
-      padding: "10px",
-      cursor: "pointer",
-      fontWeight: 800,
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, "\uD83D\uDCBE Enregistrer")))), editObjModal && role === "administrateur" && /*#__PURE__*/React.createElement("div", {
-    style: OVL,
-    onClick: () => setEditObjModal(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#FFFFFF",
-      borderRadius: 16,
-      padding: 24,
-      width: "100%",
-      maxWidth: 400,
-      border: "1px solid #E2E8F0",
-      margin: 16
-    },
-    onClick: e => e.stopPropagation()
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 16px",
-      fontWeight: 800,
-      fontSize: 16,
-      color: "#0F172A"
-    }
-  }, "\uD83C\uDFAF Modifier mes objectifs \u2014 ", now.toLocaleDateString("fr-FR", {
-    month: "long",
-    year: "numeric"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 6,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em"
-    }
-  }, "OBJECTIF CA (\u20AC HT)"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: draftCA,
-    onChange: e => setDraftCA(e.target.value),
-    placeholder: "Ex: 15000",
-    style: INP()
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 20
-    }
-  }, /*#__PURE__*/React.createElement("label", {
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: "#64748B",
-      display: "block",
-      marginBottom: 6,
-      textTransform: "uppercase",
-      letterSpacing: "0.08em"
-    }
-  }, "OBJECTIF MARGE (\u20AC)"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: draftMarge,
-    onChange: e => setDraftMarge(e.target.value),
-    placeholder: "Ex: 3000",
-    style: INP()
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setEditObjModal(false),
-    style: {
-      flex: 1,
-      background: "#E2E8F0",
-      border: "none",
-      borderRadius: 9,
-      color: "#94A3B8",
-      padding: "10px",
-      cursor: "pointer",
-      fontWeight: 700,
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, "Annuler"), /*#__PURE__*/React.createElement("button", {
-    onClick: saveObj,
-    style: {
-      flex: 2,
-      background: "linear-gradient(135deg,#3B82F6,#1D4ED8)",
-      border: "none",
-      borderRadius: 9,
-      color: "#FFF",
-      padding: "10px",
-      cursor: "pointer",
-      fontWeight: 800,
-      fontFamily: '"Outfit",sans-serif',
-      boxShadow: "0 3px 12px rgba(59,130,246,0.3)"
-    }
-  }, "\uD83D\uDCBE Enregistrer")))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: 14,
-      flexWrap: "wrap",
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
-    style: {
-      margin: "0 0 4px",
-      fontSize: 18,
-      fontWeight: 800,
-      color: "#0F172A",
-      letterSpacing: "-0.3px"
-    }
-  }, "\uD83C\uDFAF ", isAdmin && adminView === "ensemble" ? "Objectifs commerciaux" : "Mes Objectifs"), /*#__PURE__*/React.createElement("p", {
-    style: {
-      margin: 0,
-      fontSize: 12,
-      color: "#64748B"
-    }
-  }, now.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      alignItems: "center",
-      flexWrap: "wrap"
-    }
-  }, isAdmin && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      background: "#F1F5F9",
-      borderRadius: 10,
-      padding: 3,
-      border: "1px solid #E2E8F0"
-    }
-  }, [["ensemble", "📊 Vue d'ensemble"], ["perso", "👤 Ma vue"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => setAdminView(v),
-    style: {
-      padding: "7px 14px",
-      borderRadius: 8,
-      border: "none",
-      cursor: "pointer",
-      fontSize: 12,
-      fontWeight: 700,
-      fontFamily: '"Outfit",sans-serif',
-      background: adminView === v ? "#FFFFFF" : "transparent",
-      color: adminView === v ? "#1E293B" : "#94A3B8",
-      boxShadow: adminView === v ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-      transition: "all 0.15s"
-    }
-  }, l))), (!isAdmin || isAdmin && adminView === "perso") && role === "administrateur" && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setDraftCA(String(objCA || ""));
-      setDraftMarge(String(objMarge || ""));
-      setEditObjModal(true);
-    },
-    style: {
-      background: "#EFF6FF",
-      border: "1px solid #BFDBFE",
-      borderRadius: 9,
-      color: "#2563EB",
-      padding: "8px 14px",
-      cursor: "pointer",
-      fontSize: 12,
-      fontWeight: 700,
-      fontFamily: '"Outfit",sans-serif',
-      display: "flex",
-      alignItems: "center",
-      gap: 6
-    }
-  }, "\u270F\uFE0F ", objCA || objMarge ? "Modifier" : "Fixer objectifs"))), isAdmin && adminView === "ensemble" && (() => {
-    // KPIs globaux mois en cours
-    const totalCA = commerciaux.reduce((s, n) => {
-      const vs = ventes.filter(v => (v.par || "") === n && v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY);
-      return s + vs.reduce((ss, v) => ss + Number(v.prix_ht || 0), 0);
-    }, 0);
-    const totalObj = commerciaux.reduce((s, n) => {
-      return s + Number((objectifs[`${mKey}__${n}`] || {}).ca || 0);
-    }, 0);
-    const totalVentes = ventes.filter(v => v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY).length;
-    const nbAvecObj = commerciaux.filter(n => (objectifs[`${mKey}__${n}`] || {}).ca > 0).length;
-    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "grid",
-        gridTemplateColumns: "repeat(4,1fr)",
-        gap: 8,
-        marginBottom: 14
-      }
-    }, [{
-      icon: "💶",
-      label: "CA total équipe",
-      val: fmt(totalCA),
-      color: "#10B981",
-      sub: totalObj > 0 ? `obj. ${fmt(totalObj)}` : "Objectifs à fixer"
-    }, {
-      icon: "📈",
-      label: "Progression globale",
-      val: totalObj > 0 ? Math.min(100, Math.round(totalCA / totalObj * 100)) + "%" : "—",
-      color: "#3B82F6",
-      sub: `${nbAvecObj}/${commerciaux.length} objectifs fixés`
-    }, {
-      icon: "🧾",
-      label: "Ventes ce mois",
-      val: totalVentes,
-      color: "#A855F7",
-      sub: `${ventes.length} au total`
-    }, {
-      icon: "👥",
-      label: "Commerciaux actifs",
-      val: commerciaux.length,
-      color: "#F59E0B",
-      sub: `ce mois : ${commerciaux.filter(n => ventes.some(v => (v.par || "") === n && v.date && v.date.split("/")[1] === mM && v.date.split("/")[2] === mY)).length}`
-    }].map(k => /*#__PURE__*/React.createElement("div", {
-      key: k.label,
-      style: {
-        background: "#FFFFFF",
-        borderRadius: 12,
-        padding: "14px 12px",
-        border: `1px solid ${k.color}20`,
-        textAlign: "center",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 20,
-        marginBottom: 4
-      }
-    }, k.icon), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: isMobile ? 15 : 19,
-        fontWeight: 800,
-        color: k.color
-      }
-    }, k.val), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        color: "#64748B",
-        marginTop: 3,
-        fontWeight: 600
-      }
-    }, k.label), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        color: "#CBD5E1",
-        marginTop: 1
-      }
-    }, k.sub)))), commerciaux.length === 0 ? /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "center",
-        padding: "50px",
-        color: "#94A3B8"
-      }
-    }, "Aucun commercial enregistr\xE9") : /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : commerciaux.length === 1 ? "1fr" : "1fr 1fr",
-        gap: 12
-      }
-    }, commerciaux.map(commNom => {
-      const hist = getCommData(commNom, 6);
-      const curMonth = hist[hist.length - 1];
-      const objCom = Number((objectifs[`${mKey}__${commNom}`] || {}).ca || 0);
-      const objMargeCom = Number((objectifs[`${mKey}__${commNom}`] || {}).marge || 0);
-      const pct = objCom > 0 ? Math.min(100, Math.round(curMonth.ca / objCom * 100)) : null;
-      const color = pct === null ? "#3B82F6" : pct >= 100 ? "#10B981" : pct >= 70 ? "#3B82F6" : pct >= 40 ? "#F59E0B" : "#EF4444";
-      const maxH = Math.max(...hist.map(h => Math.max(h.ca, h.objCA)), 1);
-      const initials = commNom.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-      const avatarColors = ["#3B82F6", "#10B981", "#A855F7", "#F59E0B", "#EF4444", "#06B6D4"];
-      const avatarColor = avatarColors[commNom.charCodeAt(0) % avatarColors.length];
-      const nbVentesTotal = ventes.filter(v => (v.par || "") === commNom).length;
-      const isExpanded = selectedComm === commNom;
-      return /*#__PURE__*/React.createElement("div", {
-        key: commNom,
-        style: {
-          background: "#FFFFFF",
-          borderRadius: 14,
-          border: `1px solid ${isExpanded ? "#BFDBFE" : "#E2E8F0"}`,
-          overflow: "hidden",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          transition: "all 0.15s"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          padding: "14px 16px",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: 12
-        },
-        onClick: () => setSelectedComm(isExpanded ? null : commNom)
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          background: avatarColor + "25",
-          border: `2px solid ${avatarColor}50`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 14,
-          fontWeight: 800,
-          color: avatarColor,
-          flexShrink: 0
-        }
-      }, initials), /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1,
-          minWidth: 0
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 2
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 700,
-          fontSize: 14,
-          color: "#0F172A"
-        }
-      }, commNom), pct !== null && /*#__PURE__*/React.createElement("span", {
-        style: {
-          background: color + "20",
-          color,
-          borderRadius: 20,
-          padding: "1px 8px",
-          fontSize: 10,
-          fontWeight: 700
-        }
-      }, pct, "%"), pct === null && /*#__PURE__*/React.createElement("span", {
-        style: {
-          background: "#F1F5F9",
-          color: "#94A3B8",
-          borderRadius: 20,
-          padding: "1px 8px",
-          fontSize: 10
-        }
-      }, "Pas d'objectif")), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          gap: 8,
-          fontSize: 11,
-          color: "#64748B"
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontWeight: 600,
-          color
-        }
-      }, fmt(curMonth.ca)), objCom > 0 && /*#__PURE__*/React.createElement("span", null, "/ ", fmt(objCom)), /*#__PURE__*/React.createElement("span", null, "\xB7 ", curMonth.nb, " vente", curMonth.nb > 1 ? "s" : "", " ce mois"))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          gap: 6,
-          flexShrink: 0
-        }
-      }, /*#__PURE__*/React.createElement("button", {
-        onClick: e => {
-          e.stopPropagation();
-          const k = `${mKey}__${commNom}`;
-          const cur = objectifs[k] || {};
-          setDraftCAEdit(String(cur.ca || ""));
-          setDraftMargeEdit(String(cur.marge || ""));
-          setEditCommercial({
-            nom: commNom,
-            key: k
-          });
-        },
-        style: {
-          background: "#EFF6FF",
-          border: "1px solid #BFDBFE",
-          borderRadius: 7,
-          color: "#2563EB",
-          padding: "5px 9px",
-          cursor: "pointer",
-          fontSize: 11,
-          fontWeight: 700,
-          fontFamily: '"Outfit",sans-serif'
-        }
-      }, "\u270F\uFE0F"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          color: "#94A3B8",
-          fontSize: 14,
-          transition: "transform 0.2s",
-          transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)"
-        }
-      }, "\u203A"))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          padding: "0 16px 10px"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          background: "#F1F5F9",
-          borderRadius: 4,
-          height: 6,
-          overflow: "hidden"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          height: "100%",
-          borderRadius: 4,
-          width: (pct || 0) + "%",
-          background: pct >= 100 ? "linear-gradient(90deg,#10B981,#059669)" : "linear-gradient(90deg," + color + "," + color + "AA)",
-          transition: "width 0.6s"
-        }
-      }))), /*#__PURE__*/React.createElement("div", {
-        style: {
-          padding: "0 16px 14px"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "flex-end",
-          gap: 4,
-          height: 60
-        }
-      }, hist.map((h, i) => {
-        const pBar = maxH > 0 ? Math.round(h.ca / maxH * 90) : 0;
-        const pObj = maxH > 0 && h.objCA > 0 ? Math.round(h.objCA / maxH * 90) : 0;
-        return /*#__PURE__*/React.createElement("div", {
-          key: i,
-          style: {
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            height: "100%",
-            justifyContent: "flex-end",
-            position: "relative"
-          }
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            width: "100%",
-            height: Math.max(pBar, 2) + "%",
-            background: h.isCurrent ? color : "#E2E8F0",
-            borderRadius: "3px 3px 0 0",
-            minHeight: 3,
-            transition: "height 0.4s"
-          }
-        }), pObj > 0 && /*#__PURE__*/React.createElement("div", {
-          style: {
-            position: "absolute",
-            bottom: pObj + "%",
-            left: 0,
-            right: 0,
-            height: "1.5px",
-            background: "#F59E0B",
-            borderRadius: 1
-          }
-        }));
-      })), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          gap: 4,
-          marginTop: 4
-        }
-      }, hist.map((h, i) => /*#__PURE__*/React.createElement("div", {
-        key: i,
-        style: {
-          flex: 1,
-          textAlign: "center",
-          fontSize: 8,
-          color: h.isCurrent ? color : "#CBD5E1",
-          fontWeight: h.isCurrent ? 700 : 400
-        }
-      }, h.label)))), isExpanded && /*#__PURE__*/React.createElement("div", {
-        style: {
-          borderTop: "1px solid #F1F5F9",
-          padding: "14px 16px",
-          background: "#FAFBFC"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          marginBottom: 12
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 11,
-          fontWeight: 700,
-          color: "#64748B",
-          marginBottom: 8,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em"
-        }
-      }, "Historique 6 mois"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          gap: 2,
-          fontSize: 10
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          color: "#94A3B8",
-          fontWeight: 700,
-          padding: "4px 6px"
-        }
-      }, "Mois"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          color: "#94A3B8",
-          fontWeight: 700,
-          padding: "4px 6px",
-          textAlign: "right"
-        }
-      }, "CA"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          color: "#94A3B8",
-          fontWeight: 700,
-          padding: "4px 6px",
-          textAlign: "right"
-        }
-      }, "Objectif"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          color: "#94A3B8",
-          fontWeight: 700,
-          padding: "4px 6px",
-          textAlign: "right"
-        }
-      }, "Taux"), hist.map((h, i) => {
-        const tx = h.objCA > 0 ? Math.round(h.ca / h.objCA * 100) : null;
-        const tc = tx === null ? "#94A3B8" : tx >= 100 ? "#10B981" : tx >= 70 ? "#3B82F6" : tx >= 40 ? "#F59E0B" : "#EF4444";
-        return /*#__PURE__*/React.createElement(React.Fragment, {
-          key: i
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            padding: "5px 6px",
-            background: h.isCurrent ? "#EFF6FF" : "transparent",
-            borderRadius: 6,
-            color: h.isCurrent ? "#2563EB" : "#475569",
-            fontWeight: h.isCurrent ? 700 : 400
-          }
-        }, h.label), /*#__PURE__*/React.createElement("div", {
-          style: {
-            padding: "5px 6px",
-            textAlign: "right",
-            background: h.isCurrent ? "#EFF6FF" : "transparent",
-            borderRadius: 6,
-            color: h.isCurrent ? "#2563EB" : "#1E293B",
-            fontWeight: 600
-          }
-        }, h.ca > 0 ? fmt(h.ca) : "—"), /*#__PURE__*/React.createElement("div", {
-          style: {
-            padding: "5px 6px",
-            textAlign: "right",
-            background: h.isCurrent ? "#EFF6FF" : "transparent",
-            borderRadius: 6,
-            color: "#94A3B8"
-          }
-        }, h.objCA > 0 ? fmt(h.objCA) : "—"), /*#__PURE__*/React.createElement("div", {
-          style: {
-            padding: "5px 6px",
-            textAlign: "right",
-            background: h.isCurrent ? "#EFF6FF" : "transparent",
-            borderRadius: 6,
-            color: tc,
-            fontWeight: 700
-          }
-        }, tx !== null ? tx + "%" : "—"));
-      }))), objMargeCom > 0 && (_hist => {
-        const margeCur = ((_hist = hist[hist.length - 1]) === null || _hist === void 0 ? void 0 : _hist.marge) || 0;
-        const pctM = Math.min(100, Math.round(margeCur / objMargeCom * 100));
-        const cM = pctM >= 100 ? "#10B981" : pctM >= 70 ? "#3B82F6" : pctM >= 40 ? "#F59E0B" : "#EF4444";
-        return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 11,
-            color: "#64748B",
-            marginBottom: 4
-          }
-        }, /*#__PURE__*/React.createElement("span", null, "\uD83D\uDCC8 Marge ce mois"), /*#__PURE__*/React.createElement("span", {
-          style: {
-            fontWeight: 700,
-            color: cM
-          }
-        }, pctM, "% \u2014 ", fmt(margeCur), " / ", fmt(objMargeCom))), /*#__PURE__*/React.createElement("div", {
-          style: {
-            background: "#F1F5F9",
-            borderRadius: 4,
-            height: 5,
-            overflow: "hidden"
-          }
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            height: "100%",
-            borderRadius: 4,
-            width: pctM + "%",
-            background: cM
-          }
-        })));
-      })(), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          gap: 8,
-          marginTop: 10
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1,
-          background: "#F8FAFC",
-          borderRadius: 8,
-          padding: "8px 10px",
-          textAlign: "center"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 15,
-          fontWeight: 800,
-          color: "#0F172A"
-        }
-      }, curMonth.nb), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 9,
-          color: "#64748B"
-        }
-      }, "ventes ce mois")), /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1,
-          background: "#F8FAFC",
-          borderRadius: 8,
-          padding: "8px 10px",
-          textAlign: "center"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 15,
-          fontWeight: 800,
-          color: "#0F172A"
-        }
-      }, nbVentesTotal), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 9,
-          color: "#64748B"
-        }
-      }, "total historique")), /*#__PURE__*/React.createElement("div", {
-        style: {
-          flex: 1,
-          background: "#F8FAFC",
-          borderRadius: 8,
-          padding: "8px 10px",
-          textAlign: "center"
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 15,
-          fontWeight: 800,
-          color: "#0F172A"
-        }
-      }, fmt(nbVentesTotal > 0 ? ventes.filter(v => (v.par || "") === commNom).reduce((s, v) => s + Number(v.prix_ht || 0), 0) / nbVentesTotal : 0)), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 9,
-          color: "#64748B"
-        }
-      }, "panier moyen"))), /*#__PURE__*/React.createElement("button", {
-        onClick: () => {
-          const nextD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-          const nm = String(nextD.getMonth() + 1).padStart(2, "0");
-          const ny = String(nextD.getFullYear());
-          const nk = `${ny}-${nm}__${commNom}`;
-          const cur = objectifs[nk] || {};
-          setDraftCAEdit(String(cur.ca || ""));
-          setDraftMargeEdit(String(cur.marge || ""));
-          setEditCommercial({
-            nom: `${commNom} — ${nextD.toLocaleDateString("fr-FR", {
-              month: "long",
-              year: "numeric"
-            })}`,
-            key: nk
-          });
-        },
-        style: {
-          width: "100%",
-          marginTop: 10,
-          background: "transparent",
-          border: "1px solid #E2E8F0",
-          borderRadius: 8,
-          color: "#64748B",
-          padding: "7px",
-          cursor: "pointer",
-          fontSize: 11,
-          fontWeight: 600,
-          fontFamily: '"Outfit",sans-serif'
-        }
-      }, "\uD83D\uDCC5 Fixer objectif mois prochain")));
-    })));
-  })(), (!isAdmin || adminView === "perso") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)",
-      gap: 8,
-      marginBottom: 14
-    }
-  }, [{
-    icon: "💶",
-    label: "CA ce mois",
-    val: fmt(caMonth),
-    color: colorCA,
-    sub: objCA > 0 ? `/ ${fmt(objCA)}` : "Pas d'objectif"
-  }, {
-    icon: "📈",
-    label: "Marge ce mois",
-    val: fmt(margeMonth),
-    color: colorMarge,
-    sub: objMarge > 0 ? `/ ${fmt(objMarge)}` : "Pas d'objectif"
-  }, {
-    icon: "🧾",
-    label: "Ventes ce mois",
-    val: ventesMonth.length,
-    color: "#A855F7",
-    sub: `${mesVentes.length} au total`
-  }, {
-    icon: "🏆",
-    label: "Classement",
-    val: myRank > 0 ? `#${myRank}` : "—",
-    color: "#F59E0B",
-    sub: `sur ${ranking.length} commercial${ranking.length > 1 ? "s" : ""}`
-  }].map(k => /*#__PURE__*/React.createElement("div", {
-    key: k.label,
-    style: {
-      background: "#FFFFFF",
-      borderRadius: 12,
-      padding: "14px 12px",
-      border: `1px solid ${k.color}25`,
-      textAlign: "center"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 22,
-      marginBottom: 4
-    }
-  }, k.icon), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: isMobile ? 16 : 20,
-      fontWeight: 800,
-      color: k.color
-    }
-  }, k.val), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#64748B",
-      marginTop: 3,
-      fontWeight: 600
-    }
-  }, k.label), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#CBD5E1",
-      marginTop: 1
-    }
-  }, k.sub)))), (objCA > 0 || objMarge > 0) && /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 16px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\uD83D\uDCCA Progression du mois"), objCA > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "baseline",
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 700,
-      color: "#94A3B8"
-    }
-  }, "\uD83D\uDCB6 Chiffre d'affaires"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "baseline"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      fontWeight: 800,
-      color: colorCA
-    }
-  }, pctCA, "%"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#CBD5E1"
-    }
-  }, fmt(caMonth), " / ", fmt(objCA)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#F1F5F9",
-      borderRadius: 8,
-      height: 14,
-      overflow: "hidden",
-      position: "relative"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 14,
-      borderRadius: 8,
-      width: pctCA + "%",
-      background: pctCA >= 100 ? "linear-gradient(90deg,#10B981,#059669)" : "linear-gradient(90deg,#3B82F6,#1D4ED8)",
-      transition: "width 0.8s cubic-bezier(.4,0,.2,1)",
-      boxShadow: `0 0 10px ${colorCA}60`
-    }
-  })), pctCA >= 100 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#10B981",
-      fontWeight: 700,
-      marginTop: 5
-    }
-  }, "\uD83C\uDF89 Objectif atteint !") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#64748B",
-      marginTop: 5
-    }
-  }, fmt(objCA - caMonth), " restants pour atteindre l'objectif")), objMarge > 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "baseline",
-      marginBottom: 6
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 700,
-      color: "#94A3B8"
-    }
-  }, "\uD83D\uDCC8 Marge"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      alignItems: "baseline"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      fontWeight: 800,
-      color: colorMarge
-    }
-  }, pctMarge, "%"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#CBD5E1"
-    }
-  }, fmt(margeMonth), " / ", fmt(objMarge)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#F1F5F9",
-      borderRadius: 8,
-      height: 14,
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      height: 14,
-      borderRadius: 8,
-      width: pctMarge + "%",
-      background: pctMarge >= 100 ? "linear-gradient(90deg,#10B981,#059669)" : "linear-gradient(90deg,#8B5CF6,#6D28D9)",
-      transition: "width 0.8s cubic-bezier(.4,0,.2,1)",
-      boxShadow: `0 0 10px ${colorMarge}60`
-    }
-  })), pctMarge >= 100 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#10B981",
-      fontWeight: 700,
-      marginTop: 5
-    }
-  }, "\uD83C\uDF89 Objectif atteint !") : /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "#64748B",
-      marginTop: 5
-    }
-  }, fmt(objMarge - margeMonth), " restants pour atteindre l'objectif"))), !objCA && !objMarge && /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...CARD,
-      textAlign: "center",
-      padding: "24px",
-      borderStyle: "dashed"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 36,
-      marginBottom: 8
-    }
-  }, "\uD83C\uDFAF"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      color: "#64748B",
-      marginBottom: 6
-    }
-  }, "Aucun objectif fix\xE9 pour ce mois"), role === "administrateur" ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "#CBD5E1",
-      marginBottom: 14
-    }
-  }, "Fixez les objectifs pour suivre la progression"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      setDraftCA("");
-      setDraftMarge("");
-      setEditObjModal(true);
-    },
-    style: {
-      background: "linear-gradient(135deg,#3B82F6,#1D4ED8)",
-      border: "none",
-      borderRadius: 9,
-      color: "#FFF",
-      padding: "10px 20px",
-      cursor: "pointer",
-      fontWeight: 800,
-      fontSize: 13,
-      fontFamily: '"Outfit",sans-serif'
-    }
-  }, "\u2795 Fixer les objectifs")) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "#CBD5E1"
-    }
-  }, "Votre administrateur n'a pas encore fix\xE9 vos objectifs pour ce mois.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-      gap: 14,
-      alignItems: "start"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 14px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\uD83D\uDCC5 Historique CA \u2014 6 derniers mois"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "flex-end",
-      gap: isMobile ? 4 : 8,
-      height: 100,
-      marginBottom: 8
-    }
-  }, history6.map((h, i) => {
-    const pct = maxHistory > 0 ? Math.round(h.ca / maxHistory * 100) : 0;
-    const pctObj = maxHistory > 0 && h.objCA > 0 ? Math.round(h.objCA / maxHistory * 100) : 0;
-    return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      style: {
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 3,
-        height: "100%",
-        justifyContent: "flex-end"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9,
-        color: "#64748B",
-        fontWeight: 700,
-        whiteSpace: "nowrap"
-      }
-    }, h.ca > 0 ? fmt(h.ca).replace(/\s/g, "").replace("€", "k".slice(-1) != "k" ? "€" : "") : "—"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: "100%",
-        position: "relative",
-        height: Math.max(pct, 2) + "%",
-        minHeight: 4
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: "100%",
-        background: h.isCurrentMonth ? "linear-gradient(180deg,#3B82F6,#1D4ED8)" : "#E2E8F0",
-        borderRadius: "4px 4px 0 0",
-        transition: "height 0.5s"
-      }
-    }), h.objCA > 0 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        bottom: Math.max(pctObj, 2) + "%",
-        left: 0,
-        right: 0,
-        height: 2,
-        background: "#F59E0B",
-        borderRadius: 2
-      }
-    })));
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 4,
-      overflowX: "auto"
-    }
-  }, history6.map((h, i) => /*#__PURE__*/React.createElement("div", {
-    key: i,
-    style: {
-      flex: 1,
-      textAlign: "center",
-      fontSize: 9,
-      color: h.isCurrentMonth ? "#3B82F6" : "#CBD5E1",
-      fontWeight: h.isCurrentMonth ? 800 : 400,
-      whiteSpace: "nowrap"
-    }
-  }, h.label))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 12,
-      marginTop: 8,
-      flexWrap: "wrap"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      fontSize: 10,
-      color: "#94A3B8"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 10,
-      height: 10,
-      background: "#3B82F6",
-      borderRadius: 2
-    }
-  }), " CA r\xE9el"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      fontSize: 10,
-      color: "#94A3B8"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 14,
-      height: 2,
-      background: "#F59E0B",
-      borderRadius: 2
-    }
-  }), " Objectif"))), topClients.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 12px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\uD83D\uDC65 Mes meilleurs clients"), topClients.map(([client, ca], i) => /*#__PURE__*/React.createElement("div", {
-    key: client,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "8px 0",
-      borderBottom: "1px solid #0F1E35"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      color: "#CBD5E1",
-      minWidth: 20,
-      fontWeight: 700
-    }
-  }, "#", i + 1), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      color: "#1E293B",
-      fontWeight: 600
-    }
-  }, client)), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13,
-      fontWeight: 800,
-      color: "#10B981"
-    }
-  }, fmt(ca)))))), /*#__PURE__*/React.createElement("div", null, ranking.length > 1 && /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 14px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\uD83C\uDFC6 Classement commerciaux \u2014 ", now.toLocaleDateString("fr-FR", {
-    month: "long"
-  })), ranking.map((r, i) => {
-    const isMe = r.nom === nom;
-    const maxCA = ranking[0].ca || 1;
-    const pct2 = Math.round(r.ca / maxCA * 100);
-    const medals = ["🥇", "🥈", "🥉"];
-    return /*#__PURE__*/React.createElement("div", {
-      key: r.nom,
-      style: {
-        marginBottom: 10,
-        background: isMe ? "rgba(59,130,246,0.08)" : "transparent",
-        borderRadius: 10,
-        padding: isMe ? "10px 12px" : "4px 0",
-        border: isMe ? "1px solid #E2E8F0" : "none"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 4
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 16,
-        minWidth: 24
-      }
-    }, medals[i] || `#${i + 1}`), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontWeight: isMe ? 800 : 600,
-        fontSize: 13,
-        color: isMe ? "#1E293B" : "#94A3B8"
-      }
-    }, r.nom, isMe && /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        color: "#3B82F6",
-        marginLeft: 5
-      }
-    }, "\u2190 vous"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: "right"
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 13,
-        fontWeight: 800,
-        color: isMe ? "#3B82F6" : "#64748B"
-      }
-    }, fmt(r.ca)), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 10,
-        color: "#CBD5E1",
-        marginLeft: 6
-      }
-    }, r.nb, " vente", r.nb > 1 ? "s" : ""))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: "#F1F5F9",
-        borderRadius: 4,
-        height: 4,
-        overflow: "hidden"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 4,
-        borderRadius: 4,
-        width: pct2 + "%",
-        background: isMe ? "linear-gradient(90deg,#3B82F6,#1D4ED8)" : "#E2E8F0",
-        transition: "width 0.5s"
-      }
-    })));
-  })), topProd.length > 0 && /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 12px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\u26A1 Produits vendus ce mois"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8
-    }
-  }, topProd.map(([prod, qty]) => /*#__PURE__*/React.createElement("div", {
-    key: prod,
-    style: {
-      background: "#F1F5F9",
-      borderRadius: 8,
-      padding: "8px 12px",
-      border: "1px solid #E2E8F0"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "#1E293B",
-      fontWeight: 700
-    }
-  }, prod), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#3B82F6",
-      fontWeight: 700,
-      marginTop: 2
-    }
-  }, "\xD7", qty, " vendu", qty > 1 ? "s" : ""))))), /*#__PURE__*/React.createElement("div", {
-    style: CARD
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      margin: "0 0 12px",
-      fontWeight: 800,
-      fontSize: 14,
-      color: "#0F172A"
-    }
-  }, "\uD83E\uDDFE Mes derni\xE8res ventes"), mesVentes.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      padding: "20px 0",
-      color: "#CBD5E1",
-      fontSize: 12
-    }
-  }, "Aucune vente enregistr\xE9e") : /*#__PURE__*/React.createElement("div", null, mesVentes.slice(0, 5).map(v => /*#__PURE__*/React.createElement("div", {
-    key: v.id,
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "8px 0",
-      borderBottom: "1px solid #0F1E35"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 13,
-      fontWeight: 700,
-      color: "#1E293B"
-    }
-  }, v.client), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "#64748B",
-      marginTop: 1
-    }
-  }, v.date)), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 14,
-      fontWeight: 800,
-      color: "#10B981"
-    }
-  }, fmt(Number(v.prix_ht || 0)))))))))));
+
+  /* ══════════ VUE ADMIN — DÉTAIL PAR COMMERCIAL ══════════ */
+  const renderAdminDetail = () => {
+    const nom = selComm || commerciaux[0];
+    if (!nom) return [empty("Aucun commercial")];
+    const months = []; for (let i = 6; i >= -5; i--) months.push(shift(selMonth, -i)); // 6 passés … sel … 5 futurs
+    return [
+      h("div", { key: "sel", style: { ...CARD, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" } },
+        h("span", { style: { fontSize: 12, fontWeight: 700, color: T.sub } }, "Commercial :"),
+        h("select", { value: nom, onChange: e => setSelComm(e.target.value), style: INP({ width: "auto", fontWeight: 700 }) },
+          commerciaux.map(n => h("option", { key: n, value: n }, n)))),
+      h("div", { key: "chart", style: CARD },
+        h("h3", { style: SEC_TITLE }, "📊 Réalisé vs objectif — 12 mois"),
+        (() => { const c = realObjChart(nom, selMonth); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 280 }); })()),
+      h("div", { key: "grid", style: CARD },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
+          h("h3", { style: { ...SEC_TITLE, margin: 0 } }, "🗓️ Objectifs mois par mois"),
+          h("span", SUBTLE, "passés & à venir — cliquez pour définir")),
+        h("div", { style: { display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 8 } },
+          months.map(k => {
+            const o = objFor(nom, k), r = realizedFor(nom, k), p = o.ca > 0 ? Math.round(r.ca / o.ca * 100) : null;
+            const future = k > curKey, isSel = k === selMonth;
+            return h("div", { key: k, onClick: isAdmin ? () => openEdit(nom, k) : undefined, style: { border: `1px solid ${isSel ? T.accent : T.line}`, borderRadius: 10, padding: 10, cursor: isAdmin ? "pointer" : "default", background: isSel ? T.accent + "08" : future ? T.soft : "#fff" } },
+              h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                h("span", { style: { fontSize: 11, fontWeight: 700, color: T.ink2, textTransform: "capitalize" } }, shortLabel(k)),
+                future ? h("span", { style: { fontSize: 8, fontWeight: 700, color: T.violet } }, "À VENIR") : null),
+              h("div", { style: { fontSize: 15, fontWeight: 800, color: o.ca > 0 ? pctC(p) : T.faint, margin: "3px 0" } }, o.ca > 0 ? fK(o.ca) : "—"),
+              o.ca > 0 ? h(Bar, { w: p || 0, color: pctC(p), ht: 5 }) : null,
+              h("div", { style: { ...SUBTLE, marginTop: 4 } }, future ? "objectif" : `réalisé ${fK(r.ca)}`));
+          }))
+      )
+    ];
+  };
+
+  /* ══════════ VUE COMMERCIAL (lecture seule) ══════════ */
+  const renderCommercial = () => {
+    const o = objFor(myName, selMonth), r = realizedFor(myName, selMonth);
+    const pCA = o.ca > 0 ? Math.round(r.ca / o.ca * 100) : null, pMarge = o.marge > 0 ? Math.round(r.marge / o.marge * 100) : null;
+    // classement du mois
+    const ranking = commerciaux.map(n => ({ n, ca: realizedFor(n, selMonth).ca })).sort((a, b) => b.ca - a.ca);
+    const myRank = ranking.findIndex(x => x.n === myName) + 1;
+    // top clients (tous mois) & produits du mois
+    const mesV = (ventes || []).filter(v => (v.par || "") === myName);
+    const monthV = mesV.filter(v => venteInMonth(v, selMonth));
+    const cMap = {}; monthV.forEach(v => { const c = v.client || "Inconnu"; cMap[c] = (cMap[c] || 0) + Number(v.prix_ht || 0); });
+    const topClients = Object.entries(cMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return [
+      h("div", { key: "kpi", style: { display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 10, marginBottom: 14 } },
+        h(KPI, { icon: "💶", label: "Mon CA", value: fK(r.ca), color: T.accent, sub: `${r.nb} vente(s)` }),
+        h(KPI, { icon: "📈", label: "Ma marge", value: fK(r.marge), color: T.green }),
+        h(KPI, { icon: "🏅", label: "Mon classement", value: myRank ? `#${myRank}` : "—", color: T.amber, sub: `sur ${ranking.length}` }),
+        h(KPI, { icon: "🎯", label: "Atteinte CA", value: pCA == null ? "—" : pCA + " %", color: pctC(pCA) })),
+      h("div", { key: "g", style: { ...CARD, display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 12 } },
+        h(Gauge, { value: r.ca, target: o.ca, label: "objectif CA" }),
+        h(Gauge, { value: r.marge, target: o.marge, label: "objectif marge" })),
+      o.ca <= 0 ? h("div", { key: "noobj", style: { ...CARD, textAlign: "center", color: T.sub, fontSize: 12 } }, "Aucun objectif défini pour ce mois. Vos objectifs sont fixés par l'administrateur.") : null,
+      h("div", { key: "hist", style: CARD },
+        h("h3", { style: SEC_TITLE }, "📊 Mon évolution — 12 mois"),
+        (() => { const c = realObjChart(myName, selMonth); return h(Chart, { type: c.type, data: c.data, options: c.options, height: 260 }); })()),
+      h("div", { key: "cli", style: CARD },
+        h("h3", { style: SEC_TITLE }, "👥 Mes meilleurs clients du mois"),
+        topClients.length ? topClients.map(([c, v], i) => h("div", { key: i, style: { display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: i < topClients.length - 1 ? `1px solid ${T.track}` : "none" } },
+          h("span", { style: { fontSize: 12, fontWeight: 600 } }, c), h("span", { style: { fontSize: 12, fontWeight: 800, color: T.accent } }, fE(v)))) : empty("Aucune vente ce mois"))
+    ];
+  };
+
+  /* ── RENDER ── */
+  const body = !isAdmin ? renderCommercial() : adminView === "ensemble" ? renderAdminEnsemble() : renderAdminDetail();
+  return h("div", { style: { fontFamily: FONT, color: T.ink, paddingBottom: 40 } },
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 } },
+      h("div", null,
+        h("h2", { style: { margin: 0, fontSize: 20, fontWeight: 800 } }, "🎯 " + (isAdmin ? "Objectifs" : "Mes objectifs")),
+        h("div", { style: SUBTLE, ...{} }, isAdmin ? "Définissez les objectifs de chaque commercial, pour tout mois" : "Suivi de vos objectifs mensuels")),
+      h(MonthNav)),
+    isAdmin ? h("div", { style: { display: "flex", gap: 7, marginBottom: 16 } },
+      ["ensemble", "detail"].map(v => h("button", { key: v, onClick: () => setAdminView(v), style: { padding: "8px 16px", borderRadius: 20, border: `1px solid ${adminView === v ? T.accent : T.line}`, background: adminView === v ? T.accent : "transparent", color: adminView === v ? "#fff" : T.sub, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, v === "ensemble" ? "📋 Vue d'ensemble" : "👤 Par commercial"))) : null,
+    h("div", { style: { ...CARD, marginBottom: 16, padding: "10px 16px", background: T.soft, border: "none", display: "flex", alignItems: "center", gap: 8 } },
+      h("span", { style: { fontSize: 13, fontWeight: 800, color: T.ink, textTransform: "capitalize" } }, keyLabel(selMonth)),
+      selMonth === curKey ? h("span", { style: { fontSize: 11, color: T.green, fontWeight: 700 } }, "· mois en cours") : null),
+    h("div", null, body),
+    isAdmin ? h(EditModal) : null
+  );
 }
 
 // ══════════════════════════════════════════
@@ -8878,31 +7602,62 @@ function StatsTab({
     const comm = {}; vs.forEach(v => { const n = v.par || "—"; comm[n] = (comm[n] || 0) + Number(v.prix_ht || 0); });
     const commTop = Object.entries(comm).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const maxComm = Math.max(...commTop.map(c => c[1]), 1);
-    // Ops & tréso
+    // ── Données ADMINISTRATIF (facturation & trésorerie) ──
     const ch = chantiers || [];
-    const chTermines = ch.filter(c => c.statut === "termine").length;
-    const chCours = ch.filter(c => c.statut === "en_cours").length;
-    const encaisse = ch.reduce((s, c) => s + (c.facture && c.facture.statut === "paye" ? getMontant(c) : 0), 0);
-    const savMonth = (savTickets || []).filter(t => { const d = parseAny(t.created_at || t.date_creation); return d && d.getFullYear() === y && d.getMonth() === m - 1; }).length;
+    const inM = (frd) => { const d = parseFr(frd); return d && d.getFullYear() === y && d.getMonth() === m - 1; };
+    let factureMois = 0, encaisseMois = 0, aFacturer = 0, factEmise = 0;
+    ch.forEach(c => {
+      const f = c.facture || {}, mt = getMontant(c), st = f.statut || "a_facturer";
+      if (inM(f.date_envoi_facture)) factureMois += mt;
+      if (inM(f.date_paiement)) encaisseMois += mt;
+      if (st === "a_facturer" && c.statut === "termine") aFacturer += mt;
+      if (st === "facture") factEmise += mt;
+    });
+    const ac = acomptes || [];
+    const acAEnvoyer = ac.filter(a => a.statut === "a_envoyer").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const acEncaisse = ac.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const delsP = []; ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseFr(f.date_envoi_facture), parseFr(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) delsP.push(dd); });
+    const delaiPaie = delsP.length ? Math.round(delsP.reduce((a, b) => a + b, 0) / delsP.length) : null;
+    let impayes = 0; ch.forEach(c => { const f = c.facture || {}; if (f.statut === "facture") { const j = daysBetween(parseFr(f.date_envoi_facture), today); if (j != null && j > 30) impayes++; } });
+
+    // ── Données INSTALLATION (chantiers & SAV) ──
+    const stCount = { a_planifier: 0, planifie: 0, en_cours: 0, termine: 0, bloque: 0 };
+    ch.forEach(c => { const bl = c.statut === "bloque" || (c.facture && c.facture.statut === "bloque"); const s = bl ? "bloque" : (c.statut in stCount ? c.statut : "a_planifier"); stCount[s]++; });
+    const charge = {}; ch.filter(c => c.statut !== "termine").forEach(c => { const t = c.technicien || "Non assigné"; charge[t] = (charge[t] || 0) + 1; });
+    const chargeTop = Object.entries(charge).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const maxCharge = Math.max(...chargeTop.map(c => c[1]), 1);
+    const delPose = []; ch.forEach(c => { const v = venteById[String(c.vente_id)]; const dS = v ? parseFr(v.date) : null; const dF = c.facture && parseFr(c.facture.date_envoi_facture); const dd = daysBetween(dS, dF); if (dd != null && dd >= 0 && dd < 730) delPose.push(dd); });
+    const delPoseMoy = delPose.length ? Math.round(delPose.reduce((a, b) => a + b, 0) / delPose.length) : null;
+    const savList = (savTickets || []).filter(t => { const d = parseAny(t.created_at || t.date_creation); return d && d.getFullYear() === y && d.getMonth() === m - 1; });
+    const savResolved = savList.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
+    const savGar = savList.reduce((s, t) => s + Number(t.montant_facture_marque || 0), 0);
+    const stLbl = { a_planifier: "À planifier", planifie: "Planifiés", en_cours: "En cours", termine: "Terminés", bloque: "Bloqués" };
+    const stCol = { a_planifier: T.amber, planifie: T.violet, en_cours: T.accent, termine: T.green, bloque: T.red };
+
     const monthName = new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-    const tile = (label, val, sub, col) => h("div", { style: { flex: 1, background: "#fff", borderRadius: 12, padding: "14px 16px", border: `1px solid ${T.line}`, borderTop: `4px solid ${col}` } },
-      h("div", { style: { fontSize: 22, fontWeight: 800, color: col } }, val),
+    const panel = { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 };
+    const tile = (label, val, sub, col) => h("div", { style: { flex: 1, minWidth: 120, ...panel, padding: "14px 16px", borderTop: `4px solid ${col}` } },
+      h("div", { style: { fontSize: 21, fontWeight: 800, color: col } }, val),
       h("div", { style: { fontSize: 12, color: T.ink2, fontWeight: 700, marginTop: 2 } }, label),
       sub ? h("div", { style: { fontSize: 10, color: T.faint, marginTop: 1 } }, sub) : null);
-    const mini = (label, val, col) => h("div", { style: { flex: 1, textAlign: "center", padding: "8px 4px" } },
-      h("div", { style: { fontSize: 18, fontWeight: 800, color: col } }, val),
+    const mini = (label, val, col) => h("div", { style: { flex: 1, textAlign: "center", padding: "10px 4px" } },
+      h("div", { style: { fontSize: 17, fontWeight: 800, color: col } }, val),
       h("div", { style: { fontSize: 10, color: T.sub, marginTop: 1 } }, label));
+    const band = (txt, col, note) => h("div", { style: { display: "flex", alignItems: "center", gap: 9, margin: "20px 0 12px" } },
+      h("span", { style: { width: 6, height: 20, borderRadius: 3, background: col } }),
+      h("div", { style: { fontSize: 14, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: T.ink } }, txt),
+      note ? h("div", { style: { fontSize: 10, color: T.faint, marginLeft: "auto" } }, note) : null);
 
     return h("div", {
       style: { position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", zIndex: 9999, overflow: "auto", padding: isMobile ? 8 : 24, display: "flex", flexDirection: "column", alignItems: "center" }
     },
-      h("div", { style: { display: "flex", gap: 8, marginBottom: 12, position: "sticky", top: 0, zIndex: 2 } },
+      h("div", { className: "mblr-report-actions", style: { display: "flex", gap: 8, marginBottom: 12, position: "sticky", top: 0, zIndex: 2 } },
         h("button", { onClick: downloadPDF, disabled: pdfBusy, style: { padding: "10px 18px", borderRadius: 10, border: "none", background: pdfBusy ? T.faint : T.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, pdfBusy ? "⏳ Génération…" : "⬇️ Télécharger le PDF"),
         h("button", { onClick: () => window.print(), style: { padding: "10px 18px", borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "🖨️ Imprimer"),
         h("button", { onClick: () => setShowReport(false), style: { padding: "10px 18px", borderRadius: 10, border: `1px solid ${T.line}`, background: "#fff", color: T.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "✕ Fermer")
       ),
-      // POSTER A4
       h("div", { ref: reportRef, id: "mblr-report", style: { width: isMobile ? "100%" : 794, maxWidth: 794, background: "#F8FAFC", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.3)" } },
+        // EN-TÊTE
         h("div", { style: { background: `linear-gradient(135deg, ${T.ink} 0%, #1E3A8A 100%)`, color: "#fff", padding: "26px 30px" } },
           h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 8 } },
             h("div", null,
@@ -8913,38 +7668,71 @@ function StatsTab({
               h("div", { style: { fontSize: 34, fontWeight: 800 } }, fK(ca)),
               h("div", { style: { fontSize: 11, opacity: .8 } }, "Chiffre d'affaires HT")))
         ),
-        h("div", { style: { padding: 22 } },
-          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" } },
+        h("div", { style: { padding: "8px 22px 22px" } },
+          // ════ PARTIE 1 — COMMERCIAL ════
+          band("1 · Commercial", T.accent),
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" } },
             tile("CA HT", fK(ca), `${vs.length} vente(s)`, T.accent),
             tile("Marge brute", fK(marge), fPct(tx) + " de taux", T.green),
             tile("Panier moyen", fK(vs.length ? ca / vs.length : 0), null, T.violet),
             tile("Objectif", obj.ca > 0 ? Math.round(ca / obj.ca * 100) + " %" : "—", obj.ca > 0 ? "de " + fK(obj.ca) : "non défini", T.amber)),
-          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: isMobile ? "wrap" : "nowrap" } },
-            h("div", { style: { flex: 2, minWidth: 300, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 14, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 2, minWidth: 300, ...panel } },
               h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Évolution du CA (12 mois)"),
               svgLine([{ data: caSerie, color: T.accent }, { data: caN1Serie, color: T.faint, dashed: true }], isMobile ? 320 : 470, 150, true),
               h("div", { style: { display: "flex", gap: 16, marginTop: 6, fontSize: 10, color: T.sub } },
                 h("span", null, "● ", h("b", { style: { color: T.accent } }, key.split("-")[0])), h("span", null, "┄ N-1"))),
-            h("div", { style: { flex: 1, minWidth: 180, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16, display: "flex", flexDirection: "column", alignItems: "center" } },
+            h("div", { style: { flex: 1, minWidth: 180, ...panel, display: "flex", flexDirection: "column", alignItems: "center" } },
               h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 6, alignSelf: "flex-start" } }, "Objectif"),
               h(Gauge, { value: ca, target: obj.ca, label: "du mois" }))),
-          h("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: isMobile ? "wrap" : "nowrap" } },
-            h("div", { style: { flex: 1, minWidth: 220, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+          h("div", { style: { display: "flex", gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 1, minWidth: 220, ...panel } },
               h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Répartition par type"),
               typeSegs.length ? h("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
                 svgDonut(typeSegs, 120),
                 h("div", null, typeSegs.map((s, i) => h("div", { key: i, style: { fontSize: 11, color: T.sub, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 } },
                   h("span", { style: { width: 9, height: 9, borderRadius: 5, background: s.color, display: "inline-block" } }), `${s.label} · ${fK(s.value)}`)))) : empty("—")),
-            h("div", { style: { flex: 1, minWidth: 220, background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, padding: 16 } },
+            h("div", { style: { flex: 1, minWidth: 220, ...panel } },
               h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Meilleurs commerciaux"),
               commTop.length ? commTop.map((c, i) => h("div", { key: i, style: { marginBottom: 9 } },
                 h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 } },
                   h("span", { style: { fontWeight: 700 } }, (i < 3 ? ["🥇", "🥈", "🥉"][i] + " " : "") + c[0]), h("span", { style: { fontWeight: 800, color: T.accent } }, fK(c[1]))),
                 h(Bar, { w: c[1] / maxComm * 100, color: SERIES[i % SERIES.length], ht: 6 }))) : empty("—"))),
-          h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, display: "flex", marginBottom: 6 } },
-            mini("Chantiers terminés", fNb(chTermines), T.green), mini("En cours", fNb(chCours), T.accent),
-            mini("Encaissé", fK(encaisse), T.cyan), mini("Tickets SAV", fNb(savMonth), savMonth ? T.amber : T.green)),
-          h("div", { style: { textAlign: "center", fontSize: 9, color: T.faint, marginTop: 10 } }, "Généré le " + new Date().toLocaleDateString("fr-FR") + " · MBLR-Colmar"))
+
+          // ════ PARTIE 2 — ADMINISTRATIF ════
+          band("2 · Administratif", T.violet, "facturation & trésorerie"),
+          h("div", { style: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" } },
+            tile("Facturé ce mois", fK(factureMois), "factures émises", T.accent),
+            tile("Encaissé ce mois", fK(encaisseMois), "règlements reçus", T.green),
+            tile("Reste à facturer", fK(aFacturer), "chantiers terminés", T.amber),
+            tile("Délai paiement", delaiPaie == null ? "—" : delaiPaie + " j", "moyenne", T.cyan)),
+          h("div", { style: { display: "flex", gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 1, minWidth: 220, ...panel } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Acomptes (à date)"),
+              h("div", { style: { display: "flex" } },
+                mini("À envoyer", fK(acAEnvoyer), T.amber), mini("Encaissés", fK(acEncaisse), T.green))),
+            h("div", { style: { flex: 1, minWidth: 220, ...panel, display: "flex" } },
+              mini("Factures émises", fK(factEmise), T.accent),
+              mini("Impayés > 30 j", fNb(impayes), impayes ? T.red : T.green))),
+
+          // ════ PARTIE 3 — INSTALLATION ════
+          band("3 · Installation", T.green, "chantiers & SAV"),
+          h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, display: "flex", marginBottom: 14, flexWrap: "wrap" } },
+            Object.keys(stCount).map(k => mini(stLbl[k], fNb(stCount[k]), stCol[k]))),
+          h("div", { style: { display: "flex", gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" } },
+            h("div", { style: { flex: 1, minWidth: 220, ...panel } },
+              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Charge installateurs (en cours)"),
+              chargeTop.length ? chargeTop.map((c, i) => h("div", { key: i, style: { marginBottom: 9 } },
+                h("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 } },
+                  h("span", { style: { fontWeight: 700 } }, c[0]), h("span", { style: { fontWeight: 800, color: T.accent } }, c[1] + " chantier(s)")),
+                h(Bar, { w: c[1] / maxCharge * 100, color: SERIES[i % SERIES.length], ht: 6 }))) : empty("—")),
+            h("div", { style: { flex: 1, minWidth: 220, ...panel, display: "flex", flexWrap: "wrap" } },
+              mini("Délai de pose", delPoseMoy == null ? "—" : delPoseMoy + " j", T.cyan),
+              mini("Tickets SAV", fNb(savList.length), savList.length ? T.amber : T.green),
+              mini("SAV résolus", fNb(savResolved), T.green),
+              mini("Garantie marque", fK(savGar), T.accent))),
+
+          h("div", { style: { textAlign: "center", fontSize: 9, color: T.faint, marginTop: 16 } }, "Généré le " + new Date().toLocaleDateString("fr-FR") + " · MBLR-Colmar · " + (isAdmin ? "Vue entreprise" : myName)))
       )
     );
   };
