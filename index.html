@@ -17331,6 +17331,7 @@ function VentesTab({
 
     // Pré-remplir immédiatement avec les infos disponibles, puis enrichir avec les composants
     setEditId(null);
+    const leadMats = Array.isArray(lead.materiels) ? lead.materiels : [];
     setForm({
       ...emptyForm(),
       client: lead.client || "",
@@ -17338,7 +17339,8 @@ function VentesTab({
       prix_ttc: lead.prix_reonic > 0 ? String(lead.prix_reonic) : "",
       tva_taux: "",
       prix_ht: "",
-      materiels: [],
+      materiels: leadMats,
+      telephone: lead.telephone || "",
       lead_id: lead.id || null,
       reonic_id: lead.reonic_id || null
     });
@@ -17346,8 +17348,9 @@ function VentesTab({
     setCItem({ id: "", qty: "" });
     goToView("form");
 
-    // Charger les composants Reonic en arrière-plan
-    if (lead.reonic_id) {
+    // Les composants des packages sélectionnés sont déjà placés dans le formulaire.
+    // On ne recharge depuis Reonic QUE si aucun package n'a été choisi ("Sans package").
+    if (lead.reonic_id && leadMats.length === 0) {
       setReonicLoading(true);
       setReonicError(null);
       loadReonicComponents(lead.reonic_id).then(result => {
