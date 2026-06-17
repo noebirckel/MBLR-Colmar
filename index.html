@@ -23266,20 +23266,43 @@ function App() {
       await run("chantiers", nc);
       await run("acomptes", na);
       await run("sav_tickets", nsav);
-      // Objectifs : convertir {key: {ca, marge}} → [{key, ca, marge}] pour le RPC
+      // Objectifs : upsert direct, tolérant au type d'id. Corrige l'insertion
+      // d'un objectif pour un mois jamais renseigné (la colonne id n'a pas de
+      // valeur par défaut côté base, ce qui faisait échouer l'ancien RPC).
       if (nobj) {
-        const rows = Object.entries(nobj).map(([k, v]) => ({
-          key: k,
-          ca: v.ca || 0,
-          marge: v.marge || 0
-        }));
-        if (rows.length) {
-          const { error: rpcErr } = await sb.rpc("upsert_objectifs", { p_rows: rows });
-          if (rpcErr) {
-            console.error("upsert_objectifs:", rpcErr.message);
-            setSync("error");
-            throw rpcErr;
+        try {
+          const objEntries = Object.entries(nobj);
+          if (objEntries.length) {
+            const { data: existingObj } = await sb.from("objectifs").select("id,key");
+            const idByKey = {};
+            let maxNumId = 0, numericId = true;
+            const hasRows = !!(existingObj && existingObj.length);
+            (existingObj || []).forEach(r => {
+              idByKey[r.key] = r.id;
+              if (typeof r.id === "number") { if (r.id > maxNumId) maxNumId = r.id; }
+              else if (r.id != null) numericId = false;
+            });
+            if (!hasRows) numericId = true; // table vide : on suppose un id entier
+            const genId = () => numericId
+              ? ++maxNumId
+              : ((typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.floor(Math.random() * 1e6));
+            const rows = objEntries.map(([k, v]) => ({
+              id: idByKey[k] != null ? idByKey[k] : genId(),
+              key: k,
+              ca: v.ca || 0,
+              marge: v.marge || 0
+            }));
+            const { error: objErr } = await sb.from("objectifs").upsert(rows, { onConflict: "key" });
+            if (objErr) {
+              console.error("objectifs upsert:", objErr.message);
+              setSync("error");
+              setSyncErr("objectifs: " + objErr.message);
+            }
           }
+        } catch (exObj) {
+          console.error("objectifs exception:", exObj.message);
+          setSync("error");
+          setSyncErr("objectifs: " + exObj.message);
         }
       }
       await run("rapports", nrapp);
