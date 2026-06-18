@@ -7545,7 +7545,7 @@ function StatsTab({
     const dels = [];
     ch.forEach(c => {
       const v = venteById[String(c.vente_id)]; const dS = v ? parseFr(v.date) : null;
-      const dF = c.facture && parseFr(c.facture.date_envoi_facture);
+      const dF = c.facture && parseAny(c.facture.date_envoi_facture);
       const dd = daysBetween(dS, dF); if (dd != null && dd >= 0 && dd < 730) dels.push(dd);
     });
     const delMoy = dels.length ? Math.round(dels.reduce((a, b) => a + b, 0) / dels.length) : null;
@@ -7586,12 +7586,12 @@ function StatsTab({
     ch.forEach(c => {
       const f = c.facture || {}; const m = getMontant(c); const st = f.statut || "a_facturer";
       if (st === "paye") paye += m;
-      else if (st === "facture") { facture += m; const j = daysBetween(parseFr(f.date_envoi_facture), today); if (j != null && j > 30) impayes.push({ c, j, m }); }
+      else if (st === "facture") { facture += m; const j = daysBetween(parseAny(f.date_envoi_facture), today); if (j != null && j > 30) impayes.push({ c, j, m }); }
       else if (st === "a_facturer" && c.statut === "termine") attente += m;
     });
     // Délai moyen de paiement
     const dels = [];
-    ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseFr(f.date_envoi_facture), parseFr(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) dels.push(dd); });
+    ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseAny(f.date_envoi_facture), parseAny(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) dels.push(dd); });
     const delMoy = dels.length ? Math.round(dels.reduce((a, b) => a + b, 0) / dels.length) : null;
     // Acomptes
     const ac = acomptes || [];
@@ -7793,21 +7793,29 @@ function StatsTab({
     const maxComm = Math.max(...commTop.map(c => c[1]), 1);
     // ── Données ADMINISTRATIF (facturation & trésorerie) ──
     const ch = chantiers || [];
-    const inM = (frd) => { const d = parseFr(frd); return d && d.getFullYear() === y && d.getMonth() === m - 1; };
-    let factureMois = 0, encaisseMois = 0, aFacturer = 0, factEmise = 0;
+    const inM = (d) => { d = parseAny(d); return d && d.getFullYear() === y && d.getMonth() === m - 1; };
+    // État à date
+    let encaisseFact = 0, aEncaisser = 0, aFacturer = 0, impayes = 0;
     ch.forEach(c => {
       const f = c.facture || {}, mt = getMontant(c), st = f.statut || "a_facturer";
-      if (inM(f.date_envoi_facture)) factureMois += mt;
-      if (inM(f.date_paiement)) encaisseMois += mt;
-      if (st === "a_facturer" && c.statut === "termine") aFacturer += mt;
-      if (st === "facture") factEmise += mt;
+      if (st === "paye") encaisseFact += mt;
+      else if (st === "facture") { aEncaisser += mt; const j = daysBetween(parseAny(f.date_envoi_facture), today); if (j != null && j > 30) impayes++; }
+      else if (st === "a_facturer" && c.statut === "termine") aFacturer += mt;
     });
+    // Mouvements du mois (dates ISO ou jj/mm/aaaa → parseAny)
+    let factureMois = 0, encaisseMois = 0;
+    ch.forEach(c => { const f = c.facture || {}, mt = getMontant(c); if (inM(f.date_envoi_facture)) factureMois += mt; if (inM(f.date_paiement)) encaisseMois += mt; });
+    // Acomptes
     const ac = acomptes || [];
-    const acAEnvoyer = ac.filter(a => a.statut === "a_envoyer").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
     const acEncaisse = ac.filter(a => a.statut === "paye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
-    const delsP = []; ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseFr(f.date_envoi_facture), parseFr(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) delsP.push(dd); });
+    const acAttente = ac.filter(a => a.statut === "a_envoyer" || a.statut === "envoye").reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    const acMois = ac.filter(a => inM(a.date_creation)).reduce((s, a) => s + Number(a.montant_acompte || 0), 0);
+    // Synthèse trésorerie à date
+    const encaisseTotal = encaisseFact + acEncaisse;
+    const enAttente = aEncaisser + acAttente;
+    const delsP = []; ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseAny(f.date_envoi_facture), parseAny(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) delsP.push(dd); });
     const delaiPaie = delsP.length ? Math.round(delsP.reduce((a, b) => a + b, 0) / delsP.length) : null;
-    let impayes = 0; ch.forEach(c => { const f = c.facture || {}; if (f.statut === "facture") { const j = daysBetween(parseFr(f.date_envoi_facture), today); if (j != null && j > 30) impayes++; } });
+
 
     // ── Données INSTALLATION (chantiers & SAV) ──
     const stCount = { a_planifier: 0, planifie: 0, en_cours: 0, termine: 0, bloque: 0 };
@@ -7815,7 +7823,7 @@ function StatsTab({
     const charge = {}; ch.filter(c => c.statut !== "termine").forEach(c => { const t = c.technicien || "Non assigné"; charge[t] = (charge[t] || 0) + 1; });
     const chargeTop = Object.entries(charge).sort((a, b) => b[1] - a[1]).slice(0, 4);
     const maxCharge = Math.max(...chargeTop.map(c => c[1]), 1);
-    const delPose = []; ch.forEach(c => { const v = venteById[String(c.vente_id)]; const dS = v ? parseFr(v.date) : null; const dF = c.facture && parseFr(c.facture.date_envoi_facture); const dd = daysBetween(dS, dF); if (dd != null && dd >= 0 && dd < 730) delPose.push(dd); });
+    const delPose = []; ch.forEach(c => { const v = venteById[String(c.vente_id)]; const dS = v ? parseFr(v.date) : null; const dF = c.facture && parseAny(c.facture.date_envoi_facture); const dd = daysBetween(dS, dF); if (dd != null && dd >= 0 && dd < 730) delPose.push(dd); });
     const delPoseMoy = delPose.length ? Math.round(delPose.reduce((a, b) => a + b, 0) / delPose.length) : null;
     const savList = (savTickets || []).filter(t => { const d = parseAny(t.created_at || t.date_creation); return d && d.getFullYear() === y && d.getMonth() === m - 1; });
     const savResolved = savList.filter(t => ["regle_nous", "regle_marque", "borne_changee"].includes(t.statut)).length;
@@ -7889,20 +7897,18 @@ function StatsTab({
                 h(Bar, { w: c[1] / maxComm * 100, color: SERIES[i % SERIES.length], ht: 6 }))) : empty("—"))),
 
           // ════ PARTIE 2 — ADMINISTRATIF ════
-          band("2 · Administratif", T.violet, "facturation & trésorerie"),
+          band("2 · Administratif", T.violet, "trésorerie & facturation"),
           h("div", { style: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" } },
-            tile("Facturé ce mois", fK(factureMois), "factures émises", T.accent),
-            tile("Encaissé ce mois", fK(encaisseMois), "règlements reçus", T.green),
-            tile("Reste à facturer", fK(aFacturer), "chantiers terminés", T.amber),
-            tile("Délai paiement", delaiPaie == null ? "—" : delaiPaie + " j", "moyenne", T.cyan)),
-          h("div", { style: { display: "flex", gap: 12, flexWrap: isMobile ? "wrap" : "nowrap" } },
-            h("div", { style: { flex: 1, minWidth: 220, ...panel } },
-              h("div", { style: { fontSize: 13, fontWeight: 800, color: T.ink2, marginBottom: 10 } }, "Acomptes (à date)"),
-              h("div", { style: { display: "flex" } },
-                mini("À envoyer", fK(acAEnvoyer), T.amber), mini("Encaissés", fK(acEncaisse), T.green))),
-            h("div", { style: { flex: 1, minWidth: 220, ...panel, display: "flex" } },
-              mini("Factures émises", fK(factEmise), T.accent),
-              mini("Impayés > 30 j", fNb(impayes), impayes ? T.red : T.green))),
+            tile("Encaissé à date", fK(encaisseTotal), "factures + acomptes payés", T.green),
+            tile("En attente d'encaissement", fK(enAttente), "factures + acomptes émis", T.amber),
+            tile("Reste à facturer", fK(aFacturer), "chantiers terminés", T.accent),
+            tile("Impayés > 30 j", fNb(impayes), "factures en retard", impayes ? T.red : T.green)),
+          h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, display: "flex", marginBottom: 6, flexWrap: "wrap" } },
+            mini("Facturé ce mois", fK(factureMois), T.accent),
+            mini("Encaissé ce mois", fK(encaisseMois), T.green),
+            mini("Acomptes demandés ce mois", fK(acMois), T.violet),
+            mini("Délai moyen paiement", delaiPaie == null ? "—" : delaiPaie + " j", T.cyan)),
+          h("div", { style: { fontSize: 9, color: T.faint, marginBottom: 8, paddingLeft: 4 } }, "Les 4 indicateurs du haut reflètent la position de trésorerie actuelle ; la ligne du bas, les mouvements du mois."),
 
           // ════ PARTIE 3 — INSTALLATION ════
           band("3 · Installation", T.green, "chantiers & SAV"),
