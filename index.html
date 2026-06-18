@@ -7813,6 +7813,7 @@ function StatsTab({
     // Synthèse trésorerie à date
     const encaisseTotal = encaisseFact + acEncaisse;
     const enAttente = aEncaisser + acAttente;
+    const tauxEnc = pct(encaisseTotal, encaisseTotal + enAttente);
     const delsP = []; ch.forEach(c => { const f = c.facture || {}; const dd = daysBetween(parseAny(f.date_envoi_facture), parseAny(f.date_paiement)); if (dd != null && dd >= 0 && dd < 365) delsP.push(dd); });
     const delaiPaie = delsP.length ? Math.round(delsP.reduce((a, b) => a + b, 0) / delsP.length) : null;
 
@@ -7904,11 +7905,11 @@ function StatsTab({
             tile("Reste à facturer", fK(aFacturer), "chantiers terminés", T.accent),
             tile("Impayés > 30 j", fNb(impayes), "factures en retard", impayes ? T.red : T.green)),
           h("div", { style: { background: "#fff", borderRadius: 12, border: `1px solid ${T.line}`, display: "flex", marginBottom: 6, flexWrap: "wrap" } },
-            mini("Facturé ce mois", fK(factureMois), T.accent),
-            mini("Encaissé ce mois", fK(encaisseMois), T.green),
             mini("Acomptes demandés ce mois", fK(acMois), T.violet),
-            mini("Délai moyen paiement", delaiPaie == null ? "—" : delaiPaie + " j", T.cyan)),
-          h("div", { style: { fontSize: 9, color: T.faint, marginBottom: 8, paddingLeft: 4 } }, "Les 4 indicateurs du haut reflètent la position de trésorerie actuelle ; la ligne du bas, les mouvements du mois."),
+            mini("Factures émises ce mois", fK(factureMois), T.accent),
+            mini("Acomptes encaissés (à date)", fK(acEncaisse), T.green),
+            mini("Taux d'encaissement", tauxEnc + " %", T.cyan)),
+          h("div", { style: { fontSize: 9, color: T.faint, marginBottom: 8, paddingLeft: 4 } }, "Position de trésorerie à date (haut) et activité du mois (bas). Le taux d'encaissement = encaissé / (encaissé + en attente)."),
 
           // ════ PARTIE 3 — INSTALLATION ════
           band("3 · Installation", T.green, "chantiers & SAV"),
